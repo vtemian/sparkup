@@ -2,25 +2,18 @@
 
 ## What this is
 
-Ansible that provisions the DGX Spark from a fresh DGX OS install to a working training box —
-users, Docker, the NVIDIA container runtime, system monitoring, GPU telemetry — plus **live
-training-run observability in Grafana**: launch a training round, watch loss, throughput, GPU and
-**power** stream into a dashboard while it runs, compare it against past runs, and get an honest
-**energy and cost figure** for each one.
+Ansible that provisions the DGX Spark from a fresh DGX OS install to a working training box:
+users, Docker, the NVIDIA container runtime, system monitoring, GPU telemetry, **wall-socket power
+measurement**, and the thermal/firmware guardrails this hardware turns out to need.
 
-The model is k6. `k6 run -o experimental-prometheus-rw` pushes samples into Prometheus tagged with
-a `testid` label, and the official k6 dashboards make that label a template variable. We do the
-same with `run_id`. That is not a loose analogy — it is the same mechanism, and Grafana's own k6
-dashboard JSON is the reference.
+**Scope is infrastructure.** `sparkup` gets the box into a known state and gets metrics into
+Prometheus. It does **not** own training runs. A separate project builds the wrapper that emits
+per-run metrics (epoch, loss, throughput) and correlates them against the system and energy series
+this repo provides. That design is specified in `docs/training-observability.md`.
 
-Three halves (the arithmetic is wrong; the independence is the point):
-
-1. **The box as code.** Everything hand-built on `spark.local` becomes an idempotent playbook.
-   Today the box works but nothing is reproducible: the state lives only in a chat log.
-2. **Training observability.** A callback and a launcher that make a run visible the way k6 makes
-   a load test visible.
-3. **Energy and cost.** A wall-socket meter, correlated to runs, so "what did this experiment
-   cost" and "which config gets the best loss per watt-hour" are answerable.
+Today the box works, but nothing about it is reproducible — the state lives only in a chat log. If
+it died tomorrow, rebuilding it would mean rediscovering every trap recorded below. That is the
+problem this repo exists to solve.
 
 ## Working agreement
 
@@ -38,8 +31,8 @@ interesting problem. When a choice is between clever and boring, pick boring.
 - `http://spark.local` serves Grafana with system, GPU and power dashboards, no login to view
 - GPU telemetry is supervised (survives reboot and crashes), including **throttle reasons**
 - `docker run --rm --gpus all <cuda13 image> nvidia-smi` works — GPU containers are possible
-- `sparkup-train demo` streams a synthetic run into Grafana, live, and prints the URL
-- A finished run has `training_run_energy_wh`, `_duration_seconds` and `_cost` recorded
+- wall power and cumulative energy from the Shelly plug are scraped and charted
+- `/srv/bbm` exists with the right ownership, ready for the training project
 - Running the playbook a second time reports **zero changed tasks**
 - `make lint` passes (ansible-lint, production profile)
 
@@ -509,121 +502,34 @@ official Foundation SDK is still "public preview" with confusing PEP 440 epoch v
 handful of dashboards, hand-write the JSON and `POST /api/dashboards/db` with `overwrite: true`
 and a stable `uid`. Reach for the SDK only at 10+ dashboards sharing panel logic.
 
-## Phase C — training observability (the k6 part)
+## Phase C — training observability
 
-### C0: `/srv/bbm`
-`/srv/bbm/{data,checkpoints,runs}`, group `bbm`, setgid so vlad and marius share artifacts.
-**This exists because `rsync --delete` owns `~/bbm`.** Every training path points here.
+**Moved out of scope.** A separate project owns the training wrapper: per-run metrics (epoch, loss,
+lr, tokens/sec), correlation of those runs against the system and energy series, the runs index and
+the per-run dashboards. The full design — remote-write ingestion, the `TrainerCallback`, the
+heartbeat metric, run-scoped dashboards, annotations, and the energy correlation — is specified in
+`docs/training-observability.md` so that project starts from a spec rather than from scratch.
 
-### C1: `trainobs` — the Python package
-Small, dependency-light, deployed to a venv on the box and importable by `bbm`'s future `train/`
-module. `sparkup` owns it because it knows the Prometheus URL; `bbm` imports it.
+**What sparkup owes it**, and must therefore not break:
 
-Dependency: `prometheus-remote-writer` (v1.1.3, Jan 2026, Apache-2.0; small enough to vendor if
-abandoned — the remote-write 1.0 protocol is frozen). On aarch64, `python-snappy` 0.7+ wraps
-`cramjam` which ships manylinux aarch64 wheels — **verify a plain install before assuming**; fall
-back to a ~50-line DIY protobuf+snappy writer if it fights.
+- Prometheus with `--web.enable-remote-write-receiver`, so a run can push per-step samples with
+  true timestamps
+- Grafana with a provisioned Prometheus datasource and anonymous Viewer on port 80
+- live `node`, `gpu` and `power` scrape jobs
+- `/srv/bbm/{data,checkpoints,runs}`, group `bbm`, setgid — **outside `~/bbm`, because
+  `rsync --delete` owns that directory** (see the bbm contract above)
 
-`PrometheusCallback(TrainerCallback)` — structure copied from Axolotl, labels fixed:
+**Deferred with it: the scheduler.** One machine, two users. A cluster scheduler (Nomad) was
+investigated and is over-scaled for a single node — its placement machinery solves a problem that
+does not exist here. A shared `pueue` daemon or a plain `flock` lease will do, and the choice can
+wait until the training wrapper exists and the need is real. Recorded so it is not re-litigated:
+Nomad's own documented single-node mutex is `resources.cores` set to the node's full
+`cpu.reservablecores`, which is scheduler-enforced and needs no device plugin — worth knowing if
+this is ever revisited.
 
-- `on_train_begin` → the info metric plus the two timestamps that make everything else work:
-  ```
-  training_run_info{run_id, run_name, git_sha, model, dataset, tokenizer, status} 1
-  training_run_start_timestamp_seconds{run_id}
-  training_run_heartbeat_timestamp_seconds{run_id}
-  ```
-- `on_log` → `loss`, `learning_rate`, `grad_norm`, `epoch` from `logs`; `training_step` from
-  `state.global_step`; `training_steps_per_sec` and `training_tokens_per_sec` derived from deltas
-  of `global_step` / `num_input_tokens_seen` over `time.monotonic()` (needs
-  `TrainingArguments(include_num_input_tokens_seen=True)`; it counts padding). Refresh the
-  heartbeat every push.
-- `on_train_end` → terminal status, so a dashboard distinguishes finished from crashed.
-- Guard with `state.is_world_process_zero`; **wrap every push in try/except — a metrics outage must
-  never kill a training run.** Batch pushes on a ~2–5 s cadence (k6 uses 5 s).
-
-**The heartbeat is the trick.** It refreshes while the run lives and freezes when it dies, so one
-link expression covers live and finished runs — no sentinel values, no "crashed and never wrote its
-end time" hole.
-
-Cardinality: **never put `step` in a label** — step is a gauge value, time is the axis. Metadata
-lives on the info metric and joins in PromQL:
-`training_loss{run_id=~"$run_id"} * on(run_id) group_left(run_name, git_sha) training_run_info`.
-
-transformers 5.x: `TrainerCallback` signatures and `logs`/`TrainerState` fields are unchanged;
-`report_to` now defaults to `"none"`; callback kwargs carry `processing_class`, not `tokenizer`.
-Set `logging_steps=1` and `logging_first_step=True` for a live feel.
-
-### C2: `sparkup-train` — the launcher
-- `sparkup-train demo` — a **synthetic run** (decaying loss with noise, plausible step timing,
-  realistic tokens/sec). `bbm` has no training code yet, so this is the acceptance test for the
-  whole pipeline. It must be indistinguishable from a real run in Grafana.
-- `sparkup-train run -- <command>` — mint a `run_id`, sample the idle power baseline (Phase D),
-  export `run_id` + Prometheus URL into the environment, submit to the queue, record metadata
-  under `/srv/bbm/runs/<run_id>/`, and on completion write `summary.json` and the per-run energy
-  metrics.
-- `run_id` format `run-YYYYmmdd-HHMM-<name>` so runs sort chronologically as strings.
-- Print the deep link at launch (live form) and on completion (pinned form):
-  ```
-  http://spark.local/d/trainrun/training-run?orgId=1&var-run_id=<id>&from=<start_ms>&to=now&refresh=10s
-  ```
-  Subtract ~60 s from `start_ms` so the first datapoints are not glued to the axis. `&kiosk` must be
-  bare. Optionally `POST /api/snapshots` at the end for runs worth keeping.
-- **Annotations**: `POST /api/annotations` at start with tags `["training-run", "<run_id>"]`,
-  `PATCH` with `timeEnd` at the end → a shaded region marking the run. Omit `dashboardUID` so the
-  boundary also appears on infra dashboards — which is where you diagnose "why did throughput tank
-  at 03:00". Persist the annotation id so a crash handler can still close the region.
-- Keep the Trainer's own `log_history` JSON on disk. Prometheus is the live view; disk is the archive.
-
-### C3: the "Training Runs" dashboard
-Clone the k6 structure (dashboard 19665 defines `testid` as `label_values(...)`, `multi: true`,
-every panel filtering on it):
-
-- Variable `run_id` = `label_values(training_run_info, run_id)` — anchoring on the info metric is
-  far cheaper than scanning every series. `multi: true`, `includeAll: false`, `refresh: 2`
-  (re-query on time-range change), **`sort: 8`** (natural descending → newest first; 7/8 exist in
-  the schema though the docs list only six).
-- Panels: loss, lr, grad-norm, tokens/sec, steps/sec, legend `{{run_id}}`, matcher `=~` (multi-select
-  interpolates to a regex). Stats for current step / max steps and latest loss.
-- **GPU util, power, unified memory and wall power on the same dashboard.** This is the payoff of
-  using the infra Grafana instead of a separate tracker: training curves next to the hardware.
-- Annotation query filtered `["training-run", "$run_id"]`, `matchAny: false`. For compare mode add
-  a second query with `matchAny: true` and just `["training-run"]`, since ANDing multiple run tags
-  matches nothing.
-
-### C4: runs index
-A separate `/d/runs` dashboard: one Table panel, three **instant** queries in Table format —
-`training_run_info`, `training_run_start_timestamp_seconds * 1000`,
-`training_run_heartbeat_timestamp_seconds * 1000` — joined by `run_id` (outer), with an override on
-the `run_id` field carrying two data links:
-
-```
-Follow live:       /d/trainrun/training-run?var-run_id=${__data.fields["run_id"]}&from=${__data.fields["start_ms"]}&to=now&refresh=10s
-Full run (pinned): /d/trainrun/training-run?var-run_id=${__data.fields["run_id"]}&from=${__data.fields["start_ms"]}&to=${__data.fields["end_ms"]}
-```
-
-Add energy, duration and cost columns from Phase D. This is the experiment index — ~40 lines of JSON.
-`${__data.fields["<name>"]}` pulls another column on the same row; timestamps must be **ms**, hence
-the `* 1000` in PromQL rather than a transformation.
-
-### C5: run comparison, honestly scoped
-Multi-selecting `$run_id` gives wall-clock side-by-side — all the official k6 dashboards offer, and
-enough for most needs. **A step-aligned overlay (loss-vs-step superimposed) is not natural in
-Prometheus**; the axis is wall-clock. Options in order of sanity: (1) accept side-by-side — start
-here; (2) `$run_a`/`$run_b` with PromQL `offset`, clunky; (3) the Comparison Panel plugin; (4) push
-a rebased twin series with `out_of_order_time_window` set generously.
-
-**If step-aligned overlay becomes daily bread rather than a nice-to-have, that is the one genuine
-argument for a real experiment tracker instead of bending Prometheus.** Say so out loud rather than
-building option 4 by default. Grafana's ceiling here is "watch a run, compare a few, correlate with
-infra and power" — a real and valuable ceiling; know where it is. If this ever grows run-comparison
-tables, hyperparameter diffing and artifact links, we have reinvented MLflow badly.
-
-### C6: bbm-specific metrics (after stage 3 exists)
-`verifier_pass_rate` and per-check failure counts from `bbm.verify.Report.failures` — **the stage-6
-GRPO reward signal**, so watching it live is watching the reward. Plus corpus composition from
-`stats.as_dict()`, draw-channel PAD fraction per batch (measured baseline 31.3% across the seven
-fixtures, per-scene idle 21–48%), and the `stroke` degradation rate once stage 5 runs —
-`bbm/PROMPT.md` calls that "the metric that matters".
+**One invariant survives the deferral:** if energy figures are to mean anything, one run must own
+the box at a time. Whatever enforces that, the wrapper should record `contended=true` when it
+cannot be guaranteed, rather than emitting a number that looks trustworthy and is not.
 
 ## Phase D — energy and cost
 
@@ -673,64 +579,6 @@ range is pinned to the run, it already shows exactly that window. No machinery.
 per-run summary series — one sample per run, cheap forever:
 
 ```
-training_run_energy_wh{run_id}            total wall energy over the run   (plug)
-training_run_energy_marginal_wh{run_id}   energy attributable to the run   (plug − idle)
-training_run_gpu_energy_wh{run_id}        GPU-rail energy                  (NVML counter, exact)
-training_run_idle_baseline_watts{run_id}  measured immediately before the run
-training_run_duration_seconds{run_id}
-training_run_cost{run_id}                 marginal Wh × tariff
-```
-
-`training_run_gpu_energy_wh` comes from `nvmlDeviceGetTotalEnergyConsumption` sampled at run start
-and end — **verified working on this box** (10024 mJ / 3 s → 3.34 W, matching `PowerUsage` 3.38 W).
-It is millijoules and **resets on driver reload**, so read it as a delta and discard the run's
-figure if the counter went backwards. `nvidia-ml-py` is the client; it is now installed in
-`~/bbm-train/.venv`.
-
-The ratio `gpu_energy_wh / energy_wh` is the useful derived number: how much of what you paid for
-was the GPU actually working, rather than the box merely being switched on. Expect roughly 0.5 at
-best given the measured ~2× wall-to-rail gap — if a run scores far below that, the bottleneck is
-not the GPU and more epochs will mostly buy electricity.
-
-**Two numbers, both wanted.** *Total* answers "what did this cost me". *Marginal* answers "was this
-experiment worth it" — the box draws power whether or not you train. Measure the baseline for ~60 s
-immediately before each run rather than assuming a global constant; it drifts with ambient
-temperature and whatever else is running.
-
-The PromQL, using the counter:
-
-```promql
-# exact Wh over the run window (dashboard: $__range == the pinned run window)
-increase(shelly_energy_wh_total[$__range])
-
-# marginal: subtract the idle baseline over the same duration
-increase(shelly_energy_wh_total[$__range])
-  - (avg_over_time(training_run_idle_baseline_watts[$__range]) * $__range_s / 3600)
-
-# cost, tariff as a Grafana constant variable in currency per kWh
-increase(shelly_energy_wh_total[$__range]) / 1000 * $tariff
-```
-
-Gauge fallback if the exporter lacks a counter — an approximation whose error scales with the
-scrape interval, so say so in the panel description:
-
-```promql
-avg_over_time(shelly_power_watts[$__range]) * $__range_s / 3600   # Wh
-```
-
-**Tariff is a Grafana variable, not a hardcoded number** — it changes, and a variable means no
-dashboard rebuild. Romania is roughly 1.3 RON/kWh at time of writing, so a continuous 200 W box is
-on the order of €0.06/hour. **The interesting number is probably watt-hours per run, for comparing
-efficiency between configs, more than the euros.**
-
-**Clock discipline:** let Prometheus scrape the plug so all timestamps come from one clock. Never
-trust the plug's own.
-
-### D3: cost panels
-Add energy, duration and cost columns to the runs index (C4), and a per-run stat row. The
-comparison that justifies this whole phase is **final loss per watt-hour** across configs — put it
-on the dashboard explicitly rather than leaving it as arithmetic for the reader.
-
 ## Phase E — thermal, and the firmware question
 
 **Instrument before acting.** The measured state (above) shows zero thermal throttling and 6.45 h
@@ -773,63 +621,6 @@ human trigger always.
 Hardware mitigations (USB fans, printed intake mounts) are a third layer with reported effects
 ranging from 2 °C to 10 °C — record them in the runbook, buy nothing until E1 says the box is
 actually hot.
-
-## Phase F — the scheduler
-
-**Why it exists:** exclusivity. Energy attribution against a whole-box meter is only valid when one
-run owns the machine (Decisions, D2). Convenience is the secondary benefit.
-
-**Two users share this box — vlad and marius — and that changes the design.**
-
-**`pueue` is a per-user daemon.** Its socket lives under the invoking user's runtime directory, so
-a default install gives each user their own daemon and their own queue. Two queues at parallelism 1
-means **two concurrent jobs**, which destroys the exclusivity invariant and silently corrupts both
-runs' energy figures. A per-user pueue is therefore *wrong* here, however convenient it looks.
-
-**Decision: one shared system daemon.** `pueued` as a systemd **system** service running as the
-`bbm` service account, unix socket group-owned by `bbm`, mode 660; both users' launcher points at it
-via `PUEUE_CONFIG_PATH`. One queue, real serialization.
-
-Consequences to accept, not discover later:
-- Jobs execute as the service account, not as the submitter. `/srv/bbm` is already setgid `bbm`, so
-  artifacts stay shared; a common HF cache and venv is a feature, not a loss.
-- The **submitter must be recorded by the launcher** (`user` label on `training_run_info`), since it
-  can no longer be inferred from the process owner.
-- This is mildly off-label use of pueue. **Verify the shared-socket setup works before building on
-  it** — if it fights, that is the signal to reconsider, not to paper over.
-
-**`pueue` is strictly FIFO — there is no fair-share.** Ten jobs from one user block the other's
-single job. With two colleagues this is a social problem before it is a technical one, and manual
-reordering (`pueue switch`) is the escape hatch. **If fairness ever becomes contentious, migrate —
-do not patch pueue.** The migration targets, in order: **Nomad** (single binary, multi-user HTTP
-API, native Prometheus telemetry, NVIDIA device plugin, batch + parameterized jobs) then **SLURM**
-(the correct HPC answer, at the cost of munge + slurmctld + slurmd + slurmdbd + MySQL for two
-people and one GPU).
-
-Also rejected: `task-spooler`'s GPU-aware fork (2 years stale, same per-user problem), Ray (see
-Prior art), `systemd-run`/`at` (no queue).
-
-**The launcher enforces the invariant** regardless of scheduler: refuse to start when another run is
-active, or tag the run `contended=true` so its energy figures are visibly untrustworthy rather than
-quietly wrong.
-
-### F1: the queue in Grafana
-
-With two users this is not a nicety — it is how "why isn't my job running" gets answered without
-asking a human. `pueue status --json` is machine-readable; a small exporter writes to
-node-exporter's textfile directory (no new service):
-
-```
-spark_queue_tasks{status="running|queued|paused|failed|success"}   gauge, count per state
-spark_queue_task_info{task_id, run_id, user, label, status} 1      info metric, one per task
-spark_queue_wait_seconds{task_id}                                  time spent queued
-spark_queue_running_seconds{task_id}                               current runtime
-```
-
-A Table panel over `spark_queue_task_info` is the queue view; put it on the runs-index dashboard
-(C4) beside energy, duration and cost, with the same data-link pattern into the run dashboard. Add
-a stat for queue depth and an alert if anything waits longer than some threshold — on a shared box,
-a silently stuck queue is the failure nobody notices.
 
 ## Open questions — need root, a decision, or both
 
