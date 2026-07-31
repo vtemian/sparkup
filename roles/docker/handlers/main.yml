@@ -1,0 +1,28 @@
+---
+# Restarting dockerd stops every running container. site.yml sets
+# `spark_training_active` from nvidia-smi's compute-process list, and
+# `spark_allow_docker_restart` says whether that is acceptable. When it is not,
+# stop loudly rather than converge quietly over somebody's run.
+- name: Refuse to restart Docker while a training run owns the box
+  ansible.builtin.fail:
+    msg: >-
+      {{ docker_config_dir }}/daemon.json changed, so dockerd has to restart —
+      but nvidia-smi reports an active GPU compute process and
+      spark_allow_docker_restart is false. A restart stops every running
+      container, that run included. The new daemon.json is already on disk and
+      takes effect at the next restart, so either wait for the run to finish and
+      re-run the playbook, or re-run now with
+      `-e spark_allow_docker_restart=true` once you know the box is free.
+  listen: Docker configuration changed
+  when:
+    - spark_training_active | default(false) | bool
+    - not (spark_allow_docker_restart | default(true) | bool)
+
+- name: Restart Docker
+  ansible.builtin.systemd_service:
+    name: docker
+    state: restarted
+  listen: Docker configuration changed
+  when: >-
+    spark_allow_docker_restart | default(true) | bool
+    or not (spark_training_active | default(false) | bool)
