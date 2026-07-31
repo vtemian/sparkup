@@ -1,0 +1,19 @@
+---
+# Every one of these is also declared in group_vars/all.yml, which wins. They
+# live here too so the role is runnable on its own and its contract is legible
+# without reading the inventory.
+
+# ansible-lint wants role defaults prefixed with the role name. These four are
+# the project's shared registry — `spark_shared_dir` is also read by the
+# monitoring and training-observability roles — so a `users_` prefix would be
+# actively wrong. Hence the per-line waivers.
+
+# Empty on purpose: a fresh clone must not invent accounts on someone else's
+# box. Each entry is {name, groups, github_keys}; see host_vars/spark.yml.
+spark_users: []  # noqa: var-naming[no-role-prefix]
+
+# The shared artifact tree. Deliberately outside any path a laptop rsyncs with
+# --delete; see the README for why that is load-bearing.
+spark_shared_dir: /srv/spark  # noqa: var-naming[no-role-prefix]
+spark_shared_group: spark  # noqa: var-naming[no-role-prefix]
+spark_shared_subdirs: [data, checkpoints, runs]  # noqa: var-naming[no-role-prefix]

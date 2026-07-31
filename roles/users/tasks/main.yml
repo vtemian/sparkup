@@ -1,0 +1,47 @@
+---
+- name: Create the shared group
+  ansible.builtin.group:
+    name: "{{ spark_shared_group }}"
+    state: present
+
+# No uid is set anywhere in this role. The box this was written for happens to
+# have vlad at 1000 and marius at 1001, but pinning that would collide on any
+# machine where those ids are already taken.
+- name: Create the managed accounts
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    shell: /bin/bash
+    groups: "{{ (item.groups | default([])) + [spark_shared_group] }}"
+    append: true
+    state: present
+  loop: "{{ spark_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Install authorized keys from GitHub
+  ansible.posix.authorized_key:
+    user: "{{ item.name }}"
+    key: "https://github.com/{{ item.github_keys }}.keys"
+    exclusive: false
+    state: present
+  loop: "{{ spark_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: (item.github_keys | default(false)) is truthy
+
+- name: Create the shared artifact directory
+  ansible.builtin.file:
+    path: "{{ spark_shared_dir }}"
+    state: directory
+    owner: root
+    group: "{{ spark_shared_group }}"
+    mode: "2775"
+
+- name: Create the shared artifact subdirectories
+  ansible.builtin.file:
+    path: "{{ spark_shared_dir }}/{{ item }}"
+    state: directory
+    owner: root
+    group: "{{ spark_shared_group }}"
+    mode: "2775"
+  loop: "{{ spark_shared_subdirs }}"
