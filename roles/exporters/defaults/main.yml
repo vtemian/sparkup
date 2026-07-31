@@ -105,6 +105,13 @@ exporters_gpu_query_fields:
 exporters_retire_legacy_gpu_script: false
 exporters_legacy_gpu_cron_user: ""
 exporters_legacy_gpu_script: ""
+
+# Off by default: on someone else's box a container of this name may be theirs,
+# and removing it is not this role's call. On a box migrating away from a
+# containerised exporter, turning it on stops the host unit fighting the
+# container for the port.
+exporters_remove_legacy_container: false
+exporters_legacy_container_name: node-exporter
 # Both crontab lines — the every-minute one and the @reboot one — name the
 # script, so one pattern retires both no matter how they are spaced.
 exporters_legacy_gpu_cron_pattern: "{{ exporters_legacy_gpu_script | regex_escape }}"

@@ -80,3 +80,9 @@
     name: docker
     enabled: true
     state: started
+
+# Without this, the restart waits until the end of the play: the gpu role would
+# smoke-test against a daemon that has not read the new daemon.json, and the
+# eventual restart would bounce the monitoring stack after it was brought up.
+- name: Apply any pending Docker restart before the GPU role runs
+  ansible.builtin.meta: flush_handlers

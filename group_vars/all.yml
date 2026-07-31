@@ -27,6 +27,11 @@ spark_firewall_allow_ports: [22, 80]
 # from repo.download.nvidia.com; adding upstream on top fights the vendor.
 docker_manage_upstream_repo: true
 
+# nvidia-container-toolkit is not in stock Ubuntu — it comes from NVIDIA's repo,
+# which DGX OS configures. Turn this off on a box without it rather than having
+# the play die partway through.
+gpu_enabled: true
+
 monitoring_dir: /opt/monitoring
 prometheus_image: prom/prometheus:v3.5.0
 grafana_image: grafana/grafana:12.1.0

@@ -3,6 +3,10 @@
   hosts: spark
   become: true
   gather_facts: true
+  # Handlers run in definition order across every role, and a failing handler
+  # would otherwise skip the ones behind it — leaving new exporter units never
+  # reloaded and a new prometheus.yml never read.
+  force_handlers: true
 
   pre_tasks:
     - name: Detect training processes on the GPU
@@ -32,6 +36,7 @@
       tags: [docker]
     - role: gpu
       tags: [gpu]
+      when: gpu_enabled | bool
     - role: users
       tags: [users]
     - role: exporters

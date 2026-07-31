@@ -6,7 +6,14 @@
 # spark_hostname, spark_firewall_manage and spark_firewall_allow_ports from
 # there and defines neither.
 
-base_timezone: Europe/Bucharest
+# Empty leaves the clock untouched. Set it in host_vars/<host>.yml if you want
+# the box moved, e.g. base_timezone: Europe/Bucharest.
+base_timezone: ""
+
+# ufw is present on Ubuntu Server but absent from some minimal images, and the
+# firewall tasks would fail on the module rather than on a missing package.
+base_firewall_packages:
+  - ufw
 
 # Reported at every converge, never remediated. DGX OS enables all of these;
 # on a training box they are surprising rather than wrong, and switching off a

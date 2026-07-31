@@ -130,6 +130,19 @@
     mode: "0644"
   notify: Restart nvidia_gpu_exporter
 
+# The containerised exporter this role replaces runs with network_mode: host
+# and owns :9100. Starting the unit while it holds the port gives a service
+# systemd calls active and that is really crash-looping on "address already in
+# use" until the monitoring role removes the container two roles later. Take
+# the port back first, so the unit is healthy the moment it starts.
+- name: Remove the containerised node exporter that owns the exporter port
+  community.docker.docker_container:
+    name: "{{ exporters_legacy_container_name }}"
+    state: absent
+  when:
+    - exporters_remove_legacy_container | bool
+    - exporters_legacy_container_name | default('', true) | trim | length > 0
+
 # daemon_reload here as well as in the handlers: on a first run the unit file
 # is brand new and systemd has to be told about it before it can be enabled.
 - name: Enable and start node_exporter

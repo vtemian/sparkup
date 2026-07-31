@@ -4,3 +4,7 @@ __pycache__/
 # Never commit a become or vault password.
 *vault-pass*
 *become-pass*
+# host_vars names the accounts that get sudo and whose GitHub keys can log in.
+# A tracked copy auto-loads for anyone who clones this and runs it before
+# editing, so only the .example is shared.
+host_vars/*.yml

@@ -11,13 +11,18 @@ lives in [`docs/training-observability.md`](docs/training-observability.md).
 ## Quick start
 
 ```bash
-make deps                      # install the pinned collections
-$EDITOR inventory/hosts.yml    # point ansible_host at your box
-$EDITOR host_vars/spark.yml    # your users and shared paths
-make ping                      # confirm the box answers
-make check                     # dry run: see the diff it would make
-make apply                     # converge
+make deps                                            # install the pinned collections
+cp host_vars/spark.yml.example host_vars/spark.yml   # your users and shared paths
+$EDITOR host_vars/spark.yml
+$EDITOR inventory/hosts.yml                          # point ansible_host at your box
+make ping                                            # confirm the box answers
+make check                                           # dry run: see the diff it would make
+make apply                                           # converge
 ```
+
+The copy step is not optional and not ceremony: `host_vars/spark.yml` names the accounts that get
+sudo on your machine and whose GitHub keys may log in as them. It is **untracked on purpose**, so
+that cloning this repo and running it cannot create somebody else's users on your box.
 
 `make apply` prompts once for the sudo password. If your account has passwordless sudo, use
 `make apply BECOME=`.
@@ -27,14 +32,14 @@ make apply                     # converge
 Everything tunable lives in two files, so an upgrade is a reviewable diff rather than a hunt
 through roles.
 
-| File | What belongs there |
-|---|---|
-| `group_vars/all.yml` | Defaults that suit any Spark: image tags, ports, retention, exporter versions |
-| `host_vars/<host>.yml` | Your box: users, shared directory and group |
+| File | Tracked | What belongs there |
+|---|---|---|
+| `group_vars/all.yml` | yes | Defaults that suit any Spark: image tags, ports, retention, exporter versions |
+| `host_vars/<host>.yml` | **no** | Your box: users, shared directory and group, timezone |
 
-`spark_users` is empty by default — a fresh clone will not invent accounts on your box. Each entry
-takes a name, a list of extra groups, and optionally a GitHub username whose public keys are
-installed:
+`spark_users` is empty in `group_vars/all.yml` and the only file that fills it is untracked, so a
+fresh clone cannot invent accounts on your box. Each entry takes a name, a list of extra groups,
+and optionally a GitHub username whose public keys are installed:
 
 ```yaml
 spark_users:

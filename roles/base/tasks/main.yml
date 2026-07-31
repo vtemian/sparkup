@@ -38,9 +38,18 @@
     mode: "0644"
   notify: Restart avahi-daemon
 
+# Empty means leave the clock alone. Silently moving a stranger's machine to
+# the timezone this repo's author happens to live in is not provisioning.
 - name: Set the system timezone
   community.general.timezone:
     name: "{{ base_timezone }}"
+  when: base_timezone | default('', true) | trim | length > 0
+
+- name: Install the firewall packages
+  ansible.builtin.apt:
+    name: "{{ base_firewall_packages }}"
+    state: present
+  when: spark_firewall_manage
 
 # ADD allow rules, and nothing else. No reset, no default policy, no delete,
 # no enable or disable. This box's only link is WiFi with no wired fallback,

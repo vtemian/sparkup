@@ -1,0 +1,43 @@
+---
+# Copy this to host_vars/spark.yml and edit it. That file is the only one most
+# people need to touch, and it is deliberately NOT tracked in git: it names the
+# accounts that get sudo on your machine and whose GitHub keys can log in.
+#
+#     cp host_vars/spark.yml.example host_vars/spark.yml
+#
+# The inventory host is named `spark` regardless of your machine's real
+# hostname — ansible_host in inventory/hosts.yml carries the address — so this
+# filename stays correct even if your box is called something else.
+
+# Accounts to manage. `groups` is what each user gets on top of their own; the
+# shared group is appended by the role, so do not repeat it here. `github_keys`
+# takes a GitHub username whose public keys are installed, or false to manage
+# keys yourself.
+#
+# Anyone listed here with `sudo` is root-equivalent on your box, and anyone
+# whose GitHub account you name can log in as them. Only list people you mean.
+spark_users:
+  - name: you
+    groups: [sudo, docker]
+    github_keys: false
+
+# The shared artifact tree. Point it anywhere outside a directory that a laptop
+# rsyncs with --delete. Renaming it after data exists is a migration, not an edit.
+spark_shared_dir: /srv/spark
+spark_shared_group: spark
+
+# Set if your box is somewhere with a clock you want managed. Empty leaves it
+# alone, which is the default.
+# base_timezone: Europe/Bucharest
+
+# Only for a box migrating off a hand-rolled cron + flock + bash loop that
+# scraped nvidia-smi into a textfile collector. The exporters role replaces it
+# with a supervised systemd unit; the old one must go in the same change or
+# both write GPU metrics.
+# exporters_retire_legacy_gpu_script: true
+# exporters_legacy_gpu_cron_user: someone
+# exporters_legacy_gpu_script: /home/someone/monitoring/gpu-metrics.sh
+
+# Only for a box migrating off a containerised node-exporter that owns :9100.
+# The host unit cannot bind the port until the container is gone.
+# exporters_remove_legacy_container: true
