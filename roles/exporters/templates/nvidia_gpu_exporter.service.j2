@@ -1,0 +1,45 @@
+{{ ansible_managed | comment }}
+# Native host unit, deliberately not a container: a containerised GPU exporter
+# needs GPU-in-container plumbing, which is the least reliable piece of the
+# stack. Monitoring must not depend on the thing most likely to break.
+#
+# The exporter shells out to nvidia-smi --query-gpu, which is the point: NVIDIA
+# states DCGM does not support this hardware, and on GB10 the DCGM framebuffer
+# fields are broken anyway.
+
+[Unit]
+Description=Prometheus nvidia_gpu_exporter (nvidia-smi)
+Documentation=https://github.com/utkuozdemir/nvidia_gpu_exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ exporters_gpu_user }}
+Group={{ exporters_gpu_user }}
+ExecStart={{ exporters_bin_dir }}/nvidia_gpu_exporter \
+    --web.listen-address=:{{ nvidia_gpu_exporter_port }} \
+    --nvidia-smi-command={{ exporters_nvidia_smi_command }} \
+    --query-field-names={{ exporters_gpu_query_fields | join(',') }}
+Restart=always
+RestartSec=5s
+TimeoutStopSec=20s
+SyslogIdentifier=nvidia_gpu_exporter
+
+# Hardening, kept to directives that cannot get between nvidia-smi and the
+# driver. /dev/nvidia* stays reachable (the nodes are 0666), so PrivateDevices
+# is deliberately absent — it would break every metric this unit exists for.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target
