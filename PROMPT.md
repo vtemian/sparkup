@@ -692,3 +692,151 @@ actually hot.
 - `community.docker.docker_compose_v2`: https://docs.ansible.com/projects/ansible/latest/collections/community/docker/docker_compose_v2_module.html
 - Unsigned kernels break Secure Boot: https://wiki.ubuntu.com/SecurityTeam/KnowledgeBase/GRUB2SecureBootBypass
 - Secure Boot enabled by default on Spark: https://forums.developer.nvidia.com/t/secure-boot-requirements/350345
+
+---
+
+# Implementation notes for executors
+
+This section exists because the work will be done by agents starting from this file with no other
+context. Everything above is *why*; this is *what to build and how to know it worked*.
+
+## Rules
+
+- **Idempotence is the acceptance test.** Every task ends: run it, run it again, confirm the second
+  run reports `changed=0`. A task that cannot say this is not finished.
+- **FQCNs everywhere** (`ansible.builtin.apt`, `community.docker.docker_compose_v2`) — ansible-lint
+  runs the `production` profile and will fail otherwise.
+- **`make lint` must pass before every commit.** Never commit to `main`; work on a branch.
+- **Never break SSH.** It is socket-activated (`ssh.socket`, *not* `ssh.service`) and the box is
+  WiFi-only with no wired fallback. A firewall or sshd mistake means walking to the machine.
+- **Verify exporters through Prometheus, never by curling them.** `curl 127.0.0.1:9100` hangs on
+  this box even when node-exporter is healthy. Use `up`, `scrape_samples_scraped`.
+- **The box may be training.** Check `nvidia-smi --query-compute-apps=pid --format=csv` before
+  anything disruptive. A container restart is survivable; a reboot is not.
+- **Do not install system Pillow, freetype or fontconfig.** They can shadow the wheel-bundled
+  libraries that `bbm`'s cross-machine determinism contract depends on.
+- **Report, do not improvise.** If a task needs a decision that is not in this file — especially
+  anything touching kernels, firewall rules or firmware — stop and report rather than guessing.
+
+## Dependency order, and what can run in parallel
+
+```
+A0 scaffold ─┬─ A1 base ──── A7 monitoring ─┬─ B1 dashboards
+             ├─ A2 users                    └─ D2 power panels
+             ├─ A3 docker ── A4 gpu
+             ├─ A6 exporters ───────────────── (feeds A7's scrape config)
+             └─ D0/D1 shelly ──────────────── (feeds A7's scrape config)
+
+E1 thermal metrics   depends on A6
+E2 clock cap         independent, ships disabled
+E3 fwupd pinning     independent
+A5 kernel            LAST, ALONE, and only with explicit go-ahead
+```
+
+**A0 must land first** — everything else depends on the scaffold and `group_vars`. After that, A1,
+A2, A3 and A6 are genuinely independent and can be built concurrently. A7 needs A6 and D1 to exist
+so its scrape config has real targets. **A5 is sequenced last and alone**; it is the one task that
+can leave the box unbootable.
+
+## The variable registry (`group_vars/all.yml`)
+
+Task A0 creates this. It is the single place anything tunable lives, so an upgrade is a reviewable
+diff rather than a hunt through roles.
+
+```yaml
+spark_hostname: spark
+
+# `groups` is what each user gets in addition to their own. docker is deliberate:
+# marius lacks it today and that is a gap this closes.
+spark_users:
+  - { name: vlad,   groups: [sudo, docker, bbm], github_keys: false }
+  - { name: marius, groups: [sudo, docker, bbm], github_keys: balajmarius }
+
+# Deliberately NOT under ~/bbm: bbm's scripts/spark.sh rsyncs that path with
+# --delete and would erase anything written here.
+spark_shared_dir: /srv/bbm
+spark_shared_group: bbm
+spark_shared_subdirs: [data, checkpoints, runs]
+
+monitoring_dir: /opt/monitoring
+prometheus_image: prom/prometheus:v3.5.0        # pinned, never `latest`
+grafana_image: grafana/grafana:12.1.0
+grafana_port: 80                                # http://spark.local, no suffix
+prometheus_listen: "127.0.0.1:9090"
+prometheus_retention: 30d
+prometheus_scrape_interval: 15s
+prometheus_enable_remote_write_receiver: true   # the training project needs it
+
+node_exporter_version: "1.9.1"
+node_exporter_port: 9100
+nvidia_gpu_exporter_version: "1.3.2"
+nvidia_gpu_exporter_port: 9835
+
+shelly_enabled: false            # flip on once the plug is on the network
+shelly_host: ""                  # e.g. 192.168.1.141, with a DHCP reservation
+shelly_exporter_port: 9924
+energy_tariff_per_kwh: 1.3
+energy_currency: RON
+
+# OFF until E1 produces evidence. This box currently shows 0 us of thermal
+# slowdown against 6.45 h of power capping, so the community fan-curve advice
+# is an untested hypothesis here.
+gpu_clock_cap_enabled: false
+gpu_clock_cap_min_mhz: 300
+gpu_clock_cap_max_mhz: 2200
+
+expected_ec_firmware: "0x03000302"   # asserted, never flashed
+```
+
+Pin versions rather than tracking `latest`, and confirm each one exists for **linux/arm64** before
+using it — several exporters publish amd64-only assets.
+
+## File manifest per task
+
+| Task | Creates |
+|---|---|
+| A0 | `ansible.cfg`, `inventory/hosts.yml`, `group_vars/all.yml`, `requirements.yml`, `.ansible-lint`, `Makefile`, `site.yml` |
+| A1 | `roles/base/{tasks,handlers,defaults}/main.yml`, `roles/base/README.md` (records the discovered ufw state) |
+| A2 | `roles/users/tasks/main.yml` |
+| A3 | `roles/docker/{tasks,handlers}/main.yml`, `roles/docker/templates/daemon.json.j2` |
+| A4 | `roles/gpu/tasks/main.yml` |
+| A5 | `roles/kernel/{tasks,handlers}/main.yml`, `roles/kernel/files/no-unsigned-kernels` |
+| A6 | `roles/exporters/{tasks,handlers}/main.yml`, `roles/exporters/templates/*.service.j2` |
+| A7 | `roles/monitoring/{tasks,handlers}/main.yml`, `templates/{compose.yml,prometheus.yml,datasource.yml,dashboards.yml}.j2` |
+| B1 | `roles/monitoring/files/dashboards/spark-overview.json` |
+| D1 | shelly exporter unit + scrape job (extends A6/A7) |
+| E  | `roles/thermal/{tasks,handlers}/main.yml`, `templates/gpu-clock-cap.service.j2` |
+
+`ansible.cfg` needs at minimum: `inventory = inventory/hosts.yml`, `roles_path = roles`,
+`interpreter_python = auto_silent`, and `[ssh_connection] pipelining = True`.
+The `Makefile` needs `lint` (ansible-lint), `check` (`--check --diff`), `apply`, and `ping`.
+
+## Verification per task
+
+Run these; paste the output in the report rather than asserting success.
+
+| Task | Verify |
+|---|---|
+| A0 | `make lint` clean; `ansible spark -m ansible.builtin.ping` succeeds |
+| A1 | `ssh vlad@spark.local` still works; `ufw status` matches what the role declares; `avahi` active and `spark.local` resolves |
+| A2 | `ssh marius@spark.local docker ps` works after one reconnect |
+| A3 | `docker info --format '{{json .Runtimes}}'` lists `nvidia`; the three monitoring containers come back after the daemon restart |
+| A4 | `docker run --rm --gpus all <cuda13-arm64> nvidia-smi` exits 0; `/etc/cdi/nvidia.yaml` exists |
+| A5 | `mokutil --sb-state` still reports enabled; `uname -r` is the intended signed kernel; **reboot once and confirm it comes back** |
+| A6 | via Prometheus: `up{job="node"}==1`, `up{job="gpu"}==1`, `scrape_samples_scraped>0`; `node_filesystem_avail_bytes{mountpoint="/"}` present; both units survive a reboot |
+| A7 | `curl -s -o /dev/null -w '%{http_code}' http://spark.local/` → 200 anonymously; all scrape targets `up`; `docker compose down` then re-run converges |
+| B1 | every panel renders with data; no panel queries a metric nobody emits |
+| D1 | `up{job="power"}==1`; the Wh series is typed as a **counter** and `increase()` over an hour returns a plausible number |
+| E1 | throttle-reason metrics present in Prometheus; alert rules load |
+| all | second playbook run reports `changed=0`; `make lint` clean |
+
+**Then, once: `cd ~/projects/ai/bbm && make spark-parity`.** It must still pass. This is the canary
+that provisioning has not perturbed the Pillow/freetype resolution the verifier depends on — and
+that verifier becomes the RL reward signal, so a silent regression here is expensive.
+
+## What "done" reports look like
+
+For each task: what changed, the verification output, anything discovered that contradicts this
+file, and anything deliberately left undone. **Contradictions are the valuable part** — this plan
+was written from an audit of one box on one day, and several of its facts are hypotheses (marked as
+such). If reality disagrees, reality wins and this file should be corrected.
