@@ -1,0 +1,7 @@
+---
+# avahi publishes <hostname>.local from the system hostname it read at start.
+# Rename the box without this and the network keeps answering to the old name.
+- name: Restart avahi-daemon
+  ansible.builtin.systemd_service:
+    name: avahi-daemon
+    state: restarted
