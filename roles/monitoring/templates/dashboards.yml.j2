@@ -1,0 +1,20 @@
+---
+# Managed by Ansible — roles/monitoring/templates/dashboards.yml.j2.
+# Edit the template and re-run the playbook; local edits are overwritten.
+
+apiVersion: 1
+
+providers:
+  - name: spark
+    orgId: 1
+    type: file
+    disableDeletion: false
+    # The provider rescans on this interval, so a dashboard file change lands
+    # without restarting Grafana.
+    updateIntervalSeconds: 10
+    # Editing a provisioned board in the UI is allowed — but the file wins on
+    # the next converge. Export the JSON and commit it, or the change is lost.
+    allowUiUpdates: true
+    options:
+      path: {{ monitoring_dashboards_container_dir }}
+      foldersFromFilesStructure: false

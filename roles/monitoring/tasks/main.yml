@@ -1,0 +1,80 @@
+---
+- name: Create the monitoring stack directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ monitoring_dir }}"
+    - "{{ monitoring_dir }}/prometheus"
+    - "{{ monitoring_dir }}/grafana"
+    - "{{ monitoring_dir }}/grafana/dashboards"
+    - "{{ monitoring_dir }}/grafana/provisioning"
+    - "{{ monitoring_dir }}/grafana/provisioning/datasources"
+    - "{{ monitoring_dir }}/grafana/provisioning/dashboards"
+    # Empty, and created on purpose: Grafana logs a provisioning error on every
+    # start for each of these directories it cannot open, and a startup log
+    # with routine errors in it is a log nobody reads. The alerting directory
+    # is also where Phase E's thermal rules will land.
+    - "{{ monitoring_dir }}/grafana/provisioning/alerting"
+    - "{{ monitoring_dir }}/grafana/provisioning/plugins"
+
+- name: Template the compose file
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ monitoring_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart monitoring stack
+
+- name: Template the Prometheus configuration
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ monitoring_dir }}/prometheus/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload Prometheus configuration
+
+- name: Provision the Grafana datasource
+  ansible.builtin.template:
+    src: datasource.yml.j2
+    dest: "{{ monitoring_dir }}/grafana/provisioning/datasources/datasource.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart monitoring stack
+
+- name: Provision the Grafana dashboard provider
+  ansible.builtin.template:
+    src: dashboards.yml.j2
+    dest: "{{ monitoring_dir }}/grafana/provisioning/dashboards/dashboards.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart monitoring stack
+
+# Copied, not templated: the JSON is full of Grafana's own {{label}} legend
+# syntax, which Jinja would eat. Grafana's file provider rescans this directory
+# on its own interval, so a dashboard edit needs no restart.
+- name: Install the provisioned dashboards
+  ansible.builtin.copy:
+    src: dashboards/
+    dest: "{{ monitoring_dir }}/grafana/dashboards/"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Bring the monitoring stack up
+  community.docker.docker_compose_v2:
+    project_src: "{{ monitoring_dir }}"
+    project_name: "{{ monitoring_project_name }}"
+    files:
+      - compose.yml
+    state: present
+    pull: missing
+    remove_orphans: true
+    wait: true

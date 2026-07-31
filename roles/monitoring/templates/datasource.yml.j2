@@ -1,0 +1,22 @@
+---
+# Managed by Ansible — roles/monitoring/templates/datasource.yml.j2.
+# Edit the template and re-run the playbook; local edits are overwritten.
+
+apiVersion: 1
+
+datasources:
+  # The uid is load-bearing: every provisioned dashboard references the
+  # datasource by uid "prometheus". Rename it and every panel loses its query.
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    # Container-to-container on the compose network, so the service name
+    # resolves. This one does NOT need host.docker.internal — that alias is
+    # only for reaching exporters that run on the host.
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      # Lets $__rate_interval work out honest windows instead of guessing.
+      timeInterval: {{ prometheus_scrape_interval }}
