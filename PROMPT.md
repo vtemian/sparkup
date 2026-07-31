@@ -779,17 +779,57 @@ actually hot.
 **Why it exists:** exclusivity. Energy attribution against a whole-box meter is only valid when one
 run owns the machine (Decisions, D2). Convenience is the secondary benefit.
 
-**Recommended: `pueue`** — 6.3 k stars, actively maintained, single Rust binary, groups with
-parallelism limits, pause/resume, proper daemon+client. Configure one group with parallelism **1**.
-It has no GPU awareness and no metrics, and needs neither: our callback emits the metrics, and with
-one GPU and one run, "GPU awareness" is just serialization.
+**Two users share this box — vlad and marius — and that changes the design.**
 
-Considered and rejected: `task-spooler`'s GPU-aware fork (2 years stale), Ray (see Prior art),
-SLURM (munge + slurmctld + slurmd + slurmdbd + MySQL to serialize jobs on one machine — only worth
-it if multi-user fair-share ever matters), `systemd-run`/`at` (no queue).
+**`pueue` is a per-user daemon.** Its socket lives under the invoking user's runtime directory, so
+a default install gives each user their own daemon and their own queue. Two queues at parallelism 1
+means **two concurrent jobs**, which destroys the exclusivity invariant and silently corrupts both
+runs' energy figures. A per-user pueue is therefore *wrong* here, however convenient it looks.
 
-**The launcher enforces the invariant**: refuse to start when another run is active, or tag the run
-`contended=true` so its energy figures are visibly untrustworthy rather than quietly wrong.
+**Decision: one shared system daemon.** `pueued` as a systemd **system** service running as the
+`bbm` service account, unix socket group-owned by `bbm`, mode 660; both users' launcher points at it
+via `PUEUE_CONFIG_PATH`. One queue, real serialization.
+
+Consequences to accept, not discover later:
+- Jobs execute as the service account, not as the submitter. `/srv/bbm` is already setgid `bbm`, so
+  artifacts stay shared; a common HF cache and venv is a feature, not a loss.
+- The **submitter must be recorded by the launcher** (`user` label on `training_run_info`), since it
+  can no longer be inferred from the process owner.
+- This is mildly off-label use of pueue. **Verify the shared-socket setup works before building on
+  it** — if it fights, that is the signal to reconsider, not to paper over.
+
+**`pueue` is strictly FIFO — there is no fair-share.** Ten jobs from one user block the other's
+single job. With two colleagues this is a social problem before it is a technical one, and manual
+reordering (`pueue switch`) is the escape hatch. **If fairness ever becomes contentious, migrate —
+do not patch pueue.** The migration targets, in order: **Nomad** (single binary, multi-user HTTP
+API, native Prometheus telemetry, NVIDIA device plugin, batch + parameterized jobs) then **SLURM**
+(the correct HPC answer, at the cost of munge + slurmctld + slurmd + slurmdbd + MySQL for two
+people and one GPU).
+
+Also rejected: `task-spooler`'s GPU-aware fork (2 years stale, same per-user problem), Ray (see
+Prior art), `systemd-run`/`at` (no queue).
+
+**The launcher enforces the invariant** regardless of scheduler: refuse to start when another run is
+active, or tag the run `contended=true` so its energy figures are visibly untrustworthy rather than
+quietly wrong.
+
+### F1: the queue in Grafana
+
+With two users this is not a nicety — it is how "why isn't my job running" gets answered without
+asking a human. `pueue status --json` is machine-readable; a small exporter writes to
+node-exporter's textfile directory (no new service):
+
+```
+spark_queue_tasks{status="running|queued|paused|failed|success"}   gauge, count per state
+spark_queue_task_info{task_id, run_id, user, label, status} 1      info metric, one per task
+spark_queue_wait_seconds{task_id}                                  time spent queued
+spark_queue_running_seconds{task_id}                               current runtime
+```
+
+A Table panel over `spark_queue_task_info` is the queue view; put it on the runs-index dashboard
+(C4) beside energy, duration and cost, with the same data-link pattern into the run dashboard. Add
+a stat for queue depth and an alert if anything waits longer than some threshold — on a shared box,
+a silently stuck queue is the failure nobody notices.
 
 ## Open questions — need root, a decision, or both
 
@@ -809,6 +849,11 @@ it if multi-user fair-share ever matters), `systemd-run`/`at` (no queue).
 8. **Tariff.** What RON/kWh should D2 default to, and does hardware amortisation belong in the cost
    figure or not? (Recommendation: energy only — amortisation is an accounting choice, not a
    measurement, and mixing them makes the number arguable.)
+9. **Shared-daemon pueue.** Needs a spike before Phase F is built on it: does `pueued` run cleanly
+   as a system service with a group-accessible socket, and do both users' clients reach it? If not,
+   fall back to Nomad rather than to per-user queues, which do not satisfy exclusivity.
+10. **Whose job runs first.** FIFO is the plan. Confirm that is acceptable to both users, or accept
+    the migration cost early rather than after a scheduling argument.
 
 ## Risks
 
