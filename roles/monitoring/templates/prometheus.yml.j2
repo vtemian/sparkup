@@ -1,0 +1,33 @@
+---
+# Managed by Ansible — roles/monitoring/templates/prometheus.yml.j2.
+# Edit the template and re-run the playbook; local edits are overwritten.
+
+global:
+  scrape_interval: {{ prometheus_scrape_interval }}
+  evaluation_interval: {{ prometheus_scrape_interval }}
+
+scrape_configs:
+  # Prometheus scraping itself. `localhost` is correct here and only here:
+  # this target really is inside the container.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # The exporters are systemd units on the host, not containers. From inside
+  # this container `localhost` is the container, so the host is named through
+  # the host-gateway alias declared in compose.yml.
+  - job_name: node
+    static_configs:
+      - targets: ["host.docker.internal:{{ node_exporter_port }}"]
+
+  - job_name: gpu
+    static_configs:
+      - targets: ["host.docker.internal:{{ nvidia_gpu_exporter_port }}"]
+{% if shelly_enabled %}
+
+  # Wall-socket power. Emitted only when the plug is actually on the network:
+  # a permanently-red target teaches people to ignore red targets.
+  - job_name: power
+    static_configs:
+      - targets: ["{{ shelly_host }}:{{ shelly_exporter_port }}"]
+{% endif %}
