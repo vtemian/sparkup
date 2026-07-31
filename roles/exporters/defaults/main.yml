@@ -42,6 +42,10 @@ exporters_node_collectors:
   - os
   - textfile
   - filesystem
+  # `stat` is what exports node_boot_time_seconds. The overview dashboard's
+  # uptime panel is blank without it, and the containerised exporter did not
+  # run it, so this is an addition rather than a carry-over.
+  - stat
 
 # These two excludes are what stops the filesystem collector recursing into
 # the 13 snap loop devices and every Docker overlay, which is how it hangs and
