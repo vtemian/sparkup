@@ -139,6 +139,20 @@ Docker, run the `docker` role first or create the group by hand. This role does 
 because a role that silently creates any group it is handed also silently absorbs a typo: `dokcer`
 would converge green and grant nothing.
 
+## What `github_keys` actually delegates
+
+`ansible.posix.authorized_key` fetches `https://github.com/<user>.keys` from the target host on
+every converge. Two consequences worth stating plainly:
+
+- **Whoever controls that GitHub account controls login to that user.** If the account is listed
+  with `sudo`, that is root on this box. Naming someone in `github_keys` is a standing delegation,
+  not a one-time key copy — adding a key on GitHub grants access at the next converge.
+- **GitHub being unreachable fails the play mid-provision.** The keys are re-fetched every run, so
+  a network problem stops the converge rather than leaving the previous keys in place.
+
+Set `github_keys: false` and manage `authorized_keys` yourself if neither is acceptable. Existing
+keys are never removed (`exclusive: false`), so a working key cannot be orphaned either way.
+
 ## Verify
 
 ```bash
