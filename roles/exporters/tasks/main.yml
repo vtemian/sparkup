@@ -151,6 +151,19 @@
 - name: Retire the cron-driven GPU metrics script
   when: exporters_retire_legacy_gpu_script | bool
   block:
+    # An empty script path makes the pattern empty, and an empty regex matches
+    # everything: the crontab rewrite would drop every line and `pkill -f ''`
+    # would match every process on the box. Refuse rather than converge.
+    - name: Assert the legacy script path is set before matching on it
+      ansible.builtin.assert:
+        that:
+          - exporters_legacy_gpu_script | default('', true) | trim | length > 0
+          - exporters_legacy_gpu_cron_user | default('', true) | trim | length > 0
+        fail_msg: >-
+          exporters_retire_legacy_gpu_script is on but
+          exporters_legacy_gpu_script or exporters_legacy_gpu_cron_user is
+          empty. Both must name the script and its crontab owner.
+
     # ansible.builtin.cron cannot do this. With state=absent it calls
     # find_job(name) and ignores `job` entirely, so it only ever matches a
     # line it wrote itself, carrying an `#Ansible: <name>` header. These two

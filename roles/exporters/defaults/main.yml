@@ -100,9 +100,11 @@ exporters_gpu_query_fields:
 
 # Off by default: only the box that grew the cron+flock+bash GPU loop by hand
 # has anything to retire. Turning it on elsewhere is a no-op at best.
+# Set all three in host_vars when your box has such a script; the role asserts
+# the path and owner are non-empty before it matches anything on them.
 exporters_retire_legacy_gpu_script: false
-exporters_legacy_gpu_cron_user: vlad
-exporters_legacy_gpu_script: /home/vlad/monitoring/gpu-metrics.sh
+exporters_legacy_gpu_cron_user: ""
+exporters_legacy_gpu_script: ""
 # Both crontab lines — the every-minute one and the @reboot one — name the
 # script, so one pattern retires both no matter how they are spaced.
 exporters_legacy_gpu_cron_pattern: "{{ exporters_legacy_gpu_script | regex_escape }}"
