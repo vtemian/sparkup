@@ -15,6 +15,19 @@ Today the box works, but nothing about it is reproducible — the state lives on
 it died tomorrow, rebuilding it would mean rediscovering every trap recorded below. That is the
 problem this repo exists to solve.
 
+**Audience correction (2026-07-31, Vlad).** This is a recipe **other people will clone and run on
+their own Sparks**, not a config for one machine. Much of what follows is written as "converge
+*this* box" and hardcodes `vlad`, `marius` and `/srv/bbm` into `group_vars`; that framing is
+superseded. The rule now:
+
+- `group_vars/all.yml` holds only defaults that suit **any** Spark. Identity and site-specific
+  paths live in `host_vars/<host>.yml`, which is the one file a newcomer edits.
+- Nothing is destructive by default. The playbook does not disable a stranger's services, does not
+  reset their firewall, does not pin UIDs, and creates no accounts unless asked.
+- Questions in the "Open questions" section that only make sense for *this* box — whether `marius`
+  keeps sudo, whether `openvpn` should be off — are not decisions the recipe gets to make. They
+  become variables with safe defaults, or they are dropped.
+
 ## Working agreement
 
 **The assistant implements. Vlad directs.** Same agreement as `bbm`: Vlad decides architecture,
@@ -337,11 +350,12 @@ sparkup/
 │   ├── kernel/                  signed-kernel pin, unsigned apt-pin, GRUB default
 │   ├── thermal/                 clock-cap unit, fwupd pinning, EC assertion
 │   ├── exporters/               node_exporter + nvidia_gpu_exporter + shelly, systemd
-│   ├── monitoring/              prometheus + grafana containers, provisioning, alerts
-│   ├── scheduler/               pueue, one-run-at-a-time group
-│   └── training_obs/            trainobs package, /srv/bbm, dashboards, launcher
-└── files/trainobs/              the Python package (callback + launcher + demo)
+│   └── monitoring/              prometheus + grafana containers, provisioning, alerts
 ```
+
+*(An earlier version of this layout also listed `roles/scheduler/`, `roles/training_obs/` and
+`files/trainobs/`. Phase C and the scheduler are both out of scope — see below — so those are
+gone. The file manifest table near the end of this document is the accurate list.)*
 
 `ansible.cfg`: `inventory = inventory/hosts.yml`, `roles_path = roles`,
 `interpreter_python = auto_silent`, `[ssh_connection] pipelining = True`.
@@ -401,6 +415,20 @@ restart (`restart: unless-stopped` should do it — confirm, don't assume).
 `nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml`, guarded for idempotency; enable
 `nvidia-cdi-refresh` if the toolkit provides it so the spec regenerates after driver updates.
 
+**Correction found during implementation — `nvidia-cdi-refresh` is two units, and enabling it
+naively breaks CDI.** The toolkit ships `nvidia-cdi-refresh.path` *and* `nvidia-cdi-refresh.service`,
+both disabled, both dpkg conffiles from `nvidia-container-toolkit-base`. The `.path` is the trigger
+and is the one to enable. The `.service` hardcodes
+`NVIDIA_CTK_CDI_OUTPUT_FILE_PATH=/var/run/cdi/nvidia.yaml`, so enabling it as shipped writes a
+**second** spec alongside ours — and the CDI cache *drops* any device that two specs both claim, so
+`nvidia.com/gpu=all` stops resolving precisely because the refresh worked. Point it at our path
+using the vendor's own override file, `/etc/nvidia-container-toolkit/nvidia-cdi-refresh.env`, which
+already exists with that line commented out.
+
+This also justifies `/etc/cdi` over the vendor default for a reason not stated above: `/var/run` is
+tmpfs, and `PathChanged` does not fire at boot, so a spec written there is simply gone after a
+reboot.
+
 **Smoke test as a real task:** `docker run --rm --gpus all <cuda13-arm64 image> nvidia-smi` must
 succeed, asserted on output. The image must be CUDA **13**-based and arm64 — sm_121 exists only in
 CUDA ≥ 13.0, so most `cu12x` images will not run.
@@ -456,6 +484,14 @@ Memory metrics will be absent/NaN on GB10 — expected.
 **Add throttle-reason metrics.** `nvidia-smi` exposes `clocks_throttle_reasons.*` and the event
 counters as queryable fields. These are what turn the thermal question (Phase E) from forum lore
 into our own data, so they are not optional.
+
+**Naming correction, verified against driver 580.173.02 on this box.** `--help-query-gpu` lists both
+spellings on one line: `clocks_event_reasons.*` is the current name and `clocks_throttle_reasons.*`
+is a deprecated alias. Use the former. There is also a second family this document did not know
+about, with **no** `throttle` alias — `clocks_event_reasons_counters.{sw_power_cap,
+sw_thermal_slowdown, hw_thermal_slowdown, hw_power_brake_slowdown, sync_boost}` — the cumulative
+microsecond counters. Those are the honest Phase E signal: a temperature reading is a snapshot, a
+rising slowdown counter is proof of lost work.
 
 Then delete `~/monitoring/gpu-metrics.sh` and both crontab lines, migrating dashboards to the new
 metric names **in the same change** — never leave a window where panels query metrics nobody emits.
@@ -569,16 +605,24 @@ load (tens to hundreds of watts), but it means the *idle baseline* carries more 
 the loaded figure. Record the caveat next to the number rather than pretending precision.
 
 ### D2: correlation — a time-range join, not a label join
+**Owned by the training-observability project, not by `sparkup`.** What `sparkup` owes it is the
+`power` scrape job; the per-run join is the launcher's job. The full specification, including the
+`training_run_*_wh` series and the PromQL, is in `docs/training-observability.md`.
+
 The plug measures the whole box and **can never carry a `run_id` label**. Attribution is by time
-window, which is why runs must be serialized (see Decisions, and Phase F).
+window, which is why runs must be serialized (see Decisions; the scheduler that was to enforce it
+is deferred along with Phase C).
 
 **Live:** the plug series is simply a panel on the run dashboard; because the dashboard's time
 range is pinned to the run, it already shows exactly that window. No machinery.
 
 **Durable:** at run end the launcher queries Prometheus over `[start, end]` and writes back
-per-run summary series — one sample per run, cheap forever:
+per-run summary series — one sample per run, cheap forever.
 
-```
+*(An unclosed code fence used to sit here, which is why the block of `training_run_energy_wh`
+metric definitions ended up stranded in `docs/training-observability.md` instead. That is where
+they belong anyway, since the launcher writes them.)*
+
 ## Phase E — thermal, and the firmware question
 
 **Instrument before acting.** The measured state (above) shows zero thermal throttling and 6.45 h
@@ -628,8 +672,13 @@ actually hot.
    a WiFi-only box risks a lockout.
 2. **GRUB's resolved default entry.** `/boot/grub/grub.cfg` is root-only; which kernel GRUB
    actually defaults to is unverified. Confirm before A5 touches anything.
-3. **Vendor Docker provenance.** Is 29.2.1 from Docker CE upstream or NVIDIA's repo? Determines
-   whether A3 may manage the repo.
+3. ~~**Vendor Docker provenance.**~~ **Answered 2026-07-31: NVIDIA's repo.** `docker-ce`,
+   `docker-ce-cli` (5:29.2.1) and `containerd.io` (2.2.1) all resolve to
+   `repo.download.nvidia.com/baseos/ubuntu/noble/arm64` at priority 600, and `sources.list.d`
+   contains no `docker.list` or `docker.sources`. So A3 must **not** add the upstream repo here —
+   it would fight the vendor's pinned build. The role gates that block on both
+   `docker_manage_upstream_repo` and Docker being genuinely absent, so a fresh non-DGX box still
+   converges.
 4. **Surprising enabled services** (`openvpn`, `samba-ad-dc`, `gnome-remote-desktop`, cups,
    `cloud-init`). Disable or leave? The role lists; Vlad decides.
 5. **`marius` sudo.** He has it today. Keep (shared dev box) or reduce?
@@ -746,17 +795,27 @@ diff rather than a hunt through roles.
 ```yaml
 spark_hostname: spark
 
-# `groups` is what each user gets in addition to their own. docker is deliberate:
-# marius lacks it today and that is a gap this closes.
-spark_users:
-  - { name: vlad,   groups: [sudo, docker, bbm], github_keys: false }
-  - { name: marius, groups: [sudo, docker, bbm], github_keys: balajmarius }
+# CORRECTION: this file is a public recipe others run on their own Sparks, so
+# group_vars carries no identity. spark_users defaults to [] — a fresh clone
+# must not invent accounts on someone else's box — and the vlad/marius list
+# below now lives in host_vars/spark.yml as the worked example someone edits.
+# `groups` is what each user gets in addition to their own; the shared group is
+# appended by the role, so it is not repeated per user. UIDs are deliberately
+# not pinned: 1000/1001 collide on a machine where they are already taken.
+spark_users: []
 
 # Deliberately NOT under ~/bbm: bbm's scripts/spark.sh rsyncs that path with
-# --delete and would erase anything written here.
-spark_shared_dir: /srv/bbm
-spark_shared_group: bbm
+# --delete and would erase anything written here. The bbm-specific values move
+# to host_vars; the defaults here are generic.
+spark_shared_dir: /srv/spark
+spark_shared_group: spark
 spark_shared_subdirs: [data, checkpoints, runs]
+
+# ufw: the role only ever ADDS allow rules. It never resets the firewall and
+# never sets a default deny policy — adding allows cannot lock anyone out, and
+# a lockout on a WiFi-only box means walking to it.
+spark_firewall_manage: true
+spark_firewall_allow_ports: [22, 80]
 
 monitoring_dir: /opt/monitoring
 prometheus_image: prom/prometheus:v3.5.0        # pinned, never `latest`
@@ -767,9 +826,14 @@ prometheus_retention: 30d
 prometheus_scrape_interval: 15s
 prometheus_enable_remote_write_receiver: true   # the training project needs it
 
-node_exporter_version: "1.9.1"
+# Both corrected against the upstream release APIs on 2026-07-31. The versions
+# first written here were wrong: 1.9.1 was three minors stale, and
+# nvidia_gpu_exporter 1.3.2 does not exist at all — it was a typo for the 1.13.x
+# line, and pinning it would have 404'd on download. Confirm linux-arm64 assets
+# before bumping either; several exporters publish amd64 only.
+node_exporter_version: "1.12.1"
 node_exporter_port: 9100
-nvidia_gpu_exporter_version: "1.3.2"
+nvidia_gpu_exporter_version: "1.13.1"
 nvidia_gpu_exporter_port: 9835
 
 shelly_enabled: false            # flip on once the plug is on the network
