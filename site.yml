@@ -1,0 +1,38 @@
+---
+- name: Provision the DGX Spark
+  hosts: spark
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Detect training processes on the GPU
+      ansible.builtin.command: nvidia-smi --query-compute-apps=pid,process_name --format=csv,noheader
+      register: spark_gpu_apps
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Record whether the box is training
+      ansible.builtin.set_fact:
+        spark_training_active: "{{ (spark_gpu_apps.stdout | default('') | trim) | length > 0 }}"
+
+    - name: Warn that a training run owns the box
+      ansible.builtin.debug:
+        msg: >-
+          A GPU process is running ({{ spark_gpu_apps.stdout | trim }}).
+          Container restarts are survivable; a reboot is not.
+      when: spark_training_active
+
+  roles:
+    - role: base
+      tags: [base]
+    - role: users
+      tags: [users]
+    - role: docker
+      tags: [docker]
+    - role: gpu
+      tags: [gpu]
+    - role: exporters
+      tags: [exporters]
+    - role: monitoring
+      tags: [monitoring]

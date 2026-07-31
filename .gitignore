@@ -1,0 +1,6 @@
+*.retry
+.worktrees/
+__pycache__/
+# Never commit a become or vault password.
+*vault-pass*
+*become-pass*

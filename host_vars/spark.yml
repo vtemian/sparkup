@@ -1,0 +1,16 @@
+---
+# This box. Copy this file to host_vars/<your-host>.yml and edit it — it is the
+# only file most people need to touch.
+
+spark_users:
+  - name: vlad
+    groups: [sudo, docker]
+    github_keys: false
+  - name: marius
+    groups: [sudo, docker]
+    github_keys: balajmarius
+
+# bbm's scripts/spark.sh rsyncs ~/bbm with --delete, so every training artifact
+# lives here instead. Renaming this after data exists is a migration, not an edit.
+spark_shared_dir: /srv/bbm
+spark_shared_group: bbm

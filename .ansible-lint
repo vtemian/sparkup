@@ -1,0 +1,12 @@
+---
+profile: production
+
+exclude_paths:
+  - .git/
+  - .github/
+  - .worktrees/
+
+# Roles live at the top level of a single-host project, not in a collection,
+# so they carry no galaxy metadata.
+skip_list:
+  - meta-no-info
