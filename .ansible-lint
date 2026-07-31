@@ -8,5 +8,12 @@ exclude_paths:
 
 # Roles live at the top level of a single-host project, not in a collection,
 # so they carry no galaxy metadata.
+#
+# var-naming[no-role-prefix] wants role defaults named `users_shared_dir`. This
+# project deliberately keeps one shared variable registry — `spark_*`,
+# `prometheus_*`, `node_exporter_*` — read by several roles, so that an upgrade
+# is a reviewable diff in group_vars rather than a hunt through roles. Prefixing
+# per role would break that design.
 skip_list:
   - meta-no-info
+  - var-naming[no-role-prefix]

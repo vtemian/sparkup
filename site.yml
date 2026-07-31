@@ -26,12 +26,14 @@
   roles:
     - role: base
       tags: [base]
-    - role: users
-      tags: [users]
+    # docker before users: ansible.builtin.user fails hard when a group named in
+    # `groups:` does not exist, and users are put in the docker group.
     - role: docker
       tags: [docker]
     - role: gpu
       tags: [gpu]
+    - role: users
+      tags: [users]
     - role: exporters
       tags: [exporters]
     - role: monitoring
