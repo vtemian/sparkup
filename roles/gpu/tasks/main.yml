@@ -1,0 +1,84 @@
+---
+- name: Install the NVIDIA container toolkit
+  ansible.builtin.apt:
+    name: "{{ gpu_toolkit_packages }}"
+    state: present
+
+- name: Create the CDI specification directory
+  ansible.builtin.file:
+    path: "{{ gpu_cdi_spec_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# `creates` is the idempotency guard: the spec is written once, and the refresh
+# unit below regenerates it whenever the driver or the toolkit changes. A plain
+# command here would rewrite the file on every converge.
+- name: Generate the CDI specification for the GPU
+  ansible.builtin.command:
+    cmd: nvidia-ctk cdi generate --output={{ gpu_cdi_spec_path }}
+    creates: "{{ gpu_cdi_spec_path }}"
+
+- name: Look for the CDI refresh units
+  ansible.builtin.find:
+    paths:
+      - /etc/systemd/system
+      - /usr/lib/systemd/system
+    patterns: nvidia-cdi-refresh.path
+    file_type: any
+  register: gpu_cdi_refresh_units
+
+- name: Check for the CDI refresh override file
+  ansible.builtin.stat:
+    path: "{{ gpu_cdi_refresh_env_file }}"
+  register: gpu_cdi_refresh_env
+
+- name: Keep the CDI specification current across driver updates
+  when: gpu_cdi_refresh_units.matched | int > 0
+  block:
+    # The unit defaults to /var/run/cdi/nvidia.yaml. Left alone it would produce
+    # a second spec declaring the same devices, and the CDI cache drops devices
+    # that two specs both claim. The vendor ships this env file as the
+    # documented override point, so redirect rather than duplicate.
+    - name: Point the CDI refresh service at the managed specification path
+      ansible.builtin.lineinfile:
+        path: "{{ gpu_cdi_refresh_env_file }}"
+        regexp: '^#?\s*NVIDIA_CTK_CDI_OUTPUT_FILE_PATH='
+        line: "NVIDIA_CTK_CDI_OUTPUT_FILE_PATH={{ gpu_cdi_spec_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+      when: gpu_cdi_refresh_env.stat.exists
+
+    - name: Enable the CDI refresh watcher
+      ansible.builtin.systemd_service:
+        name: nvidia-cdi-refresh.path
+        enabled: true
+        state: started
+
+- name: Prove that GPU containers work
+  when:
+    - gpu_smoke_test | bool
+    - not ansible_check_mode
+  block:
+    - name: Run nvidia-smi inside a CUDA container
+      ansible.builtin.command:
+        cmd: docker run --rm --gpus all {{ gpu_smoke_test_image }} nvidia-smi
+      register: gpu_smoke_test_result
+      changed_when: false
+
+    - name: Assert that the container saw the GPU
+      ansible.builtin.assert:
+        that:
+          - gpu_smoke_test_result.rc == 0
+          - "'NVIDIA-SMI' in gpu_smoke_test_result.stdout"
+          - "'CUDA Version' in gpu_smoke_test_result.stdout"
+        fail_msg: >-
+          `docker run --gpus all {{ gpu_smoke_test_image }} nvidia-smi` ran but
+          did not print a driver table, so the container could not reach the
+          GPU. Check that the nvidia runtime is registered
+          (`docker info --format '{{ '{{' }}json .Runtimes{{ '}}' }}'`), that
+          {{ gpu_cdi_spec_path }} exists, and that the image is a CUDA 13 arm64
+          build — this GPU is sm_121 and CUDA 12 images cannot address it.
+        success_msg: GPU containers work; nvidia-smi ran inside the container.
