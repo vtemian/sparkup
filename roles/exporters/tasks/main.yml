@@ -1,0 +1,189 @@
+---
+# node_exporter and nvidia_gpu_exporter as supervised host systemd units.
+# Both binaries come from checksum-verified GitHub release archives staged
+# under a versioned path, so a version bump is a real change and an unchanged
+# version is a no-op.
+
+# The groups are created explicitly rather than left to useradd's
+# user-private-group default: the units name a Group=, and a unit that cannot
+# resolve its group fails to start.
+- name: Create the exporter system groups
+  ansible.builtin.group:
+    name: "{{ item }}"
+    system: true
+    state: present
+  loop:
+    - "{{ exporters_node_user }}"
+    - "{{ exporters_gpu_user }}"
+
+- name: Create the exporter system users
+  ansible.builtin.user:
+    name: "{{ item }}"
+    group: "{{ item }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    create_home: false
+  loop:
+    - "{{ exporters_node_user }}"
+    - "{{ exporters_gpu_user }}"
+
+- name: Create the exporter staging directory
+  ansible.builtin.file:
+    path: "{{ exporters_download_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create the node_exporter textfile collector directory
+  ansible.builtin.file:
+    path: "{{ exporters_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download the node_exporter release archive
+  ansible.builtin.get_url:
+    url: "{{ exporters_node_release_url }}/{{ exporters_node_archive }}"
+    dest: "{{ exporters_download_dir }}/{{ exporters_node_archive }}"
+    checksum: "sha256:{{ exporters_node_release_url }}/{{ exporters_node_checksums }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Unpack the node_exporter release archive
+  ansible.builtin.unarchive:
+    src: "{{ exporters_download_dir }}/{{ exporters_node_archive }}"
+    dest: "{{ exporters_download_dir }}"
+    remote_src: true
+    creates: "{{ exporters_node_unpack_dir }}/node_exporter"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the node_exporter binary
+  ansible.builtin.copy:
+    src: "{{ exporters_node_unpack_dir }}/node_exporter"
+    dest: "{{ exporters_bin_dir }}/node_exporter"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart node_exporter
+
+# The nvidia_gpu_exporter archive is flat — no version prefix inside it — so
+# it gets a directory of its own to unpack into.
+- name: Create the nvidia_gpu_exporter staging directory
+  ansible.builtin.file:
+    path: "{{ exporters_gpu_unpack_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download the nvidia_gpu_exporter release archive
+  ansible.builtin.get_url:
+    url: "{{ exporters_gpu_release_url }}/{{ exporters_gpu_archive }}"
+    dest: "{{ exporters_download_dir }}/{{ exporters_gpu_archive }}"
+    checksum: "sha256:{{ exporters_gpu_release_url }}/{{ exporters_gpu_checksums }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Unpack the nvidia_gpu_exporter release archive
+  ansible.builtin.unarchive:
+    src: "{{ exporters_download_dir }}/{{ exporters_gpu_archive }}"
+    dest: "{{ exporters_gpu_unpack_dir }}"
+    remote_src: true
+    creates: "{{ exporters_gpu_unpack_dir }}/nvidia_gpu_exporter"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the nvidia_gpu_exporter binary
+  ansible.builtin.copy:
+    src: "{{ exporters_gpu_unpack_dir }}/nvidia_gpu_exporter"
+    dest: "{{ exporters_bin_dir }}/nvidia_gpu_exporter"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart nvidia_gpu_exporter
+
+- name: Install the node_exporter systemd unit
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart node_exporter
+
+- name: Install the nvidia_gpu_exporter systemd unit
+  ansible.builtin.template:
+    src: nvidia_gpu_exporter.service.j2
+    dest: /etc/systemd/system/nvidia_gpu_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart nvidia_gpu_exporter
+
+# daemon_reload here as well as in the handlers: on a first run the unit file
+# is brand new and systemd has to be told about it before it can be enabled.
+- name: Enable and start node_exporter
+  ansible.builtin.systemd_service:
+    name: node_exporter.service
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Enable and start nvidia_gpu_exporter
+  ansible.builtin.systemd_service:
+    name: nvidia_gpu_exporter.service
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# GPU telemetry used to come from a bash loop launched by cron under `flock`.
+# Retiring it is opt-in because only the box that grew it by hand has it.
+- name: Retire the cron-driven GPU metrics script
+  when: exporters_retire_legacy_gpu_script | bool
+  block:
+    # ansible.builtin.cron cannot do this. With state=absent it calls
+    # find_job(name) and ignores `job` entirely, so it only ever matches a
+    # line it wrote itself, carrying an `#Ansible: <name>` header. These two
+    # lines were written by hand and have no header, so the module would
+    # report ok and change nothing. Rewriting the crontab through crontab(1)
+    # is the supported interface and is indifferent to the alignment padding
+    # on the @reboot line, which no reconstructed job string can match.
+    - name: Read the crontab that launches the GPU metrics loop
+      ansible.builtin.command:
+        cmd: crontab -u {{ exporters_legacy_gpu_cron_user }} -l
+      register: exporters_legacy_crontab
+      changed_when: false
+      failed_when: exporters_legacy_crontab.rc not in [0, 1]
+      check_mode: false
+
+    - name: Remove the GPU metrics entries from the crontab
+      ansible.builtin.command:
+        cmd: crontab -u {{ exporters_legacy_gpu_cron_user }} -
+        stdin: '{{ exporters_legacy_crontab.stdout_lines | reject("search", exporters_legacy_gpu_cron_pattern) | join("\n") }}'
+      changed_when: true
+      when: exporters_legacy_crontab.stdout is search(exporters_legacy_gpu_cron_pattern)
+
+    # The script is a `while true` loop, so deleting it leaves the running
+    # copy writing stale metrics until the next reboot. rc 1 is pkill's "no
+    # process matched", which is the steady state after the first run.
+    - name: Stop the running GPU metrics loop
+      ansible.builtin.command:
+        cmd: pkill -f {{ exporters_legacy_gpu_script }}
+      register: exporters_legacy_pkill
+      changed_when: exporters_legacy_pkill.rc == 0
+      failed_when: exporters_legacy_pkill.rc not in [0, 1]
+
+    - name: Remove the GPU metrics script
+      ansible.builtin.file:
+        path: "{{ exporters_legacy_gpu_script }}"
+        state: absent
