@@ -1,0 +1,26 @@
+---
+# Role-owned variables carry the role name as a prefix. ansible-lint's
+# production profile (var-naming[no-role-prefix]) requires it of anything a
+# role defines. Variables the project owns keep the spark_ prefix and live in
+# group_vars/all.yml, which the rule does not constrain: this role reads
+# spark_hostname, spark_firewall_manage and spark_firewall_allow_ports from
+# there and defines neither.
+
+# Empty leaves the clock untouched. Set it in host_vars/<host>.yml if you want
+# the box moved, e.g. base_timezone: Europe/Bucharest.
+base_timezone: ""
+
+# ufw is present on Ubuntu Server but absent from some minimal images, and the
+# firewall tasks would fail on the module rather than on a missing package.
+base_firewall_packages:
+  - ufw
+
+# Reported at every converge, never remediated. DGX OS enables all of these;
+# on a training box they are surprising rather than wrong, and switching off a
+# stranger's VPN, domain controller or print spooler is not this role's call.
+base_report_units:
+  - openvpn
+  - samba-ad-dc
+  - gnome-remote-desktop
+  - cups
+  - cloud-init

@@ -1,0 +1,117 @@
+---
+# Versions and ports live in group_vars/all.yml — they are the tunables an
+# upgrade touches. Everything here is role plumbing.
+
+# Release archives are staged under a versioned path so bumping a version
+# unpacks fresh instead of trusting a stale file that happens to be there.
+exporters_download_dir: /usr/local/src
+exporters_bin_dir: /usr/local/bin
+
+# Both projects publish a checksum file next to the archives; the download
+# tasks hand its URL to get_url rather than pinning a hash that rots.
+exporters_node_release_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}"
+exporters_node_archive: "node_exporter-{{ node_exporter_version }}.linux-arm64.tar.gz"
+exporters_node_checksums: sha256sums.txt
+# The node_exporter archive carries its own version prefix inside it.
+exporters_node_unpack_dir: "{{ exporters_download_dir }}/node_exporter-{{ node_exporter_version }}.linux-arm64"
+
+exporters_gpu_release_url: "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v{{ nvidia_gpu_exporter_version }}"
+exporters_gpu_archive: "nvidia_gpu_exporter_{{ nvidia_gpu_exporter_version }}_linux_arm64.tar.gz"
+exporters_gpu_checksums: checksums.txt
+# This archive is flat, so the version has to come from a directory we make.
+exporters_gpu_unpack_dir: "{{ exporters_download_dir }}/nvidia_gpu_exporter-{{ nvidia_gpu_exporter_version }}"
+
+exporters_node_user: node_exporter
+exporters_gpu_user: nvidia_gpu_exporter
+
+# Ad-hoc metrics dropped here are served by node_exporter. It runs
+# unprivileged, so every .prom file has to be world-readable or it is skipped
+# in silence.
+exporters_textfile_dir: /var/lib/node_exporter/textfile
+
+# Today's collector set, plus `filesystem` — the one the containerised
+# exporter could not run, and the reason disk metrics are missing.
+exporters_node_collectors:
+  - cpu
+  - meminfo
+  - loadavg
+  - hwmon
+  - thermal_zone
+  - netdev
+  - uname
+  - os
+  - textfile
+  - filesystem
+  # `stat` is what exports node_boot_time_seconds. The overview dashboard's
+  # uptime panel is blank without it, and the containerised exporter did not
+  # run it, so this is an addition rather than a carry-over.
+  - stat
+
+# These two excludes are what stops the filesystem collector recursing into
+# the 13 snap loop devices and every Docker overlay, which is how it hangs and
+# flaps `up` to 0. The `$` is written `$$` in the unit file: systemd expands a
+# bare `$`, and `$$` is its documented literal dollar.
+exporters_node_filesystem_mount_points_exclude: "^/(dev|proc|sys|run|var/lib/docker/.+|var/lib/snapd/.+)($|/)"
+exporters_node_filesystem_fs_types_exclude: "^(autofs|overlay|squashfs|tmpfs|devtmpfs|nsfs|cgroup.*)$"
+
+exporters_nvidia_smi_command: /usr/bin/nvidia-smi
+
+# An explicit list, not the exporter's `AUTO`, so the throttle-reason fields
+# are guaranteed rather than dependent on what auto-discovery happens to find.
+# `clocks_event_reasons.*` is the current spelling on driver 580;
+# `clocks_throttle_reasons.*` is the deprecated alias for the same fields.
+# The exporter always appends the GPU identity fields (uuid, name, index,
+# serial, ...) itself, so they are deliberately absent here.
+exporters_gpu_query_fields:
+  - utilization.gpu
+  - utilization.memory
+  - temperature.gpu
+  - power.draw
+  - power.limit
+  - enforced.power.limit
+  - clocks.current.graphics
+  - clocks.current.sm
+  - clocks.current.memory
+  - clocks.current.video
+  - clocks.max.sm
+  - clocks.max.graphics
+  - memory.total
+  - memory.used
+  - memory.free
+  - pstate
+  - persistence_mode
+  - compute_mode
+  - fan.speed
+  - clocks_event_reasons.supported
+  - clocks_event_reasons.active
+  - clocks_event_reasons.gpu_idle
+  - clocks_event_reasons.applications_clocks_setting
+  - clocks_event_reasons.sw_power_cap
+  - clocks_event_reasons.hw_slowdown
+  - clocks_event_reasons.hw_thermal_slowdown
+  - clocks_event_reasons.hw_power_brake_slowdown
+  - clocks_event_reasons.sw_thermal_slowdown
+  - clocks_event_reasons.sync_boost
+  - clocks_event_reasons_counters.sw_power_cap
+  - clocks_event_reasons_counters.sw_thermal_slowdown
+  - clocks_event_reasons_counters.hw_thermal_slowdown
+  - clocks_event_reasons_counters.hw_power_brake_slowdown
+  - clocks_event_reasons_counters.sync_boost
+
+# Off by default: only the box that grew the cron+flock+bash GPU loop by hand
+# has anything to retire. Turning it on elsewhere is a no-op at best.
+# Set all three in host_vars when your box has such a script; the role asserts
+# the path and owner are non-empty before it matches anything on them.
+exporters_retire_legacy_gpu_script: false
+exporters_legacy_gpu_cron_user: ""
+exporters_legacy_gpu_script: ""
+
+# Off by default: on someone else's box a container of this name may be theirs,
+# and removing it is not this role's call. On a box migrating away from a
+# containerised exporter, turning it on stops the host unit fighting the
+# container for the port.
+exporters_remove_legacy_container: false
+exporters_legacy_container_name: node-exporter
+# Both crontab lines — the every-minute one and the @reboot one — name the
+# script, so one pattern retires both no matter how they are spaced.
+exporters_legacy_gpu_cron_pattern: "{{ exporters_legacy_gpu_script | regex_escape }}"

@@ -1,0 +1,98 @@
+---
+# avahi rides along in the same apt transaction because it is not optional
+# here: it is the only thing publishing <hostname>.local, and every other role
+# in this repo — plus bbm's scripts/spark.sh — assumes that name resolves.
+- name: Install the base utilities and the avahi daemon
+  ansible.builtin.apt:
+    name:
+      - rsync
+      - curl
+      - util-linux
+      - python3-apt
+      - avahi-daemon
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Enable and start the avahi daemon
+  ansible.builtin.systemd_service:
+    name: avahi-daemon
+    enabled: true
+    state: started
+
+- name: Set the system hostname
+  ansible.builtin.hostname:
+    name: "{{ spark_hostname }}"
+  notify: Restart avahi-daemon
+
+# Debian-family convention: the machine's own name resolves through 127.0.1.1,
+# not 127.0.0.1. A stale entry here makes sudo pause on every invocation and
+# leaves avahi advertising a name the box no longer answers to.
+- name: Keep the 127.0.1.1 entry in /etc/hosts consistent with the hostname
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1\s'
+    line: "127.0.1.1 {{ spark_hostname }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart avahi-daemon
+
+# Empty means leave the clock alone. Silently moving a stranger's machine to
+# the timezone this repo's author happens to live in is not provisioning.
+- name: Set the system timezone
+  community.general.timezone:
+    name: "{{ base_timezone }}"
+  when: base_timezone | default('', true) | trim | length > 0
+
+- name: Install the firewall packages
+  ansible.builtin.apt:
+    name: "{{ base_firewall_packages }}"
+    state: present
+  when: spark_firewall_manage
+
+# ADD allow rules, and nothing else. No reset, no default policy, no delete,
+# no enable or disable. This box's only link is WiFi with no wired fallback,
+# so a firewall mistake is recovered by physically walking to the machine.
+# Adding an allow rule is the one ufw operation that cannot lock anybody out.
+- name: Allow inbound service ports through ufw
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ spark_firewall_allow_ports }}"
+  when: spark_firewall_manage
+
+# Read-only, and gated on the same flag as the rules above: a box that told
+# this role to keep its hands off the firewall does not want it running ufw
+# either. Needs root, which is why the rules are unknown until a converge.
+- name: Read the current ufw state
+  ansible.builtin.command: ufw status verbose
+  register: base_ufw_status
+  changed_when: false
+  check_mode: false
+  when: spark_firewall_manage
+
+- name: Report the current ufw state
+  ansible.builtin.debug:
+    var: base_ufw_status.stdout_lines
+  when: spark_firewall_manage
+
+- name: Gather the state of every installed service
+  ansible.builtin.service_facts:
+
+# Report only. This recipe runs on other people's boxes, and a provisioning
+# run has no business switching off services its author never saw.
+- name: Report which unexpected platform services are enabled
+  ansible.builtin.debug:
+    msg: >-
+      Enabled and unexpected on a training box:
+      {{ ansible_facts.services.values()
+         | selectattr('status', 'defined')
+         | selectattr('status', 'eq', 'enabled')
+         | map(attribute='name')
+         | map('regex_replace', '\.service$', '')
+         | select('in', base_report_units)
+         | sort | join(', ') | default('none', true) }}.
+      This role reports them and leaves them alone; disabling any of them is
+      a decision for whoever owns the box.

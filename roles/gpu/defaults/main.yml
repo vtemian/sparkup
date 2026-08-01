@@ -1,0 +1,17 @@
+---
+# DGX OS owns the toolkit version. Never pin it here: a pin that drifts behind
+# the driver is how GPU containers break after a vendor update.
+gpu_toolkit_packages:
+  - nvidia-container-toolkit
+
+# Persistent, not /var/run/cdi. /var/run is tmpfs, and the refresh unit fires on
+# file *changes*, so a tmpfs spec is simply absent after a reboot. Exactly one
+# spec file may declare nvidia.com/gpu — see README.md.
+gpu_cdi_spec_path: /etc/cdi/nvidia.yaml
+gpu_cdi_refresh_env_file: /etc/nvidia-container-toolkit/nvidia-cdi-refresh.env
+
+# GB10 is sm_121, an architecture that exists only from CUDA 13.0. Most `cu12x`
+# images will not run on it. The tag must also publish a linux/arm64 manifest —
+# verified against the registry, not assumed. See README.md.
+gpu_smoke_test: true
+gpu_smoke_test_image: nvidia/cuda:13.0.3-base-ubuntu24.04

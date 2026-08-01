@@ -1,0 +1,16 @@
+{#- Managed end to end by the sparkup `docker` role. Anything added by hand on
+    the box is overwritten on the next converge. See roles/docker/README.md for
+    why `default-runtime` is absent and why log rotation is mandatory. -#}
+{
+  "runtimes": {
+    "nvidia": {
+      "path": "{{ docker_nvidia_runtime_path }}",
+      "runtimeArgs": []
+    }
+  },
+  "log-driver": "{{ docker_log_driver }}",
+  "log-opts": {
+    "max-size": "{{ docker_log_max_size }}",
+    "max-file": "{{ docker_log_max_file }}"
+  }
+}

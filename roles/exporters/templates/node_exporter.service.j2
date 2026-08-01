@@ -1,0 +1,46 @@
+{{ ansible_managed | comment }}
+# Native host unit, deliberately not a container: a containerised
+# node-exporter needs /:/host:ro,rslave, and that mount makes the filesystem
+# collector recurse every Docker overlay and hang.
+
+[Unit]
+Description=Prometheus node exporter
+Documentation=https://github.com/prometheus/node_exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ exporters_node_user }}
+Group={{ exporters_node_user }}
+ExecStart={{ exporters_bin_dir }}/node_exporter \
+    --web.listen-address=:{{ node_exporter_port }} \
+    --collector.textfile.directory={{ exporters_textfile_dir }} \
+    --collector.filesystem.mount-points-exclude={{ exporters_node_filesystem_mount_points_exclude | replace('$', '$$') }} \
+    --collector.filesystem.fs-types-exclude={{ exporters_node_filesystem_fs_types_exclude | replace('$', '$$') }} \
+    --collector.disable-defaults \
+{% for collector in exporters_node_collectors %}
+    --collector.{{ collector }}{{ ' \\' if not loop.last else '' }}
+{% endfor %}
+Restart=always
+RestartSec=5s
+TimeoutStopSec=20s
+SyslogIdentifier=node_exporter
+
+# Hardening. The exporter only ever reads, so nothing needs to be writable.
+# ProtectHome is read-only rather than hidden: hiding it would cost the
+# filesystem collector any series for a separate /home mount.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

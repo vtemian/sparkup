@@ -1,0 +1,61 @@
+---
+# Defaults that suit any DGX Spark. Nothing personal belongs in this file —
+# put users, shared paths and anything site-specific in host_vars/<host>.yml.
+
+spark_hostname: spark
+
+# Accounts the playbook manages. Empty by default: a fresh clone must not
+# invent users on someone else's box. See host_vars/spark.yml for the shape.
+#   - name: alice
+#     groups: [sudo, docker]
+#     github_keys: alice-on-github   # or false to manage keys yourself
+spark_users: []
+
+# Shared artifact tree, deliberately outside any directory that a laptop
+# rsyncs with --delete. setgid so members of the group share what they write.
+spark_shared_dir: /srv/spark
+spark_shared_group: spark
+spark_shared_subdirs: [data, checkpoints, runs]
+
+# ufw: this role only ever ADDS allow rules. It never resets the firewall and
+# never sets a default deny policy — locking yourself out of a box whose only
+# link is WiFi means walking to it.
+spark_firewall_manage: true
+spark_firewall_allow_ports: [22, 80]
+
+# Docker's apt repo is added ONLY when Docker is absent. DGX OS ships Docker
+# from repo.download.nvidia.com; adding upstream on top fights the vendor.
+docker_manage_upstream_repo: true
+
+# nvidia-container-toolkit is not in stock Ubuntu — it comes from NVIDIA's repo,
+# which DGX OS configures. Turn this off on a box without it rather than having
+# the play die partway through.
+gpu_enabled: true
+
+monitoring_dir: /opt/monitoring
+prometheus_image: prom/prometheus:v3.5.0
+grafana_image: grafana/grafana:12.1.0
+grafana_port: 80
+prometheus_listen: "127.0.0.1:9090"
+prometheus_retention: 30d
+prometheus_scrape_interval: 15s
+# The training-observability project pushes per-step samples with true
+# timestamps. Turning this off breaks that contract.
+prometheus_enable_remote_write_receiver: true
+
+# Verified to publish linux-arm64 assets. Several exporters are amd64-only;
+# check before bumping.
+node_exporter_version: "1.12.1"
+node_exporter_port: 9100
+nvidia_gpu_exporter_version: "1.13.1"
+nvidia_gpu_exporter_port: 9835
+
+# Wall-socket power. The exporter role is not built yet; this flag exists so
+# the Prometheus config does not carry a permanently-dead target until it is.
+shelly_enabled: false
+shelly_host: ""
+shelly_exporter_port: 9924
+
+# A container restart is survivable mid-training; set this false to refuse
+# disruptive work while a GPU process is running.
+spark_allow_docker_restart: true

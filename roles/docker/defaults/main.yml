@@ -1,0 +1,30 @@
+---
+# Docker itself ships with DGX OS, from NVIDIA's own apt repo. `state: present`
+# is therefore the whole policy: converge what the vendor installed, never
+# chase `latest` and never race the vendor's pinned build.
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin
+
+# Upstream (download.docker.com) is a fallback for a box that has no Docker at
+# all. On DGX OS this stays inert — see README.md. group_vars/all.yml owns the
+# switch; the copy here only keeps the role usable on its own.
+docker_manage_upstream_repo: true
+docker_upstream_repo_url: https://download.docker.com/linux/ubuntu
+docker_upstream_gpg_url: https://download.docker.com/linux/ubuntu/gpg
+# Single-host project on a single architecture. Override for an amd64 box.
+docker_apt_architecture: arm64
+
+docker_group: docker
+docker_config_dir: /etc/docker
+
+# Registered as a named runtime, deliberately NOT as `default-runtime`.
+docker_nvidia_runtime_path: nvidia-container-runtime
+
+# Unbounded json-file logs are a slow disk leak on a box that runs multi-day
+# jobs. 50m x 3 caps each container at 150 MB.
+docker_log_driver: json-file
+docker_log_max_size: 50m
+docker_log_max_file: 3
