@@ -91,7 +91,8 @@ From `group_vars/all.yml` (the registry — change them there, not here):
 | `monitoring_dir` | `/opt/monitoring` | root-owned, outside any rsynced tree |
 | `prometheus_image` | `prom/prometheus:v3.5.0` | pinned; never `latest` |
 | `grafana_image` | `grafana/grafana:12.1.0` | pinned; never `latest` |
-| `prometheus_listen` | `127.0.0.1:9090` | loopback only — unauthenticated, and it accepts remote writes |
+| `prometheus_bind_address` | `127.0.0.1` | loopback only — unauthenticated, and it accepts remote writes |
+| `prometheus_port` | `9090` | published port on the host; the container always listens on 9090 |
 | `grafana_port` | `80` | so `http://spark.local` needs no suffix |
 | `prometheus_retention` | `30d` | the durable archive is per-run summaries on disk, not the TSDB |
 | `prometheus_scrape_interval` | `15s` | also fed to the datasource as `timeInterval` |

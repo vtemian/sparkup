@@ -42,7 +42,7 @@ services:
       # LAN must not reach Prometheus: it is unauthenticated and it accepts
       # remote writes. Bound to loopback, reached through Grafana or an SSH
       # tunnel.
-      - "{{ prometheus_listen }}:9090"
+      - "{{ prometheus_bind_address }}:{{ prometheus_port }}:9090"
 
   grafana:
     image: {{ grafana_image }}

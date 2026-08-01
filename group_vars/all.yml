@@ -36,7 +36,11 @@ monitoring_dir: /opt/monitoring
 prometheus_image: prom/prometheus:v3.5.0
 grafana_image: grafana/grafana:12.1.0
 grafana_port: 80
-prometheus_listen: "127.0.0.1:9090"
+# Split rather than one "host:port" string: it is consumed both as a Docker
+# port-binding prefix and as a URL authority, and a value valid for one is not
+# always valid for the other.
+prometheus_bind_address: "127.0.0.1"
+prometheus_port: 9090
 prometheus_retention: 30d
 prometheus_scrape_interval: 15s
 # The training-observability project pushes per-step samples with true

@@ -36,13 +36,17 @@
     group: root
     mode: "0755"
 
+# Group-writable and setgid so the shared group can drop ad-hoc .prom files
+# here without root. node_exporter reads them as its own unprivileged user, so
+# the files themselves must stay world-readable — check the writer's umask if a
+# metric never appears.
 - name: Create the node_exporter textfile collector directory
   ansible.builtin.file:
     path: "{{ exporters_textfile_dir }}"
     state: directory
     owner: root
-    group: root
-    mode: "0755"
+    group: "{{ spark_shared_group }}"
+    mode: "2775"
 
 - name: Download the node_exporter release archive
   ansible.builtin.get_url:
