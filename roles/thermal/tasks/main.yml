@@ -123,7 +123,9 @@
           If the new version is intended, update thermal_expected_ec_firmware.
         success_msg: >-
           EC firmware is {{ thermal_expected_ec_firmware }}, as expected.
-      when: thermal_ec_version | default('', true) | length > 0
+      when:
+        - thermal_ec_version | default('', true) | length > 0
+        - thermal_expected_ec_firmware | default('', true) | trim | length > 0
 
 # --------------------------------------------------------------------------
 # E2 — the clock cap, shipped disabled

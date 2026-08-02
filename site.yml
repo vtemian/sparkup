@@ -43,3 +43,14 @@
       tags: [exporters]
     - role: monitoring
       tags: [monitoring]
+    # Everything in here is inert unless switched on: the clock cap ships
+    # disabled, fwupd is left alone, and the firmware assertion is skipped until
+    # you record your own EC version in host_vars.
+    - role: thermal
+      tags: [thermal]
+    # LAST, ALONE, and off by default. This is the one role that can leave a
+    # headless WiFi-only box unbootable. Run it with --tags kernel, deliberately,
+    # with someone able to walk to the machine.
+    - role: kernel
+      tags: [kernel]
+      when: kernel_enabled | bool

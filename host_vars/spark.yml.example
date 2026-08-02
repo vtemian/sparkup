@@ -30,6 +30,12 @@ spark_shared_group: spark
 # alone, which is the default.
 # base_timezone: Europe/Bucharest
 
+# Your box's EC firmware version, from `fwupdmgr get-devices`. Once set, the
+# thermal role asserts it every converge and fails on drift — that is how you
+# find out something flashed the box. It never flashes anything itself. Leave it
+# empty until you know your own value; asserting someone else's is meaningless.
+# thermal_expected_ec_firmware: "0x03000302"
+
 # Only for a box migrating off a hand-rolled cron + flock + bash loop that
 # scraped nvidia-smi into a textfile collector. The exporters role replaces it
 # with a supervised systemd unit; the old one must go in the same change or

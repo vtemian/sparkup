@@ -32,6 +32,12 @@ docker_manage_upstream_repo: true
 # the play die partway through.
 gpu_enabled: true
 
+# The Secure Boot kernel work. Off by default and sequenced last, because it is
+# the only role that can leave a headless box unbootable. It never reboots — it
+# tells you a reboot is required and stops — but the reboot that follows is
+# where the risk lives. Turn it on for one deliberate, supervised run.
+kernel_enabled: false
+
 monitoring_dir: /opt/monitoring
 prometheus_image: prom/prometheus:v3.5.0
 grafana_image: grafana/grafana:12.1.0
