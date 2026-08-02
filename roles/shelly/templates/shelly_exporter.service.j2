@@ -1,0 +1,53 @@
+{{ ansible_managed | comment }}
+# easimon/shelly-exporter {{ shelly_exporter_version }}, pinned by digest.
+#
+# A container, where the other two exporters are native binaries. Both reasons
+# this repo keeps exporters off Docker are absent here: this one needs no
+# /:/host mount, so it cannot recurse the overlay tree and hang, and it needs
+# no GPU-in-container plumbing. All it needs is a route to the plug on the LAN.
+# And there is nothing else to install — the project ships a JVM image and
+# publishes no release binaries, so a container is the artifact.
+
+[Unit]
+Description=Prometheus exporter for the Shelly wall-socket power meter
+Documentation=https://github.com/easimon/shelly-exporter
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# A container left behind by an unclean stop owns both the name and the
+# published port, and `docker run` would then fail on the name conflict on
+# every restart forever. The leading `-` keeps a clean start, where there is
+# nothing to remove, from counting as a failure.
+ExecStartPre=-{{ shelly_docker_bin }} rm --force {{ shelly_container_name }}
+# SHELLY_GEN2DEVICES_HOSTS, not SHELLY_DEVICES_HOSTS. The exporter has no
+# generation auto-detection and the two device APIs are unrelated; a Gen3 plug
+# listed under the Gen1 variable is simply never discovered, and says nothing
+# about it. An IP address, not a .local name: the container has no mDNS
+# resolver, which is why the plug needs a DHCP reservation.
+ExecStart={{ shelly_docker_bin }} run --rm --name {{ shelly_container_name }} \
+    --publish {{ shelly_exporter_port }}:{{ shelly_container_port }} \
+    --env SHELLY_GEN2DEVICES_HOSTS={{ shelly_host }} \
+    --security-opt no-new-privileges \
+    --cap-drop ALL \
+    {{ shelly_image_ref }}
+ExecStop={{ shelly_docker_bin }} stop {{ shelly_container_name }}
+# systemd owns the restart policy, so the container deliberately carries none
+# (`--rm`, no `--restart`). Two supervisors over one process is how a crash
+# loop becomes something neither of them reports.
+Restart=always
+RestartSec=5s
+TimeoutStopSec=20s
+SyslogIdentifier=shelly_exporter
+
+# The hardening the other exporter units carry — ProtectSystem=strict and
+# friends — is deliberately absent, not forgotten. This process is a Docker
+# client talking to a root-equivalent socket, so sandboxing it is theatre, and
+# a read-only /run would block the socket outright. The boundary that matters
+# is the container: the image already drops to uid 65535, and the flags above
+# take away the capabilities and the setuid path.
+
+[Install]
+WantedBy=multi-user.target

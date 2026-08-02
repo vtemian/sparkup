@@ -1,0 +1,56 @@
+---
+# easimon/shelly-exporter as a digest-pinned container under a systemd unit. It
+# polls the Shelly Plug M Gen3 over local JSON-RPC and serves the Prometheus
+# exposition format itself. README.md carries the evidence for why that
+# exporter and why a container rather than a native binary.
+#
+# Everything is behind shelly_enabled, which is false until the plug exists,
+# has joined the 2.4 GHz SSID and holds a DHCP reservation. While it is false
+# this role is a complete no-op — nothing downloaded, nothing installed,
+# nothing started — and the monitoring role emits no `power` scrape job, so
+# Prometheus never carries a permanently-red target.
+
+- name: Install the Shelly power exporter
+  when: shelly_enabled | bool
+  block:
+    # Without a plug address the exporter still starts, still answers /metrics
+    # and still reads `up == 1` — it simply has no device to poll and exports
+    # no power at all. A healthy-looking target that measures nothing is worse
+    # than a failure, so refuse to converge instead.
+    - name: Assert the Shelly exporter is configured before installing it
+      ansible.builtin.assert:
+        that:
+          - shelly_host | default('', true) | trim | length > 0
+          - shelly_exporter_image_digest | default('', true) is match('^sha256:[0-9a-f]{64}$')
+        fail_msg: >-
+          shelly_enabled is on but shelly_host is empty or
+          shelly_exporter_image_digest is not a sha256 digest. shelly_host must
+          be the plug's reserved IP address — not a .local name, which the
+          container cannot resolve — and the digest is what pins the image.
+
+    - name: Pull the Shelly exporter image
+      community.docker.docker_image_pull:
+        name: "{{ shelly_image_ref }}"
+        # not_present rather than the module default of always: a digest names
+        # immutable content, so re-asking the registry on every converge buys
+        # nothing and makes an otherwise offline run need the internet.
+        pull: not_present
+
+    - name: Install the Shelly exporter systemd unit
+      ansible.builtin.template:
+        src: shelly_exporter.service.j2
+        dest: "/etc/systemd/system/{{ shelly_unit_name }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart shelly_exporter
+
+    # daemon_reload here as well as in the handler: on a first run the unit
+    # file is brand new and systemd has to be told about it before it can be
+    # enabled.
+    - name: Enable and start the Shelly exporter
+      ansible.builtin.systemd_service:
+        name: "{{ shelly_unit_name }}"
+        enabled: true
+        state: started
+        daemon_reload: true

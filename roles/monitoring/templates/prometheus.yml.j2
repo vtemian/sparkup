@@ -25,9 +25,20 @@ scrape_configs:
       - targets: ["host.docker.internal:{{ nvidia_gpu_exporter_port }}"]
 {% if shelly_enabled %}
 
-  # Wall-socket power. Emitted only when the plug is actually on the network:
-  # a permanently-red target teaches people to ignore red targets.
+  # Wall-socket power. The target is the SPARK, not the plug. The plug speaks
+  # Shelly JSON-RPC and serves no metrics at all, so a separate exporter
+  # process on the host polls it and speaks Prometheus itself — which puts it
+  # on the far side of the same host-gateway alias as node and gpu, for the
+  # same reason. `shelly_host` is that exporter's configuration, the device it
+  # reads, and is never a target.
+  #
+  # /prometheus rather than /metrics: the exporter is a Spring Boot app and its
+  # actuator serves the exposition format there.
+  #
+  # Emitted only when the plug is actually on the network: a permanently-red
+  # target teaches people to ignore red targets.
   - job_name: power
+    metrics_path: {{ shelly_exporter_metrics_path }}
     static_configs:
-      - targets: ["{{ shelly_host }}:{{ shelly_exporter_port }}"]
+      - targets: ["{{ shelly_scrape_host }}:{{ shelly_exporter_port }}"]
 {% endif %}

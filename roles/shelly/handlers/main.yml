@@ -1,0 +1,11 @@
+---
+# daemon_reload before the restart: a template change is invisible to systemd
+# until it is reloaded, and restarting on a stale definition looks like success
+# while changing nothing — here it would keep the container pointed at the old
+# image digest or the old plug address.
+
+- name: Restart shelly_exporter
+  ansible.builtin.systemd_service:
+    name: "{{ shelly_unit_name }}"
+    state: restarted
+    daemon_reload: true
