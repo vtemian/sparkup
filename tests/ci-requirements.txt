@@ -1,0 +1,10 @@
+# The Python side of the toolchain, pinned so CI fails on this repo changing
+# rather than on ansible-lint releasing a new rule on a Tuesday. Bump these
+# deliberately, in a commit that shows the lint output changing.
+#
+# ansible-core is pinned to the version ansible-lint 26.6.0 resolves to, so the
+# same interpreter runs the lint and the syntax check. PyYAML arrives with
+# ansible-core; tests/check_dashboard.py is the only thing that reads it
+# directly.
+ansible-core==2.21.2
+ansible-lint==26.6.0
