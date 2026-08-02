@@ -1,0 +1,340 @@
+---
+# This role NEVER reboots. Not optionally, not behind a flag, not at the end of
+# the play. It converges what it can, asserts what it cannot fix, and stops.
+# The box is headless, WiFi-only and has already failed to boot once over
+# kernel signatures; deciding to power-cycle it belongs to whoever can walk to
+# it, not to a playbook.
+#
+# The order below is a safety property rather than a preference:
+#   1. install the signed replacement — nothing may point at a kernel that is
+#      not on disk yet
+#   2. raise the GRUB timeout and un-hide the menu — no boot change while the
+#      only recovery is guessing when to hold a key
+#   3. retarget GRUB — only now does the boot path actually move
+#   4. pin unsigned kernels out of apt — stop the problem coming back
+#   5. remove the unsigned kernels — last, and only once Secure Boot proves the
+#      kernel currently running is signed
+#   6. assert Secure Boot and the running version — report drift, never fix it
+
+# ---------------------------------------------------------------------------
+# Discovery: read-only, restarts nothing, safe to run while the box is training
+# ---------------------------------------------------------------------------
+
+- name: Install the Secure Boot tooling
+  ansible.builtin.apt:
+    name: "{{ kernel_secure_boot_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Read the Secure Boot state
+  ansible.builtin.command: mokutil --sb-state
+  register: kernel_sb_state
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Read the installed package set
+  ansible.builtin.package_facts:
+    manager: apt
+
+# dpkg-query, deliberately not `apt-cache depends`. apt-cache answers for the
+# *candidate* version, so a newer kernel sitting in NVIDIA's archive would
+# become "the intended kernel" and `state: present` would install it — an
+# unrequested kernel upgrade on a box with a boot-failure history. dpkg-query
+# answers for the version installed here, which is the kernel already proven to
+# boot on this machine.
+- name: Read the kernel image the installed meta package depends on
+  ansible.builtin.command:
+    cmd: dpkg-query --showformat=${Depends} --show {{ kernel_meta_package }}
+  register: kernel_meta_depends
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# Ubuntu names the signed image `linux-image-<version>-<flavour>` and the
+# unsigned one `linux-image-unsigned-<version>-<flavour>`, so a name whose
+# first character after `linux-image-` is a digit cannot be an unsigned build.
+# The fallback to the running kernel's own name keeps the role correct on a box
+# with no vendor meta package: `linux-image-<running>` is exactly the signed
+# counterpart of whatever is booted.
+- name: Resolve the kernel version this box is meant to boot
+  ansible.builtin.set_fact:
+    kernel_intended_version: >-
+      {{ (kernel_signed_image_package | trim | regex_replace('^linux-image-', ''))
+         or (kernel_meta_depends.stdout | default('', true)
+             | regex_findall('linux-image-([0-9][A-Za-z0-9.+~-]*)')
+             | first | default('', true))
+         or ansible_kernel }}
+    kernel_secure_boot_enabled: >-
+      {{ 'SecureBoot enabled' in (kernel_sb_state.stdout | default('', true)) }}
+
+- name: Report the kernel state this role resolved
+  ansible.builtin.debug:
+    msg: >-
+      Running {{ ansible_kernel }}; intended {{ kernel_intended_version }},
+      resolved from {{ kernel_meta_package }}. Secure Boot
+      {{ kernel_secure_boot_enabled | bool | ternary('enabled', 'NOT enabled') }}.
+      Installed kernel images:
+      {{ ansible_facts.packages.keys() | select('match', 'linux-image-')
+         | sort | join(', ') | default('none', true) }}.
+
+- name: Refuse to treat an unsigned image as the signed kernel
+  ansible.builtin.assert:
+    that:
+      - "'unsigned' not in kernel_intended_version"
+    fail_msg: >-
+      The intended kernel resolved to "{{ kernel_intended_version }}", which
+      carries the `unsigned` infix. Installing that would reintroduce exactly
+      the problem this role exists to fix. Set kernel_signed_image_package to
+      the signed package name, or leave it empty and let the role discover it.
+    success_msg: >-
+      Intended kernel {{ kernel_intended_version }} is a signed image name.
+
+# ---------------------------------------------------------------------------
+# 1. The signed replacement, before anything points at it or removes what it
+#    replaces. `state: present`, never `latest`: this role converges the kernel
+#    the box already boots, it does not go looking for newer ones.
+# ---------------------------------------------------------------------------
+
+- name: Install the signed kernel and its meta package
+  ansible.builtin.apt:
+    name: >-
+      {{ ([kernel_meta_package] if kernel_meta_package | trim | length > 0 else [])
+         + ['linux-image-' ~ kernel_intended_version] }}
+    state: present
+
+# ---------------------------------------------------------------------------
+# 2. The menu, before the boot target moves. GRUB_TIMEOUT on its own does not
+#    do it: Ubuntu ships GRUB_TIMEOUT_STYLE=hidden, and a hidden menu counts
+#    the timeout down invisibly. Both lines are needed for the menu to appear.
+# ---------------------------------------------------------------------------
+
+- name: Raise the GRUB menu timeout
+  ansible.builtin.lineinfile:
+    path: "{{ kernel_grub_default_file }}"
+    regexp: '^#?\s*GRUB_TIMEOUT='
+    line: "GRUB_TIMEOUT={{ kernel_grub_timeout }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Update GRUB
+
+- name: Show the GRUB menu rather than hiding it
+  ansible.builtin.lineinfile:
+    path: "{{ kernel_grub_default_file }}"
+    regexp: '^#?\s*GRUB_TIMEOUT_STYLE='
+    line: "GRUB_TIMEOUT_STYLE={{ kernel_grub_timeout_style }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Update GRUB
+
+# ---------------------------------------------------------------------------
+# 3. Retarget GRUB. `saved` plus grub-set-default, never a menu-entry title:
+#    titles carry the distributor string and the kernel version in prose, and a
+#    pin on one rots silently the next time either changes.
+# ---------------------------------------------------------------------------
+
+- name: Select the saved entry as GRUB's default
+  ansible.builtin.lineinfile:
+    path: "{{ kernel_grub_default_file }}"
+    regexp: '^#?\s*GRUB_DEFAULT='
+    line: GRUB_DEFAULT=saved
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Update GRUB
+  when: kernel_manage_grub_default | bool
+
+# grub.cfg only honours ${saved_entry} once it has been regenerated with
+# GRUB_DEFAULT=saved in effect, and a kernel installed above has no menu entry
+# until update-grub has run. Everything below reads the generated menu, so the
+# handler cannot wait for the end of the play.
+- name: Regenerate the GRUB menu before reading it
+  ansible.builtin.meta: flush_handlers
+
+- name: Read the generated GRUB menu
+  ansible.builtin.slurp:
+    src: "{{ kernel_grub_config }}"
+  register: kernel_grub_cfg
+
+# Two things are pulled out of the generated menu. The entry ids are what
+# grub-set-default is given; they embed the kernel version and the root
+# filesystem UUID rather than a human-readable title. The timeout pair is the
+# ground truth for whether the menu will appear at all — /etc/default/grub.d/
+# drop-ins are sourced after /etc/default/grub and win, so an edit above can be
+# silently overridden and only the generated file shows it.
+- name: Extract the entry ids and the resolved timeout from the GRUB menu
+  ansible.builtin.set_fact:
+    kernel_grub_entry_ids: >-
+      {{ kernel_grub_cfg.content | b64decode
+         | regex_findall("menuentry_id_option '([^']+)'") }}
+    kernel_grub_menu_settings: >-
+      {{ kernel_grub_cfg.content | b64decode
+         | regex_findall('set timeout_style=([a-z]+)\s+set timeout=([0-9-]+)') }}
+
+- name: Report how the generated GRUB menu will behave
+  ansible.builtin.debug:
+    msg: >-
+      {{ kernel_grub_config }} resolves to
+      {{ kernel_grub_menu_settings | first | default(['unparsed', 'unparsed'], true) | join(' / ') }}
+      (timeout_style / timeout), and offers
+      {{ kernel_grub_entry_ids | length }} menu entries.
+
+- name: Point GRUB at the signed kernel
+  when: kernel_manage_grub_default | bool
+  block:
+    # Ubuntu nests every per-kernel entry inside the "Advanced options"
+    # submenu, so the saved entry is the submenu id and the entry id joined by
+    # '>'. On a menu with no submenu the join collapses to the entry id alone.
+    - name: Compose the saved entry that selects the intended kernel
+      ansible.builtin.set_fact:
+        kernel_grub_target: >-
+          {{ [kernel_grub_entry_ids | select('match', 'gnulinux-advanced-')
+              | list | first | default('', true),
+              kernel_grub_entry_ids
+              | select('search', '^gnulinux-' ~ (kernel_intended_version | regex_escape) ~ '-advanced-')
+              | list | first | default('', true)]
+             | reject('equalto', '') | join('>') }}
+
+    - name: Assert that GRUB has a menu entry for the intended kernel
+      ansible.builtin.assert:
+        that:
+          - kernel_grub_target | length > 0
+          - kernel_intended_version in kernel_grub_target
+        fail_msg: >-
+          {{ kernel_grub_config }} has no entry for
+          {{ kernel_intended_version }}, so there is nothing safe to point the
+          default at. Confirm the signed image is installed and that
+          `update-grub` has run, then look at the menu by hand before doing
+          anything else. This role changes no boot target it cannot name.
+        success_msg: >-
+          GRUB entry for {{ kernel_intended_version }} is
+          "{{ kernel_grub_target }}".
+      when: not ansible_check_mode
+
+    # The idempotency guard. grubenv already holding the target means
+    # grub-set-default has nothing to do, and a converged box reports no change.
+    - name: Read the saved GRUB default entry
+      ansible.builtin.command: grub-editenv list
+      register: kernel_grubenv
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Point GRUB's saved default at the signed kernel
+      ansible.builtin.command:
+        cmd: grub-set-default {{ kernel_grub_target | quote }}
+      changed_when: true
+      when:
+        # Repeats the assertion above rather than relying on it: the assertion
+        # is skipped in --check, and this is the task that moves the boot path.
+        - kernel_grub_target | length > 0
+        - kernel_intended_version in kernel_grub_target
+        - >-
+          (kernel_grubenv.stdout | default('', true)
+           | regex_findall('^saved_entry=(.*)$', multiline=True)
+           | first | default('', true)) != kernel_grub_target
+
+# ---------------------------------------------------------------------------
+# 4. Keep unsigned kernels out permanently. An apt pin, not a dpkg hold: a hold
+#    only constrains packages already installed, and the failure mode here is
+#    an update pulling in an unsigned image that is not installed yet.
+# ---------------------------------------------------------------------------
+
+- name: Pin unsigned kernel images out of apt
+  ansible.builtin.copy:
+    src: no-unsigned-kernels
+    dest: "{{ kernel_apt_preferences_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+# ---------------------------------------------------------------------------
+# 5. Removal, last and heavily gated. Secure Boot being enabled on a box that
+#    is up IS the proof that the running kernel is signed — shim would not have
+#    loaded an unsigned image — which is why that flag gates this step rather
+#    than merely being reported at the end.
+# ---------------------------------------------------------------------------
+
+- name: Retire the unsigned kernels
+  when:
+    - kernel_remove_unsigned | bool
+    - kernel_unsigned_packages | length > 0
+    - kernel_secure_boot_enabled | bool
+    - ansible_kernel == kernel_intended_version
+    - ('linux-image-' ~ kernel_intended_version) in ansible_facts.packages
+  block:
+    - name: Refuse to remove a package that provides the running kernel
+      ansible.builtin.assert:
+        that:
+          - kernel_unsigned_packages
+            | select('search', ansible_kernel | regex_escape)
+            | list | length == 0
+        fail_msg: >-
+          kernel_unsigned_packages names a package for {{ ansible_kernel }},
+          the kernel this box is running right now. Removing it takes the
+          modules out from under the live system and leaves nothing to boot.
+          Remove only kernels you are not standing on.
+        success_msg: >-
+          None of the packages to remove provides the running kernel.
+
+    - name: Remove the unsigned kernel packages
+      ansible.builtin.apt:
+        name: "{{ kernel_unsigned_packages }}"
+        state: absent
+        purge: false
+        autoremove: false
+      notify: Update GRUB
+
+# ---------------------------------------------------------------------------
+# 6. Assertions. They report drift; they never remediate it, and in particular
+#    they never reboot to make themselves true.
+# ---------------------------------------------------------------------------
+
+- name: Assert that Secure Boot is enabled
+  ansible.builtin.assert:
+    that:
+      - kernel_secure_boot_enabled | bool
+    fail_msg: >-
+      `mokutil --sb-state` reports
+      "{{ kernel_sb_state.stdout | default('nothing at all', true) | trim }}".
+      This role neither enables nor disables Secure Boot. The fix for a kernel
+      that will not boot is a signed kernel, not switching the protection off —
+      NVIDIA's own Aerial-on-Spark guide tells people to disable it, and this
+      project deliberately does not. Re-enable it in firmware and converge again.
+    success_msg: Secure Boot is enabled.
+
+- name: Assert that the GRUB menu will be visible
+  ansible.builtin.assert:
+    that:
+      - kernel_grub_menu_settings | length > 0
+      - kernel_grub_menu_settings[0][0] == kernel_grub_timeout_style
+      - kernel_grub_menu_settings[0][1] | int != 0
+    fail_msg: >-
+      {{ kernel_grub_config }} does not resolve to a visible menu
+      ({{ kernel_grub_menu_settings | first | default(['unparsed', 'unparsed'], true) | join(' / ') }}).
+      The usual cause is a drop-in under /etc/default/grub.d/, which is sourced
+      after /etc/default/grub and wins. Fix that and re-run; do not reboot into
+      a hidden menu on a box you cannot reach. If instead the generated file is
+      simply laid out differently from Ubuntu's, check the menu by hand and set
+      kernel_assert_grub_menu to false.
+    success_msg: >-
+      The menu appears for {{ kernel_grub_menu_settings[0][1] }} seconds.
+  when:
+    - kernel_assert_grub_menu | bool
+    - not ansible_check_mode
+
+- name: Assert that the box is running the intended signed kernel
+  ansible.builtin.assert:
+    that:
+      - ansible_kernel == kernel_intended_version
+    fail_msg: >-
+      Running {{ ansible_kernel }}; intended {{ kernel_intended_version }}.
+      A REBOOT IS REQUIRED and this role will never perform one. Everything
+      else has converged: the signed kernel is installed, GRUB points at it and
+      the menu is visible. Reboot the box by hand, with someone able to reach it
+      physically, then converge again to turn this assertion green.
+    success_msg: >-
+      Running the intended signed kernel {{ ansible_kernel }}.
