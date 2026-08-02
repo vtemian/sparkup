@@ -60,10 +60,30 @@ node_exporter_port: 9100
 nvidia_gpu_exporter_version: "1.13.1"
 nvidia_gpu_exporter_port: 9835
 
-# Wall-socket power. nvidia-smi sees the GPU rail only and underreports the
-# wall by roughly 2x, so cost is measured at the socket or not measured at all.
-# Off until the plug exists, has joined the 2.4 GHz SSID and holds a DHCP
-# reservation: a permanently-red target teaches people to ignore red targets.
+# ---------------------------------------------------------------------------
+# Wall-socket power
+#
+# nvidia-smi sees the GPU rail only and underreports the wall by roughly 2x, so
+# cost is measured at the socket or not measured at all.
+#
+# What this repo owes the training-observability project is a `power` scrape
+# job — not a brand of meter. These two variables ARE that contract. Anything
+# that speaks the Prometheus exposition format can fill it: a Tasmota or Kasa
+# exporter, a Zigbee bridge, or an exporter already running on another host.
+# Empty means no power job is emitted at all.
+#
+# The bundled Shelly role below is one convenient way to fill it, and sets
+# these automatically when it is switched on. It is not the only way, and
+# nothing outside roles/shelly assumes it.
+power_scrape_target: "{{ shelly_scrape_host ~ ':' ~ shelly_exporter_port if shelly_enabled | bool else '' }}"
+power_scrape_metrics_path: "{{ shelly_exporter_metrics_path if shelly_enabled | bool else '/metrics' }}"
+
+# ---------------------------------------------------------------------------
+# The bundled Shelly Plug M Gen3 exporter — entirely optional.
+#
+# Leave this false and the role is a complete no-op: nothing downloaded,
+# nothing installed, no scrape job. Turn it on only once the plug exists, has
+# joined the 2.4 GHz SSID and holds a DHCP reservation.
 shelly_enabled: false
 
 # TWO DIFFERENT HOSTS, and confusing them is the bug this pair exists to

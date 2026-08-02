@@ -23,22 +23,24 @@ scrape_configs:
   - job_name: gpu
     static_configs:
       - targets: ["host.docker.internal:{{ nvidia_gpu_exporter_port }}"]
-{% if shelly_enabled %}
+{% if power_scrape_target %}
 
-  # Wall-socket power. The target is the SPARK, not the plug. The plug speaks
-  # Shelly JSON-RPC and serves no metrics at all, so a separate exporter
-  # process on the host polls it and speaks Prometheus itself — which puts it
-  # on the far side of the same host-gateway alias as node and gpu, for the
-  # same reason. `shelly_host` is that exporter's configuration, the device it
-  # reads, and is never a target.
+  # Wall-socket power. What this repo owes the training-observability project is
+  # a `power` job, not a particular brand of meter — so the job is emitted from
+  # whatever `power_scrape_target` names, and the bundled Shelly exporter is one
+  # way to fill it rather than the only way. Point it at a Tasmota or Kasa
+  # exporter, or at one already running on another host, and nothing here cares.
   #
-  # /prometheus rather than /metrics: the exporter is a Spring Boot app and its
-  # actuator serves the exposition format there.
+  # The target is never the meter itself: a smart plug speaks its own RPC, not
+  # the Prometheus exposition format. It is always some exporter that polls the
+  # meter and speaks Prometheus. When that exporter runs on this box, the target
+  # goes through the same host-gateway alias as node and gpu, for the same
+  # reason.
   #
-  # Emitted only when the plug is actually on the network: a permanently-red
-  # target teaches people to ignore red targets.
+  # Emitted only when a target is configured: a permanently-red target teaches
+  # people to ignore red targets.
   - job_name: power
-    metrics_path: {{ shelly_exporter_metrics_path }}
+    metrics_path: {{ power_scrape_metrics_path }}
     static_configs:
-      - targets: ["{{ shelly_scrape_host }}:{{ shelly_exporter_port }}"]
+      - targets: ["{{ power_scrape_target }}"]
 {% endif %}

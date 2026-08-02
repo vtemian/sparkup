@@ -47,3 +47,20 @@ spark_shared_group: spark
 # Only for a box migrating off a containerised node-exporter that owns :9100.
 # The host unit cannot bind the port until the container is gone.
 # exporters_remove_legacy_container: true
+
+# --- wall-socket power, entirely optional --------------------------------
+# Measuring at the plug is the only honest way to cost a run: nvidia-smi sees
+# the GPU rail only and underreports the wall by roughly 2x.
+#
+# If you have a Shelly Plug M Gen3, this is the whole configuration — the
+# bundled exporter is installed and the scrape job appears:
+# shelly_enabled: true
+# shelly_host: 192.168.1.141      # the plug's reserved IP, never a .local name
+#
+# If you have any OTHER meter, ignore the Shelly role entirely and just point
+# Prometheus at whatever already speaks the exposition format:
+# power_scrape_target: tasmota.lan:9999
+# power_scrape_metrics_path: /metrics
+#
+# Set neither and there is simply no power job. Nothing else breaks: no
+# dashboard panel queries these metrics.

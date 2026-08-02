@@ -50,6 +50,23 @@ spark_users:
 
 Existing authorized keys are never removed, so a working key cannot be orphaned by a typo.
 
+## Optional pieces
+
+Three roles do nothing unless you ask for them, so a plain `make apply` on a stock DGX Spark never
+touches firmware, kernels or power:
+
+| Role | Off by default because | Turn on with |
+|---|---|---|
+| `shelly` | not everyone owns a smart plug | `shelly_enabled: true` + `shelly_host` |
+| `thermal` | the clock cap trades compute for headroom, and your EC version is not this box's | `thermal_gpu_clock_cap_enabled`, `thermal_expected_ec_firmware` |
+| `kernel` | it is the only role that can leave a headless box unbootable | `kernel_enabled: true`, deliberately and supervised |
+
+**Power measurement is not tied to Shelly.** What this repo provides is a `power` scrape job, and
+any exporter can fill it — set `power_scrape_target` to wherever something already speaks the
+Prometheus exposition format. The bundled Shelly role is one convenient way to fill it and sets that
+target for you; it is not the only way, and nothing outside `roles/shelly` assumes it. Set neither
+and there is no power job at all — no dashboard panel queries those metrics.
+
 ## Secrets
 
 **No password belongs in this repo.** The supported options, in order of preference:
