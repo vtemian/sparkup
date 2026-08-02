@@ -35,3 +35,20 @@ idempotence: ## Converge, then prove a second run changes nothing
 	@grep -qE 'changed=0 ' /tmp/sparkup-second-run.log \
 		&& echo "IDEMPOTENT: second run reported changed=0" \
 		|| { echo "NOT IDEMPOTENT: second run changed something"; exit 1; }
+
+# Everything below runs without a Spark. Docker is the only requirement.
+.PHONY: offline dashboard roles-test harness-up harness-down
+
+offline: lint syntax dashboard roles-test ## Every check that needs no Spark
+
+dashboard: ## Parse every panel query and check it names a metric we emit
+	python3 tests/check_dashboard.py
+
+roles-test: ## Converge base and users in containers twice, expect changed=0
+	./tests/role-idempotence.sh
+
+harness-up: ## Grafana + Prometheus locally on :13000, fed synthetic metrics
+	./tests/harness-up.sh
+
+harness-down: ## Remove the local harness, containers and volumes
+	./tests/harness-down.sh

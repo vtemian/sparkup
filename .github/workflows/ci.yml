@@ -1,0 +1,119 @@
+---
+name: CI
+
+# Everything here runs without a DGX Spark. That is the constraint the whole
+# job list is built around: a contributor with no hardware still gets an
+# answer, and the answer is about more than YAML being well-formed.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: ansible-lint and syntax check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tests/ci-requirements.txt
+
+      # host_vars/spark.yml is gitignored on purpose — it names the accounts
+      # that get sudo — so this checkout has no host_vars at all, only the
+      # .example. Both commands below were confirmed to pass in exactly that
+      # state: --syntax-check does not resolve variables, and every variable
+      # the roles read has a default in group_vars/all.yml or in the role.
+      # Nothing needs to be copied into place. If that ever stops being true,
+      # the fix is `cp host_vars/spark.yml.example host_vars/spark.yml` here,
+      # not a tracked host_vars file.
+      - name: Confirm the checkout really has no host_vars
+        run: |
+          test ! -e host_vars/spark.yml
+          test -e host_vars/spark.yml.example
+
+      - name: Install the pinned toolchain
+        run: pip install --requirement tests/ci-requirements.txt
+
+      - name: Cache the Galaxy collections
+        uses: actions/cache@v4
+        with:
+          path: ~/.ansible/collections
+          key: collections-${{ runner.os }}-${{ hashFiles('requirements.yml') }}
+
+      - name: Install the pinned collections
+        run: ansible-galaxy collection install --requirements-file requirements.yml
+
+      - name: ansible-lint, production profile
+        run: ansible-lint
+
+      - name: Parse the playbook without contacting a host
+        run: ansible-playbook site.yml --syntax-check
+
+      # The house rule for this repo's shell is `set -euo pipefail` and a clean
+      # shellcheck. Preinstalled on the runner, so this costs nothing.
+      - name: shellcheck
+        run: shellcheck tests/*.sh
+
+  dashboard:
+    name: dashboard queries
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tests/ci-requirements.txt
+
+      # PyYAML only; it arrives with ansible-core, which the same pin file
+      # installs. Prometheus itself is not installed: the check runs promtool
+      # out of the prom/prometheus image group_vars/all.yml pins, so the parser
+      # that judges the queries is the one the box will run them on.
+      - name: Install the pinned toolchain
+        run: pip install --requirement tests/ci-requirements.txt
+
+      - name: Every panel query parses, and names a metric an exporter emits
+        run: python3 tests/check_dashboard.py
+
+  roles:
+    name: role idempotence in containers
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tests/ci-requirements.txt
+
+      - name: Install the pinned toolchain
+        run: pip install --requirement tests/ci-requirements.txt
+
+      - name: Cache the Galaxy collections
+        uses: actions/cache@v4
+        with:
+          path: ~/.ansible/collections
+          key: collections-${{ runner.os }}-${{ hashFiles('requirements.yml') }}
+
+      # community.docker provides the connection plugin the containers are
+      # reached through. No SSH is involved anywhere in this job.
+      - name: Install the pinned collections
+        run: ansible-galaxy collection install --requirements-file requirements.yml
+
+      # base and users only. The script prints what it does not cover and why
+      # before it runs anything, so the gap is in the log rather than in
+      # somebody's head.
+      - name: Converge base and users twice, require changed=0
+        run: ./tests/role-idempotence.sh

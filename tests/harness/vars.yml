@@ -1,0 +1,37 @@
+---
+# What the monitoring stack becomes when it runs on a laptop instead of the
+# Spark. Loaded last, so every value here beats the one in group_vars/all.yml
+# or roles/monitoring/defaults/main.yml that it shadows.
+#
+# The templates themselves are NOT copied or adapted: tests/harness/render.yml
+# renders the role's own .j2 files with these values, so a change to a template
+# shows up here before it shows up on a box.
+
+# Rendered next to this file, not /opt/monitoring: the harness must never need
+# root and must never collide with a real stack on the same machine.
+monitoring_dir: "{{ playbook_dir }}/rendered"
+
+# Compose namespaces its volumes by project name. A distinct one means
+# `down --volumes` cannot reach a real spark-monitoring stack's history.
+monitoring_project_name: sparkup-harness
+
+# Nothing on 80. Grafana on 13000 and Prometheus on 19090 stay clear of the
+# usual laptop occupants (3000, 8080, 9090).
+grafana_port: 13000
+prometheus_bind_address: "127.0.0.1"
+prometheus_port: 19090
+
+# The synthetic exporters run as a plain host process on these ports, and the
+# rendered prometheus.yml reaches them through host.docker.internal exactly as
+# it reaches the real host exporters on the box. That path — the one the
+# compose template calls THE TRAP — is therefore exercised, not bypassed.
+node_exporter_port: 19100
+nvidia_gpu_exporter_port: 19835
+
+# Five seconds rather than fifteen: panels fill in while you are still looking
+# at them, and rate() over $__rate_interval has samples within half a minute.
+prometheus_scrape_interval: 5s
+
+# There is no smart plug on a laptop, and a permanently-red target teaches
+# people to ignore red targets.
+shelly_enabled: false

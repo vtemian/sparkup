@@ -1,0 +1,80 @@
+---
+# Render the monitoring role's templates onto this machine, so the Prometheus
+# and Grafana that come up locally are configured by the same .j2 files the
+# Spark gets — not by a hand-maintained copy that drifts.
+#
+# The role's tasks are not reused: they install into /opt/monitoring as root
+# and end by bringing the stack up with community.docker. Here the same
+# artifacts are written under tests/harness/rendered as the invoking user, and
+# tests/harness-up.sh brings them up.
+- name: Render the monitoring stack for a machine that is not a DGX Spark
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    harness_repo_root: "{{ playbook_dir | dirname | dirname }}"
+    harness_monitoring_templates: "{{ harness_repo_root }}/roles/monitoring/templates"
+  vars_files:
+    - "{{ playbook_dir }}/../../group_vars/all.yml"
+    - "{{ playbook_dir }}/../../roles/monitoring/defaults/main.yml"
+    - "{{ playbook_dir }}/vars.yml"
+
+  tasks:
+    # The same tree the monitoring role creates, including the two empty
+    # provisioning directories Grafana logs an error for when they are absent.
+    - name: Create the rendered stack directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ monitoring_dir }}"
+        - "{{ monitoring_dir }}/prometheus"
+        - "{{ monitoring_dir }}/grafana"
+        - "{{ monitoring_dir }}/grafana/dashboards"
+        - "{{ monitoring_dir }}/grafana/provisioning"
+        - "{{ monitoring_dir }}/grafana/provisioning/datasources"
+        - "{{ monitoring_dir }}/grafana/provisioning/dashboards"
+        - "{{ monitoring_dir }}/grafana/provisioning/alerting"
+        - "{{ monitoring_dir }}/grafana/provisioning/plugins"
+
+    - name: Render the compose file
+      ansible.builtin.template:
+        src: "{{ harness_monitoring_templates }}/compose.yml.j2"
+        dest: "{{ monitoring_dir }}/compose.yml"
+        mode: "0644"
+
+    - name: Render the Prometheus configuration
+      ansible.builtin.template:
+        src: "{{ harness_monitoring_templates }}/prometheus.yml.j2"
+        dest: "{{ monitoring_dir }}/prometheus/prometheus.yml"
+        mode: "0644"
+
+    - name: Render the Grafana datasource
+      ansible.builtin.template:
+        src: "{{ harness_monitoring_templates }}/datasource.yml.j2"
+        dest: "{{ monitoring_dir }}/grafana/provisioning/datasources/datasource.yml"
+        mode: "0644"
+
+    - name: Render the Grafana dashboard provider
+      ansible.builtin.template:
+        src: "{{ harness_monitoring_templates }}/dashboards.yml.j2"
+        dest: "{{ monitoring_dir }}/grafana/provisioning/dashboards/dashboards.yml"
+        mode: "0644"
+
+    # Copied rather than templated, for the reason the role gives: the JSON is
+    # full of Grafana's own {{ '{{label}}' }} legend syntax, which Jinja eats.
+    - name: Install the provisioned dashboards
+      ansible.builtin.copy:
+        src: "{{ harness_repo_root }}/roles/monitoring/files/dashboards/"
+        dest: "{{ monitoring_dir }}/grafana/dashboards/"
+        mode: "0644"
+
+    - name: Report where the stack was rendered
+      ansible.builtin.debug:
+        msg: >-
+          Rendered {{ monitoring_project_name }} into {{ monitoring_dir }}.
+          Grafana will listen on {{ grafana_port }}, Prometheus on
+          {{ prometheus_bind_address }}:{{ prometheus_port }}, scraping
+          host.docker.internal:{{ node_exporter_port }} and
+          host.docker.internal:{{ nvidia_gpu_exporter_port }}.
