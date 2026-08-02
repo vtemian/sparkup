@@ -40,7 +40,6 @@ import json
 import re
 import subprocess
 import sys
-import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -348,24 +347,25 @@ def promtool_parse(image: str, exprs: list[tuple[str, str, str]]) -> None:
         ]
     }
 
-    with tempfile.TemporaryDirectory() as tmp:
-        rule_file = Path(tmp) / "rules.yml"
-        rule_file.write_text(yaml.safe_dump(rules, sort_keys=False), encoding="utf-8")
-        result = subprocess.run(
-            [
-                "docker", "run", "--rm",
-                "--volume", f"{tmp}:/dashboard:ro",
-                "--entrypoint", "promtool",
-                image,
-                "check", "rules", "/dashboard/rules.yml",
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+    # Piped in rather than bind-mounted. A mount would need the Docker daemon
+    # to see this filesystem, which it does not when the check itself runs in a
+    # container against a mounted socket — a normal CI shape, and one where the
+    # mount silently resolves to an empty directory.
+    result = subprocess.run(
+        [
+            "docker", "run", "--rm", "--interactive",
+            "--entrypoint", "sh",
+            image,
+            "-c", "cat > /tmp/rules.yml && exec promtool check rules /tmp/rules.yml",
+        ],
+        input=yaml.safe_dump(rules, sort_keys=False),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
     if result.returncode != 0:
-        detail = (result.stdout + result.stderr).strip()
+        detail = (result.stdout + result.stderr).strip().replace('/tmp/rules.yml', 'panel queries')
         for name, panel, ref, _ in labelled:
             detail = detail.replace(f'"{name}"', f"{panel} target {ref}")
         raise CheckFailed(f"promtool rejected a panel query:\n{detail}")

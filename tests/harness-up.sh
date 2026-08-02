@@ -59,16 +59,57 @@ done
 echo "==> Rendering the monitoring role's templates"
 ansible-playbook "${HARNESS_DIR}/render.yml"
 
+EXPORTER_LOG="${RENDERED_DIR}/fake-exporters.log"
+
+exporters_answer() {
+    curl -fsS "http://127.0.0.1:${NODE_PORT}/metrics" >/dev/null &&
+        curl -fsS "http://127.0.0.1:${GPU_PORT}/metrics" >/dev/null
+}
+
+port_in_use() {
+    python3 -c 'import socket, sys
+probe = socket.socket()
+probe.settimeout(1)
+sys.exit(0 if probe.connect_ex(("127.0.0.1", int(sys.argv[1]))) == 0 else 1)' "$1"
+}
+
 echo "==> Starting the synthetic exporters on :${NODE_PORT} and :${GPU_PORT}"
 if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
     echo "    already running as pid $(cat "${PID_FILE}")"
 else
+    # Refuse before starting rather than after. A process that loses the bind
+    # dies on EADDRINUSE in milliseconds, but the port keeps answering —
+    # whatever already held it is still there — so a check that only asks
+    # "does :19100 respond" passes while Prometheus scrapes a stranger. That
+    # is not a hypothetical: it happened while this harness was being written,
+    # and every panel went green off someone else's process.
+    for port in "${NODE_PORT}" "${GPU_PORT}"; do
+        if port_in_use "${port}"; then
+            echo "something is already listening on 127.0.0.1:${port}." >&2
+            echo "The harness will not feed Prometheus from a process it did not" >&2
+            echo "start. Free the port, or change it in tests/harness/vars.yml:" >&2
+            echo "  lsof -nP -iTCP:${port} -sTCP:LISTEN" >&2
+            exit 1
+        fi
+    done
     python3 "${REPO_ROOT}/tests/fake_exporters.py" \
         --node-port "${NODE_PORT}" --gpu-port "${GPU_PORT}" \
-        >"${RENDERED_DIR}/fake-exporters.log" 2>&1 &
+        >"${EXPORTER_LOG}" 2>&1 &
     echo $! >"${PID_FILE}"
-    echo "    pid $(cat "${PID_FILE}"), log ${RENDERED_DIR}/fake-exporters.log"
+    echo "    pid $(cat "${PID_FILE}"), log ${EXPORTER_LOG}"
 fi
+
+exporter_deadline=$(( $(date +%s) + 15 ))
+until exporters_answer; do
+    if [ "$(date +%s)" -ge "${exporter_deadline}" ]; then
+        echo "the synthetic exporters never answered on :${NODE_PORT} and :${GPU_PORT}:" >&2
+        cat "${EXPORTER_LOG}" >&2
+        rm -f "${PID_FILE}"
+        exit 1
+    fi
+    sleep 1
+done
+echo "    both endpoints answering"
 
 echo "==> Bringing up ${PROJECT}"
 docker compose --project-directory "${RENDERED_DIR}" --project-name "${PROJECT}" up -d
