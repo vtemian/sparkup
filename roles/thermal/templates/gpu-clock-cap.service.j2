@@ -1,0 +1,41 @@
+{{ ansible_managed | comment }}
+# Caps the GPU SM clock range so an unattended run cannot chase the top of the
+# frequency curve all night. This exists as a unit rather than a one-off
+# command for one reason: a clock lock does not survive a reboot. Persistence
+# mode keeps it across process exits, nothing keeps it across power cycles, so
+# the machine has to re-apply it every boot or the guarantee is a fiction.
+#
+# `-lgc` is the short form of `--lock-gpu-clocks`, `-rgc` of
+# `--reset-gpu-clocks`. The short forms are what the runbooks and the forum
+# posts use, so they are what this unit shows.
+#
+# Ordered after the driver's persistence daemon: locking clocks before the
+# driver is initialised gets "Unable to set GPU clocks" and a failed unit.
+# `After=` on a unit that does not exist is a no-op, so this is also correct on
+# a box without nvidia-persistenced.
+#
+# ConditionPathExists is the "harmless on hardware this was not written for"
+# guard: no driver CLI, no attempt, no failed unit in anybody's boot log.
+
+[Unit]
+Description=Cap the GPU SM clocks at {{ thermal_gpu_clock_cap_min_mhz }}-{{ thermal_gpu_clock_cap_max_mhz }} MHz
+Documentation=man:nvidia-smi(1)
+After=nvidia-persistenced.service
+ConditionPathExists={{ thermal_nvidia_smi_command }}
+
+[Service]
+# oneshot + RemainAfterExit so systemd models the cap as a state rather than as
+# a command that ran once: `systemctl status` answers "is the cap on", and
+# `systemctl stop` is what releases it.
+Type=oneshot
+RemainAfterExit=true
+ExecStart={{ thermal_nvidia_smi_command }} -lgc {{ thermal_gpu_clock_cap_min_mhz }},{{ thermal_gpu_clock_cap_max_mhz }}
+ExecStop={{ thermal_nvidia_smi_command }} -rgc
+
+# Deliberately unhardened. This runs as root for a few milliseconds and talks
+# straight to the driver; ProtectSystem, PrivateDevices and friends are exactly
+# the directives that get between nvidia-smi and /dev/nvidia*, and a sandbox
+# around a oneshot that exits immediately buys nothing worth that risk.
+
+[Install]
+WantedBy=multi-user.target
