@@ -1,0 +1,23 @@
+---
+# Run one role per container so a failure names the role that caused it.
+# site.yml's own ordering is not reproduced here: docker, gpu, exporters and
+# monitoring are not in this file at all, because a container cannot honestly
+# stand in for a GPU, a driver, or a machine on a network. See
+# tests/role-idempotence.sh, which prints that scope before it runs.
+- name: Converge the base role in a container
+  hosts: sparkup-test-base
+  gather_facts: true
+  vars_files:
+    - "{{ playbook_dir }}/../../group_vars/all.yml"
+    - "{{ playbook_dir }}/vars.yml"
+  roles:
+    - role: base
+
+- name: Converge the users role in a container
+  hosts: sparkup-test-users
+  gather_facts: true
+  vars_files:
+    - "{{ playbook_dir }}/../../group_vars/all.yml"
+    - "{{ playbook_dir }}/vars.yml"
+  roles:
+    - role: users

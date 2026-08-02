@@ -30,6 +30,12 @@ spark_shared_group: spark
 # alone, which is the default.
 # base_timezone: Europe/Bucharest
 
+# Your box's EC firmware version, from `fwupdmgr get-devices`. Once set, the
+# thermal role asserts it every converge and fails on drift — that is how you
+# find out something flashed the box. It never flashes anything itself. Leave it
+# empty until you know your own value; asserting someone else's is meaningless.
+# thermal_expected_ec_firmware: "0x03000302"
+
 # Only for a box migrating off a hand-rolled cron + flock + bash loop that
 # scraped nvidia-smi into a textfile collector. The exporters role replaces it
 # with a supervised systemd unit; the old one must go in the same change or
@@ -41,3 +47,20 @@ spark_shared_group: spark
 # Only for a box migrating off a containerised node-exporter that owns :9100.
 # The host unit cannot bind the port until the container is gone.
 # exporters_remove_legacy_container: true
+
+# --- wall-socket power, entirely optional --------------------------------
+# Measuring at the plug is the only honest way to cost a run: nvidia-smi sees
+# the GPU rail only and underreports the wall by roughly 2x.
+#
+# If you have a Shelly Plug M Gen3, this is the whole configuration — the
+# bundled exporter is installed and the scrape job appears:
+# shelly_enabled: true
+# shelly_host: 192.168.1.141      # the plug's reserved IP, never a .local name
+#
+# If you have any OTHER meter, ignore the Shelly role entirely and just point
+# Prometheus at whatever already speaks the exposition format:
+# power_scrape_target: tasmota.lan:9999
+# power_scrape_metrics_path: /metrics
+#
+# Set neither and there is simply no power job. Nothing else breaks: no
+# dashboard panel queries these metrics.

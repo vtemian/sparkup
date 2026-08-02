@@ -1,0 +1,52 @@
+---
+# Everything this role reads is declared here and carries the role prefix.
+# Nothing thermal lives in group_vars/all.yml: the registry there is the set of
+# tunables an upgrade is a diff of, and every value below is a safety decision
+# rather than a version. Override them in host_vars/<host>.yml.
+
+# E2 — the clock cap.
+#
+# OFF until E1 produces evidence on this hardware. The audit measured 0 us of
+# thermal slowdown against 6.45 h of power capping over 20 h of uptime, so the
+# community fan-curve advice is a hypothesis about our box, not a finding on
+# it. The unit is installed either way, so turning the cap on for one night is
+# `systemctl start gpu-clock-cap` rather than a converge.
+thermal_gpu_clock_cap_enabled: false
+thermal_gpu_clock_cap_min_mhz: 300
+thermal_gpu_clock_cap_max_mhz: 2200
+thermal_gpu_clock_cap_unit: gpu-clock-cap.service
+
+# The driver CLI. The clock cap unit and this role's guards both key off it, so
+# a box without it converges to "nothing to do" instead of failing.
+thermal_nvidia_smi_command: /usr/bin/nvidia-smi
+
+# E3 — the fwupd pin.
+#
+# OFF by default, and the README argues the case at length. In short: this is a
+# public recipe, fwupd-refresh.timer refreshes *metadata* rather than flashing
+# anything, and masking a stranger's firmware-update path is the kind of
+# decision the `base` role already refuses to make on their behalf. Turn it on
+# in host_vars as step 1 of the E4 rollback runbook, which is the point at
+# which there is finally a deliberate firmware state worth protecting.
+thermal_pin_fwupd: false
+thermal_fwupdmgr_command: /usr/bin/fwupdmgr
+thermal_fwupd_refresh_timer: fwupd-refresh.timer
+
+# Where systemd keeps local unit files, masks and enablement symlinks. The role
+# reads all three out of here and writes the clock cap unit into it.
+thermal_systemd_unit_dir: /etc/systemd/system
+
+# The EC firmware version is asserted, never remediated and never flashed.
+#
+# fwupd device ids are hashes derived from the device's own identity, so this
+# one names the embedded controller on *this* box. On another Spark the id will
+# differ, the lookup will find nothing, and the assertion is skipped rather
+# than failed — run `fwupdmgr get-devices` there and set your own. Empty
+# disables the firmware read entirely.
+thermal_ec_device_id: 8c948e1db381648c8893897e4d09b7b153309991
+# Empty asserts nothing. This is a per-box fact, not a project constant: another
+# Spark on newer EC firmware is not drifting, it is simply a different machine,
+# and failing a stranger's converge against this box's version would be wrong.
+# Record your own in host_vars once you know it, and the assertion starts
+# guarding it.
+thermal_expected_ec_firmware: ""

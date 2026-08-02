@@ -1,0 +1,27 @@
+---
+# What the roles are converged with in a container. Loaded after
+# group_vars/all.yml, which is what makes these win: vars_files outrank a
+# play's own `vars:`, and group_vars/all.yml ships spark_users empty so a fresh
+# clone cannot invent accounts.
+
+# Two accounts, so both branches of the users role run: one that asks for an
+# extra group and one that does not. `sudo` exists in a stock Ubuntu image;
+# `docker` does not, because the docker role is not part of this test, and
+# ansible.builtin.user fails hard on a group that is missing.
+#
+# github_keys is false throughout. Installing a real GitHub account's keys
+# would need the network and would put a stranger's public key in a test
+# fixture, so the authorized_key task is the one part of this role the
+# container run does not exercise.
+spark_users:
+  - name: sparkup-alice
+    groups: [sudo]
+    github_keys: false
+  - name: sparkup-bob
+    groups: []
+    github_keys: false
+
+# Under the repo default this is empty and the timezone task never runs, which
+# would leave community.general.timezone untested. Setting it means the task
+# executes and has to be idempotent on the second pass like everything else.
+base_timezone: Europe/Bucharest

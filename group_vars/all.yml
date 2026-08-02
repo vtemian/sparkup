@@ -32,11 +32,21 @@ docker_manage_upstream_repo: true
 # the play die partway through.
 gpu_enabled: true
 
+# The Secure Boot kernel work. Off by default and sequenced last, because it is
+# the only role that can leave a headless box unbootable. It never reboots — it
+# tells you a reboot is required and stops — but the reboot that follows is
+# where the risk lives. Turn it on for one deliberate, supervised run.
+kernel_enabled: false
+
 monitoring_dir: /opt/monitoring
 prometheus_image: prom/prometheus:v3.5.0
 grafana_image: grafana/grafana:12.1.0
 grafana_port: 80
-prometheus_listen: "127.0.0.1:9090"
+# Split rather than one "host:port" string: it is consumed both as a Docker
+# port-binding prefix and as a URL authority, and a value valid for one is not
+# always valid for the other.
+prometheus_bind_address: "127.0.0.1"
+prometheus_port: 9090
 prometheus_retention: 30d
 prometheus_scrape_interval: 15s
 # The training-observability project pushes per-step samples with true
@@ -50,11 +60,54 @@ node_exporter_port: 9100
 nvidia_gpu_exporter_version: "1.13.1"
 nvidia_gpu_exporter_port: 9835
 
-# Wall-socket power. The exporter role is not built yet; this flag exists so
-# the Prometheus config does not carry a permanently-dead target until it is.
+# ---------------------------------------------------------------------------
+# Wall-socket power
+#
+# nvidia-smi sees the GPU rail only and underreports the wall by roughly 2x, so
+# cost is measured at the socket or not measured at all.
+#
+# What this repo owes the training-observability project is a `power` scrape
+# job — not a brand of meter. These two variables ARE that contract. Anything
+# that speaks the Prometheus exposition format can fill it: a Tasmota or Kasa
+# exporter, a Zigbee bridge, or an exporter already running on another host.
+# Empty means no power job is emitted at all.
+#
+# The bundled Shelly role below is one convenient way to fill it, and sets
+# these automatically when it is switched on. It is not the only way, and
+# nothing outside roles/shelly assumes it.
+power_scrape_target: "{{ shelly_scrape_host ~ ':' ~ shelly_exporter_port if shelly_enabled | bool else '' }}"
+power_scrape_metrics_path: "{{ shelly_exporter_metrics_path if shelly_enabled | bool else '/metrics' }}"
+
+# ---------------------------------------------------------------------------
+# The bundled Shelly Plug M Gen3 exporter — entirely optional.
+#
+# Leave this false and the role is a complete no-op: nothing downloaded,
+# nothing installed, no scrape job. Turn it on only once the plug exists, has
+# joined the 2.4 GHz SSID and holds a DHCP reservation.
 shelly_enabled: false
+
+# TWO DIFFERENT HOSTS, and confusing them is the bug this pair exists to
+# prevent. shelly_host is the PLUG — the exporter's configuration, the device
+# it polls over JSON-RPC. It is never a scrape target: the plug speaks Shelly
+# RPC, not the Prometheus exposition format. Use the reserved IP rather than a
+# .local name; the exporter runs in a container with no mDNS resolver.
 shelly_host: ""
+# shelly_scrape_host is where PROMETHEUS looks. The exporter is a separate
+# process on the Spark, and Prometheus is containerised, so it reaches the host
+# through the host-gateway alias — exactly as the node and gpu jobs do.
+shelly_scrape_host: host.docker.internal
 shelly_exporter_port: 9924
+
+# easimon/shelly-exporter: of the three maintained candidates it is the only
+# one that exports cumulative watt-hours as a Prometheus counter, which is the
+# whole point (roles/shelly/README.md has the evidence). Verified to carry
+# linux/arm64 in its manifest index — several exporters are amd64-only — and
+# pinned by that index digest, which is the image's checksum.
+shelly_exporter_version: "3.0.0"
+shelly_exporter_image_digest: "sha256:3032562bcff4415a39de32a169ac2c2e200ae27c9bed551cded3831d31437ac9"
+# Spring Boot's actuator serves the exposition format at /prometheus, not at
+# the /metrics every other exporter here uses.
+shelly_exporter_metrics_path: /prometheus
 
 # A container restart is survivable mid-training; set this false to refuse
 # disruptive work while a GPU process is running.

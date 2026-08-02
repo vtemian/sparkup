@@ -1,0 +1,13 @@
+---
+# Two throwaway containers, one role each, reached through the docker CLI
+# rather than SSH. Nothing here can address a real machine: the connection
+# plugin only knows how to talk to a local container, so a mistyped target
+# fails rather than provisioning somebody's box.
+all:
+  hosts:
+    sparkup-test-base:
+    sparkup-test-users:
+  vars:
+    ansible_connection: community.docker.docker
+    ansible_user: root
+    ansible_python_interpreter: /usr/bin/python3

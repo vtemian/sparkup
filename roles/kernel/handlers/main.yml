@@ -1,0 +1,8 @@
+---
+# Nothing written to /etc/default/grub takes effect until grub.cfg is
+# regenerated from it. The role flushes this handler mid-run rather than
+# letting it fire at the end of the play, because every task after it reads the
+# generated menu: the entry ids it pins to, and the timeout it verifies.
+- name: Update GRUB
+  ansible.builtin.command: update-grub
+  changed_when: true

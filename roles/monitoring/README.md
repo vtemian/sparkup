@@ -91,13 +91,17 @@ From `group_vars/all.yml` (the registry — change them there, not here):
 | `monitoring_dir` | `/opt/monitoring` | root-owned, outside any rsynced tree |
 | `prometheus_image` | `prom/prometheus:v3.5.0` | pinned; never `latest` |
 | `grafana_image` | `grafana/grafana:12.1.0` | pinned; never `latest` |
-| `prometheus_listen` | `127.0.0.1:9090` | loopback only — unauthenticated, and it accepts remote writes |
+| `prometheus_bind_address` | `127.0.0.1` | loopback only — unauthenticated, and it accepts remote writes |
+| `prometheus_port` | `9090` | published port on the host; the container always listens on 9090 |
 | `grafana_port` | `80` | so `http://spark.local` needs no suffix |
 | `prometheus_retention` | `30d` | the durable archive is per-run summaries on disk, not the TSDB |
 | `prometheus_scrape_interval` | `15s` | also fed to the datasource as `timeInterval` |
 | `prometheus_enable_remote_write_receiver` | `true` | a contract with the training-observability project |
 | `node_exporter_port` / `nvidia_gpu_exporter_port` | `9100` / `9835` | targets, via the host gateway |
-| `shelly_enabled` / `shelly_host` / `shelly_exporter_port` | `false` / `""` / `9924` | the `power` job is emitted only when enabled |
+| `shelly_enabled` | `false` | the `power` job is emitted only when this is true |
+| `shelly_scrape_host` / `shelly_exporter_port` | `host.docker.internal` / `9924` | where Prometheus scrapes the exporter |
+| `shelly_host` | `""` | the **plug's** address — the exporter's config, never a scrape target |
+| `shelly_exporter_metrics_path` | `/prometheus` | Spring Boot actuator; `/metrics` returns 404 |
 
 Role-local defaults live in `defaults/main.yml`: the compose project name, the container-side
 dashboard path, and the four Grafana environment settings this box already had (anonymous access,
@@ -215,11 +219,23 @@ ssh vlad@spark.local 'curl -s -o /dev/null -w "%{http_code}\n" \
 make apply && make apply    # the second run must report changed=0
 ```
 
-## Known loose end
+## The `power` job
 
-The `power` job targets `{{ shelly_host }}:{{ shelly_exporter_port }}`, gated behind
-`shelly_enabled: false`. When D1 lands, confirm which side of that pair is right: if the Shelly
-exporter runs on the box (the likely shape — the plug speaks JSON-RPC, not the Prometheus exposition
-format), the target becomes `host.docker.internal:{{ shelly_exporter_port }}` and only the plug's
-address stays in `shelly_host`. One line, and it should be changed in the same commit that ships the
-exporter, not guessed at now.
+Settled when the `shelly` role landed. The target is the **Spark**, not the plug: the plug speaks
+Shelly JSON-RPC and serves no metrics on any port, so a separate exporter process on the host polls
+it and speaks Prometheus itself. That puts it behind the same host-gateway alias as `node` and
+`gpu`.
+
+- `shelly_scrape_host` — where Prometheus looks (`host.docker.internal`)
+- `shelly_host` — the **plug's** address, which is the exporter's configuration and never a target
+- `shelly_exporter_metrics_path` — `/prometheus`, because the exporter is a Spring Boot app whose
+  actuator does not serve `/metrics`. At the default path the target reads down with a 404,
+  which looks exactly like a dead exporter.
+
+The whole block is emitted only when `shelly_enabled` is true, so an absent plug leaves no
+permanently-red target.
+
+**`up{job="power"} == 1` is not sufficient verification.** The exporter answers whether or not it
+has ever reached the plug — it discovers devices on an interval and simply exposes nothing for one
+that does not respond. A green target with no `shelly_meter_power_watthours_total` means the
+exporter is healthy and the *plug* is unreachable. Check for the metric, not the target.

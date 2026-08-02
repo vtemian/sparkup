@@ -26,7 +26,11 @@
 # in the seconds after the stack restart while Prometheus is still binding.
 - name: Reload Prometheus configuration
   ansible.builtin.uri:
-    url: "http://{{ prometheus_listen }}/-/reload"
+    # The handler runs on the box, so it reaches Prometheus over loopback. A
+    # wildcard bind is listening there too; any other bind address is not.
+    url: >-
+      http://{{ '127.0.0.1' if prometheus_bind_address in ['0.0.0.0', '::']
+      else prometheus_bind_address }}:{{ prometheus_port }}/-/reload
     method: POST
     status_code: [200]
   register: monitoring_prometheus_reload
