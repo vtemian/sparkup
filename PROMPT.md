@@ -649,6 +649,26 @@ E1 produces evidence.**
 is not silently undone, and **assert** the EC version, reporting drift as a failed assertion rather
 than remediating it.
 
+**Mechanism correction (found while implementing).** The sentence above overstates what the timer
+does. `fwupd-refresh.service` runs `fwupdmgr refresh`, which downloads *metadata* from configured
+remotes and updates the MOTD — it does **not** install firmware. Firmware gets installed by a human
+running `fwupdmgr update`, or by a desktop updater acting on that metadata. The latter is not
+hypothetical here: `gnome-remote-desktop` is enabled, and a desktop session can be nagged into an
+offline firmware update at reboot.
+
+So masking the timer is a real guard but an **indirect** one, and that changes the default. The
+role ships `thermal_pin_fwupd: false` and leans on the assertion instead, which catches drift
+whatever caused it — vendor tool, desktop updater, or a colleague. Flip the flag in `host_vars`
+*before* an E4 downgrade, and move `thermal_expected_ec_firmware` to the rolled-back version after.
+The surgical alternative is `fwupdmgr block-firmware <checksum>`, which blocks one specific firmware
+from being installed while leaving metadata refresh working.
+
+**Also note:** the registry below lists `gpu_clock_cap_*` and `expected_ec_firmware` unprefixed in
+`group_vars`. The implemented rule is narrower: variables a **role declares** carry the role's name
+(`thermal_gpu_clock_cap_enabled`), because `var-naming[no-role-prefix]` is enabled and not skipped;
+`group_vars` holds only what several roles share. These are role-local, so they live in
+`roles/thermal/defaults/main.yml`.
+
 ### E4: firmware rollback — a manual runbook, not a task
 Document, do not automate:
 
