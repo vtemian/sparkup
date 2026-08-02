@@ -54,11 +54,34 @@ node_exporter_port: 9100
 nvidia_gpu_exporter_version: "1.13.1"
 nvidia_gpu_exporter_port: 9835
 
-# Wall-socket power. The exporter role is not built yet; this flag exists so
-# the Prometheus config does not carry a permanently-dead target until it is.
+# Wall-socket power. nvidia-smi sees the GPU rail only and underreports the
+# wall by roughly 2x, so cost is measured at the socket or not measured at all.
+# Off until the plug exists, has joined the 2.4 GHz SSID and holds a DHCP
+# reservation: a permanently-red target teaches people to ignore red targets.
 shelly_enabled: false
+
+# TWO DIFFERENT HOSTS, and confusing them is the bug this pair exists to
+# prevent. shelly_host is the PLUG — the exporter's configuration, the device
+# it polls over JSON-RPC. It is never a scrape target: the plug speaks Shelly
+# RPC, not the Prometheus exposition format. Use the reserved IP rather than a
+# .local name; the exporter runs in a container with no mDNS resolver.
 shelly_host: ""
+# shelly_scrape_host is where PROMETHEUS looks. The exporter is a separate
+# process on the Spark, and Prometheus is containerised, so it reaches the host
+# through the host-gateway alias — exactly as the node and gpu jobs do.
+shelly_scrape_host: host.docker.internal
 shelly_exporter_port: 9924
+
+# easimon/shelly-exporter: of the three maintained candidates it is the only
+# one that exports cumulative watt-hours as a Prometheus counter, which is the
+# whole point (roles/shelly/README.md has the evidence). Verified to carry
+# linux/arm64 in its manifest index — several exporters are amd64-only — and
+# pinned by that index digest, which is the image's checksum.
+shelly_exporter_version: "3.0.0"
+shelly_exporter_image_digest: "sha256:3032562bcff4415a39de32a169ac2c2e200ae27c9bed551cded3831d31437ac9"
+# Spring Boot's actuator serves the exposition format at /prometheus, not at
+# the /metrics every other exporter here uses.
+shelly_exporter_metrics_path: /prometheus
 
 # A container restart is survivable mid-training; set this false to refuse
 # disruptive work while a GPU process is running.

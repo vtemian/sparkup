@@ -1,0 +1,21 @@
+---
+# The image identity, the ports and the metrics path live in group_vars/all.yml
+# — those are what an exporter swap or a version bump is a diff of. Everything
+# here is role plumbing.
+
+shelly_image_repository: ghcr.io/easimon/shelly-exporter
+
+# Pulled and run by digest, never by tag. A tag is a mutable pointer; a digest
+# names immutable content, so an unchanged unit file cannot quietly start
+# running different software. This is the same guarantee roles/exporters buys
+# with get_url's sha256 check, spelled the way a registry spells it.
+shelly_image_ref: "{{ shelly_image_repository }}@{{ shelly_exporter_image_digest }}"
+
+shelly_container_name: shelly-exporter
+
+# Fixed by the image (EXPOSE 8080) and not a tunable. The host side is
+# shelly_exporter_port, which is what Prometheus scrapes.
+shelly_container_port: 8080
+
+shelly_docker_bin: /usr/bin/docker
+shelly_unit_name: shelly_exporter.service
