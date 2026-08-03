@@ -137,7 +137,11 @@ GRPO reward signal**, so watching it live is watching the reward. Plus corpus co
 fixtures, per-scene idle 21–48%), and the `stroke` degradation rate once stage 5 runs —
 `bbm/PROMPT.md` calls that "the metric that matters".
 
+### D2: the per-run energy series
 
+Written by the launcher at run end, one sample per run, cheap to keep forever:
+
+```
 training_run_energy_wh{run_id}            total wall energy over the run   (plug)
 training_run_energy_marginal_wh{run_id}   energy attributable to the run   (plug − idle)
 training_run_gpu_energy_wh{run_id}        GPU-rail energy                  (NVML counter, exact)
@@ -153,9 +157,11 @@ figure if the counter went backwards. `nvidia-ml-py` is the client; it is now in
 `~/bbm-train/.venv`.
 
 The ratio `gpu_energy_wh / energy_wh` is the useful derived number: how much of what you paid for
-was the GPU actually working, rather than the box merely being switched on. Expect roughly 0.5 at
-best given the measured ~2× wall-to-rail gap — if a run scores far below that, the bottleneck is
-not the GPU and more epochs will mostly buy electricity.
+was the GPU actually working, rather than the box merely being switched on. Under sustained load the
+published wall-to-rail gap is around 2×, so **0.5 is roughly the ceiling, not the expectation** —
+the ratio falls steeply as utilisation drops, because the rail collapses to a few watts while the
+rest of the box does not. If a run scores far below 0.5, the bottleneck is not the GPU and more
+epochs will mostly buy electricity.
 
 **Two numbers, both wanted.** *Total* answers "what did this cost me". *Marginal* answers "was this
 experiment worth it" — the box draws power whether or not you train. Measure the baseline for ~60 s

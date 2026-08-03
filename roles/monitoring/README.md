@@ -166,9 +166,10 @@ NVIDIA states DCGM does not support Spark, and `nvmlDeviceGetMemoryInfo` returns
 
 Two more honest limitations recorded on the panels themselves:
 
-- **GPU power is the GPU rail only.** 87 W by `nvidia-smi` against 180 W measured at the socket —
-  roughly 2× under, and non-linearly so, because idle overhead dominates at low GPU load. Cost comes
-  from the `power` job, never from this panel.
+- **GPU power is the GPU rail only.** Measured here: 3–4 W idle, peaking near 83 W under sustained
+  bf16 matmul. That does not span even the GB10 package, which NVIDIA rates at 140 W for CPU and GPU
+  together. The gap to the wall grows as utilisation falls, so it is not a multiplier you can apply.
+  Cost comes from the `power` job, never from this panel.
 - **`/srv/bbm` has no filesystem of its own.** This box has one NVMe and no separate `/home`, so
   `node_filesystem_*{mountpoint="/srv/bbm"}` would match nothing at all. The shared-artifact panel
   reports the root filesystem, which is the pool `/srv/bbm` actually draws from, and says so.

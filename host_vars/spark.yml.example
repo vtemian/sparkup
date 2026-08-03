@@ -55,7 +55,8 @@ spark_shared_group: spark
 
 # --- wall-socket power, entirely optional --------------------------------
 # Measuring at the plug is the only honest way to cost a run: nvidia-smi sees
-# the GPU rail only and underreports the wall by roughly 2x.
+# the GPU rail only, and no supported interface on this hardware exposes system
+# power. The gap is not a fixed multiplier, so it cannot be estimated away.
 #
 # If you have a Shelly Plug M Gen3, this is the whole configuration — the
 # bundled exporter is installed and the scrape job appears:

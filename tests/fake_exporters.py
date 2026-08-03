@@ -6,7 +6,7 @@ is the part that most needs a running box. This stands in for the box: two
 HTTP endpoints in the Prometheus exposition format, shaped like the two host
 exporters the `exporters` role installs, carrying values that plausibly
 resemble a DGX Spark — 20 cores, 121 GiB of unified memory, one 3.7 TB NVMe,
-a GPU rail that peaks near 87 W, and clocks between 200 MHz idle and 3003 MHz.
+a GPU rail that peaks near 83 W, and clocks between 200 MHz idle and 3003 MHz.
 
 It is deliberately not a simulator. The numbers move on a slow cycle so panels
 show a line rather than a flat bar; nothing here is a claim about how the real

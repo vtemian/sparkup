@@ -52,7 +52,8 @@ Every one of these cost somebody an afternoon. They are why the roles look the w
 
 | | |
 |---|---|
-| **`nvidia-smi` underreports the wall by ~2×** | 87 W on the GPU rail against 180 W at the socket. There is no internal path to system power, so cost is measured at the plug or not at all. |
+| **`nvidia-smi` measures the GPU rail, not the box** | Our rail idles at 3–4 W and peaks near 83 W under sustained bf16 matmul. NVIDIA rates the GB10 SoC at 140 W for CPU *and* GPU together, inside a 240 W system, so the rail cannot even cover its own package. Published wall readings sit 60–90 W above it under load and the gap grows past 10× at idle: there is no constant to calibrate away. |
+| **The system power telemetry is right there, and nothing can read it** | The DSDT on this box describes `NVDA8800` at `\_SB.MTEL` with registers named `SPBM_TE_TOTAL_SYS_IN` and `SPBM_PKG_ENERGY_VALUE_ACCUMULATE`. No driver binds it, the MMIO aperture is unclaimed, and Secure Boot lockdown blocks `/dev/mem`. NVIDIA's own dashboard shells out to `nvidia-smi`. The hardware knows; the OS is not told. So cost is measured at the plug. |
 | **There is no GPU memory metric** | Memory is unified, `nvidia-smi` prints `[N/A]`, and that is correct. `node_memory_*` **is** the GPU memory signal. Do not "fix" it. |
 | **DGX OS hides the GRUB menu behind a drop-in** | Writing `GRUB_TIMEOUT` to `/etc/default/grub` does nothing; `no-grubmenu.cfg` is sourced afterwards and wins. Always check the *generated* `grub.cfg`. |
 | **80 °C is not the limit** | Under sustained bf16 matmul this box sat at 79–80 °C with clocks at 2405 of 3003 MHz and **zero microseconds** of thermal slowdown. The limiter is the power cap, not heat, so the fan-curve advice going around does not apply here. Measure before you mitigate. |

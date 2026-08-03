@@ -20,24 +20,87 @@ missing metric.
 
 ## Why there is a plug at all
 
-**This box has no internal path to system power.** That is not an inconvenience
-to route around; it is a hardware fact, measured here and stated three separate
-times by NVIDIA staff on the developer forums. `nvidia-smi` reports the **GPU
-rail only**, and on this box it underreports the wall by roughly **2×** — 87 W
-observed via `nvidia-smi` against **180 W measured at the socket**.
+**This box exposes no supported path to system power.** Audited here: no hwmon
+power or energy rails, an empty `/sys/class/power_supply`, `acpi_power_meter`
+binding no device, no `/dev/ipmi*` and no Redfish interface. NVIDIA staff have
+said three separate times on the developer forums that CPU rail information is
+not exposed and there are no plans to expose it.
+
+`nvidia-smi` reports the **GPU rail only**. Measured here, that rail idles at
+**3–4 W** and peaks near **83 W** under sustained bf16 matmul.
+
+The wall side is **not** measured here — this box has no meter, which is what
+the role exists to fix. Published figures, with their caveats intact:
+
+| Reading | Source and caveat |
+|---|---|
+| 87 W rail vs 180 W socket | One forum post, single session. An **MSI GB10 variant**, a fullscreen **Vulkan** demo rather than compute, and the 180 W includes a **~10 W monitor** drawing through the box. Machine-only ≈ 170 W, so ≈ **1.95×**. |
+| 16–20 W rail vs 75–80 W | Kill-A-Watt, NVFP4 quantisation at ~50% utilisation. **≈ 4–5×.** |
+| 22–25 W idle | Post-firmware-update, but taken with a **USB-C meter inline on the DC cable**, so DC-side, not the socket. |
+| 40–45 W idle | Pre-update AC figures. |
+
+So **~2× is the floor of the range, not its middle** — it appears only near
+peak GPU load, and the multiplier climbs past 10× at idle. The steadier quantity
+is the **offset**: the wall runs roughly 60–90 W above the rail under load.
+Neither is a constant you can calibrate away.
+
+Note what the rail cannot cover even in principle: NVIDIA publishes **140 W for
+the GB10 SoC**, which is CPU *and* GPU together, against **240 W for the
+system** — and that 240 W is a supply rating, not an observed draw; no reviewer
+has exceeded about 200 W. A number that does not span its own package cannot be
+the cost.
+
+The Spark also draws through an **external brick**, so AC-to-DC conversion loss
+happens outside the chassis. At roughly 88–92% efficiency that is **15–20 W at a
+170 W draw** which the utility bills and which no internal register can ever
+see, however good it gets.
 
 The audit found no substitute anywhere on the box: no hwmon power or energy
-rails, an empty `/sys/class/power_supply`, and `acpi_power_meter` present as a
-module but binding no device. NVML's cumulative counter
+rails, an empty `/sys/class/power_supply`, an empty `/sys/class/powercap` (no
+RAPL), no energy PMU, no `/dev/ipmi*` and no Redfish interface.
+`acpi_power_meter` is present as a module but binds `ACPI000D` only, which does
+not exist here — and NVIDIA's own `/etc/nvidia-platform.d/nvidia-platform-configs.json`
+sets `"EnablePowerMeterCap": "False"` for `dgx_spark` while other platforms say
+`True`. NVML answers `NVML_ERROR_NOT_SUPPORTED` for every power field at
+`MODULE` scope. NVIDIA's own `dgx-dashboard` shells out to
+`nvidia-smi --query-gpu=power.draw`. Its cumulative counter
 (`nvmlDeviceGetTotalEnergyConsumption`) does work and is worth recording as a
 second series, but it is the same GPU rail — exact, and exactly half the story.
 
+### The telemetry exists. It is simply not wired up.
+
+This is the part worth knowing before someone tries to save the cost of a plug.
+Decoding this box's DSDT turns up `NVDA8800` at `\_SB.MTEL`, whose `_DSM`
+publishes a register map for the MediaTek **System Power Budget Manager**,
+including:
+
+```
+SPBM_TE_SYS_TOTAL_TELEMETRY_OFFSET       0x300
+SPBM_TE_TOTAL_GPU_IN_OFFSET              0x32c
+SPBM_TE_TOTAL_SYS_IN_OFFSET              0x330
+SPBM_PKG_ENERGY_VALUE_ACCUMULATE_OFFSET  0x344
+```
+
+Separate registers for GPU input and system input, plus a package energy
+accumulator. The firmware distinguishes them; NVML only ever reports the first.
+
+It is unreachable, four ways over: nothing on the box binds `acpi:NVDA8800:`,
+the `0x1C238000` aperture is absent from `/proc/iomem`, `/dev/mem` returns
+`EPERM` because Secure Boot puts the kernel in integrity lockdown, and there is
+no ACPI debugger to invoke `_DSM` out of band. A third-party out-of-tree driver
+(`spark_hwmon`) does bind it, at the cost of MOK enrolment on a box with a
+boot-failure history.
+
+**And even if you did all that, it would not give you cost.** Those registers
+read the DC side, downstream of the external brick, so conversion loss is
+invisible to them. Their units are undocumented 32-bit values with no scaling
+hint in the AML, so calibrating them needs an external meter anyway. They answer
+*where the power goes inside the box*, which is a genuinely interesting question
+and a different one.
+
 So a smart plug is not a workaround. It is **the only correct instrument for
 cost**, because it captures what the electricity meter charges for: CPU,
-memory, NVMe, fans, and the PSU's own conversion loss. The 2× gap is also not a
-constant you could calibrate away — idle overhead dominates at low GPU load, so
-the error is non-linear in exactly the region where a cheap "multiply by two"
-would be most tempting.
+memory, NVMe, fans, and the conversion loss in the brick.
 
 ## Choosing the exporter
 
@@ -247,8 +310,8 @@ None of this is automatable, and none of it should be. Do it once, by hand,
 before flipping `shelly_enabled`.
 
 **Buy the Shelly Plug M Gen3.** 13 A / 3000 W, CEE 7/3 Schuko output and a
-CEE 7/7 plug — correct for Romania, with vast headroom over a box that draws
-around 240 W at the wall. Gen3 means a local RPC API and no cloud dependency.
+CEE 7/7 plug — correct for Romania, with vast headroom over a box rated at
+240 W system power. Gen3 means a local RPC API and no cloud dependency.
 
 1. **Join the 2.4 GHz SSID.** The plug is 2.4 GHz only. Pointing it at a
    5 GHz-only SSID fails in a way the app describes as a generic connection
@@ -376,10 +439,16 @@ does not respond, logging the reason. So a green target with no
 **plug** is unreachable: wrong IP, wrong SSID, or listed under the Gen1
 variable. The third metric in that list, not the first, is the real check.
 
-`increase()` over an hour should land in the low hundreds of Wh for an idle
-box and rise clearly under load. A figure roughly double what `nvidia-smi`
-implies is the expected result, not an error — that gap is the reason this
-role exists.
+`increase()` over an hour is watt-hours, so an idle box drawing 40–45 W should
+land near **40–45 Wh**, and a loaded one near **170–180 Wh**. Anything in the
+hundreds for an idle box means the plug is metering more than the Spark.
+
+**Do not sanity-check it against `nvidia-smi`.** The wall-to-rail gap is not a
+constant: roughly 2× under sustained load, but **over 10×** at idle, because the
+rail falls to 3–4 W while the rest of the box does not. Comparing the two during
+first light — which happens on an idle box, since you install the plug before you
+train — makes a correctly working plug look like it is double-counting. That
+varying gap is the reason this role exists.
 
 Locally, `systemctl status shelly_exporter` and
 `journalctl -u shelly_exporter` are safe and do not hang. Device discovery

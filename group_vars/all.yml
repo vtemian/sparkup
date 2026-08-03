@@ -84,8 +84,10 @@ nvidia_gpu_exporter_port: 9835
 # ---------------------------------------------------------------------------
 # Wall-socket power
 #
-# nvidia-smi sees the GPU rail only and underreports the wall by roughly 2x, so
-# cost is measured at the socket or not measured at all.
+# nvidia-smi sees the GPU rail only, and the gap to the wall is not a constant:
+# published readings sit 60-90 W above it under load and the multiplier grows
+# past 10x at idle. No supported interface exposes system power, so cost is
+# measured at the socket or not measured at all.
 #
 # What this repo owes the training-observability project is a `power` scrape
 # job — not a brand of meter. These two variables ARE that contract. Anything
