@@ -24,7 +24,7 @@ live `node`, `gpu` and `power` scrape jobs.
 ## Phase C — training observability (the k6 part)
 
 ### C0: `/srv/bbm`
-`/srv/bbm/{data,checkpoints,runs}`, group `bbm`, setgid so vlad and marius share artifacts.
+`/srv/bbm/{data,checkpoints,runs}`, group `bbm`, setgid so the group shares artifacts.
 **This exists because `rsync --delete` owns `~/bbm`.** Every training path points here. `/srv/bbm`
 and `bbm` are this box's values of `spark_shared_dir` and `spark_shared_group`; the repo defaults
 are `/srv/spark` and `spark`.
