@@ -43,6 +43,15 @@ playbook still converges.
 8. **Never query a metric nobody emits.** Enforced by `make dashboard`.
 9. **Pin versions, and never below what the box already runs.** Grafana migrates its database schema
    forward only. Check `docker exec <container> grafana server -v` before changing a pin.
+10. **Never make `users` authoritative.** `ansible.builtin.user` carries `append: true` and
+    `ansible.posix.authorized_key` carries `exclusive: false`. Both read like sloppiness and are the
+    opposite. Without `append`, `groups:` becomes the complete set and the first run strips `sudo`,
+    `adm`, `audio` and everything else the account already had. With `exclusive: true`, every key
+    absent from `https://github.com/<user>.keys` is deleted — and GitHub answers an account with no
+    public keys with an empty body, so it would truthfully install nothing over a working
+    `authorized_keys` on a headless WiFi-only box. This role only ever grants. Revocation is manual
+    and deliberate, and naming an account in `github_keys` is a standing delegation: whoever
+    controls it can log in as that user at the next converge, with whatever key they add.
 
 ## Stop and ask the human
 
@@ -107,6 +116,7 @@ role's defaults, or the same tunable exists in two files.
 
 | Role | Off because | Enable with |
 |---|---|---|
+| `spbm` | out-of-tree kernel module, and a key a human must enrol at the console | `spbm_enabled: true` + `-e spbm_mok_password=…` |
 | `shelly` | not everyone owns a smart plug | `shelly_enabled: true` + `shelly_host` |
 | `thermal` clock cap | trades compute for thermal headroom | `thermal_gpu_clock_cap_enabled` |
 | `thermal` EC assertion | your firmware version is not this box's | `thermal_expected_ec_firmware` |
@@ -116,6 +126,13 @@ role's defaults, or the same tunable exists in two files.
 **`--tags kernel` alone does nothing.** The tag selects the role, `when: kernel_enabled` discards it,
 and the run reports success having done nothing. Both are required:
 `--tags kernel -e kernel_enabled=true`.
+
+**The clock cap ships off because of a measurement, not caution.** Over 20 h of uptime including
+training this box logged 0 µs of SW and HW thermal slowdown against 23 224 s of SW power capping, at
+79–80 °C with clocks at 2405 of 3003 MHz. The limiter here is the power cap, not heat, so the
+fan-curve advice circulating for this hardware is a hypothesis about our box rather than a finding
+on it. `nvidia-smi` also reports `N/A` for every thermal-limit register, so there is no headroom
+figure to check it against. Measure before mitigating.
 
 ### Power is not tied to Shelly
 
@@ -136,7 +153,7 @@ make apply BECOME="--become-password-file ~/.sparkup-become"   # must report cha
 Play order, and it is load-bearing:
 
 ```
-base → docker → gpu → users → exporters → shelly → monitoring → thermal → firmware → kernel
+base → docker → gpu → users → spbm → exporters → shelly → monitoring → thermal → firmware → kernel
 ```
 
 - `docker` precedes `users` because `ansible.builtin.user` fails hard if a group in `groups:` does
@@ -145,6 +162,7 @@ base → docker → gpu → users → exporters → shelly → monitoring → th
   a containerised node-exporter. Running `--tags monitoring` alone on an unmigrated box removes host
   metrics and gives nothing back.
 - `shelly` precedes `monitoring` so the exporter exists before Prometheus is told to scrape it.
+- `spbm` precedes `exporters` so its hwmon channels exist before node_exporter starts reading them.
 
 ---
 
@@ -193,8 +211,6 @@ stubbed. A fake that reported success would be worse than no test.
 
 ## Traps
 
-Accumulated by losing time to them. Each one has cost somebody an afternoon.
-
 - **`curl 127.0.0.1:9100` hangs** on this hardware even when node-exporter is healthy. Verify through
   Prometheus.
 - **SSH is socket-activated.** `ssh.socket` is enabled, `ssh.service` is disabled. Restarting
@@ -221,6 +237,62 @@ Accumulated by losing time to them. Each one has cost somebody an afternoon.
   shared group, so adding users to it fails. Artifact of the dry run; gone after the first apply.
 - **A package stuck in dpkg state `install ok unpacked`** reads as not-installed forever, so its task
   reports `changed` on every run. Fix with `dpkg --configure -a`, not with a workaround in a role.
+- **`docker` deliberately sets no `default-runtime: nvidia`.** `nvidia` is registered as a *named*
+  runtime, so `--runtime=nvidia` and `--gpus all` opt in per container. Making it the default would
+  inject GPU device nodes and driver libraries into Prometheus, Grafana and every throwaway
+  `alpine`, widening a broken toolkit from "GPU jobs fail" to "monitoring fails". Monitoring is the
+  thing that has to survive when the GPU plumbing breaks.
+- **The GPU is sm_121, so the smoke-test image must be CUDA 13 *and* publish a `linux/arm64`
+  manifest.** sm_121 exists only from CUDA 13.0, so most `cu12x` images cannot address it, and
+  plenty of images ship amd64 only. `gpu_smoke_test_image` was checked against the registry manifest
+  list rather than guessed; changing that tag means checking both properties again.
+- **The two filesystem-collector excludes are what stop node_exporter hanging.** Without
+  `exporters_node_filesystem_mount_points_exclude` and `exporters_node_filesystem_fs_types_exclude`
+  the collector walks the snap loop devices and every Docker overlay and hangs, flapping `up` to 0 —
+  telemetry reporting its own absence as an outage. They are not tidiness.
+- **`$` is written `$$` in the rendered exporter unit.** systemd expands `$` in `ExecStart` and `$$`
+  is its documented literal dollar, so the template applies the substitution and the defaults stay
+  readable as plain regexes. Debug against the rendered unit file, never against the defaults.
+- **Textfile-collector `.prom` files must be `0644`.** node_exporter drops to an unprivileged user,
+  so a `0600` file in `exporters_textfile_dir` is skipped with no error anybody notices. Write them
+  world-readable, and write them atomically (`mktemp` in the same directory, then `mv`) so a scrape
+  never sees half a file.
+- **`monitoring_project_name` is load-bearing.** Compose namespaces named volumes by project, not by
+  directory: `spark-monitoring_grafana-data` holds every dashboard built by hand in the UI and
+  `spark-monitoring_prometheus-data` holds the history. Rename the project and both are silently
+  abandoned, full and unreferenced, and the new stack collides with the running one on port 80.
+- **Dashboards are installed with `copy`, never `template`.** Grafana's own legend syntax is
+  `{{label}}` and Jinja would eat it. That applies to any JSON this repo hands to Grafana.
+- **The Shelly exporter serves `/prometheus`, not `/metrics`.** It is a Spring Boot actuator. Left
+  at Prometheus's default path the target reads down with a 404, which looks exactly like a dead
+  exporter.
+- **`shelly_host` is the plug; the scrape target is the Spark.** The plug speaks Shelly JSON-RPC and
+  serves no metrics on any port, so it is the exporter's *configuration* and never a target.
+  `shelly_scrape_host` is where Prometheus looks, through the same host-gateway alias as `node` and
+  `gpu`.
+- **The Shelly exporter runs on the host network on purpose.** `--publish` would put port 9924
+  beyond ufw, and it serves unauthenticated device inventory alongside the power series. Loopback
+  publishing is not the alternative either: Prometheus is containerised and arrives over the bridge
+  gateway, not loopback.
+- **`firmware` gates on `get-updates` exiting 2, and stages with `--no-reboot-check`.** `update`
+  exits 0 on a converged box, so gating on its own result would report a change forever; only
+  `get-updates` distinguishes "nothing to do", with exit 2. Without `--no-reboot-check`, `fwupdmgr
+  update` offers to reboot and a run holding a pty can act on the answer. Neither token is cosmetic.
+- **`kernel` uses an apt pin, not a dpkg hold.** A hold only constrains packages that are already
+  installed; the failure being prevented is an update pulling in an unsigned image that is not
+  installed yet. `Pin-Priority: -1` on `linux-image-unsigned-*` covers every unsigned kernel that
+  will ever exist, including ones NVIDIA has not built.
+- **`kernel` resolves the image with `dpkg-query`, deliberately not `apt-cache depends`.** apt-cache
+  answers for the *candidate* version, so a newer meta package in NVIDIA's archive would become "the
+  intended kernel" and `state: present` would install it — an unrequested kernel upgrade on a box
+  with a boot-failure history.
+- **GRUB is pinned by menu entry id, never by title.** A title carries the distributor string and
+  the kernel version in prose, and when it stops matching GRUB does not complain, it boots something
+  else. The id embeds the kernel version and the root UUID, and Ubuntu nests per-kernel entries, so
+  the saved value is `<submenu id>><entry id>`.
+- **`spbm_headers_package` is what makes the module survive a kernel upgrade.** DKMS can only
+  rebuild against headers that arrive with the new kernel. Remove that meta package and there is no
+  error — just a missing module, and a metric that stopped, after the next kernel.
 
 ---
 
