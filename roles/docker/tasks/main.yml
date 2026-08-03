@@ -1,61 +1,10 @@
 ---
-- name: Read the installed package set
-  ansible.builtin.package_facts:
-    manager: apt
-
-# DGX OS ships docker-ce from repo.download.nvidia.com. Adding Docker's own
-# repo on top would hand apt a second, higher-priority source for the same
-# package and let a routine upgrade replace the vendor's pinned build. So the
-# repo is added only when there is no Docker to fight with.
-- name: Decide whether Docker has to come from upstream
-  ansible.builtin.set_fact:
-    docker_needs_upstream_repo: >-
-      {{ docker_manage_upstream_repo | bool
-         and 'docker-ce' not in ansible_facts.packages }}
-
-- name: Provide Docker's upstream apt repository on a box that has no Docker
-  when: docker_needs_upstream_repo | bool
-  block:
-    - name: Create the apt keyring directory
-      ansible.builtin.file:
-        path: /etc/apt/keyrings
-        state: directory
-        owner: root
-        group: root
-        mode: "0755"
-
-    - name: Fetch Docker's apt signing key
-      ansible.builtin.get_url:
-        url: "{{ docker_upstream_gpg_url }}"
-        dest: /etc/apt/keyrings/docker.asc
-        owner: root
-        group: root
-        mode: "0644"
-
-    # deb822 rather than the one-line format: ansible.builtin.apt_repository is
-    # deprecated and goes away in ansible-core 2.25.
-    - name: Register Docker's upstream apt repository
-      ansible.builtin.deb822_repository:
-        name: docker
-        types: [deb]
-        uris: "{{ docker_upstream_repo_url }}"
-        suites: "{{ ansible_facts['distribution_release'] }}"
-        components: [stable]
-        architectures: "{{ docker_apt_architecture }}"
-        signed_by: /etc/apt/keyrings/docker.asc
-        state: present
-        mode: "0644"
-
-    - name: Refresh the apt cache so the new repository is visible
-      ansible.builtin.apt:
-        update_cache: true
 
 - name: Install Docker, containerd and the compose plugin
   ansible.builtin.apt:
     name: "{{ docker_packages }}"
     state: present
 
-# The users role puts people in this group; membership is not managed here.
 - name: Ensure the docker group exists
   ansible.builtin.group:
     name: "{{ docker_group }}"
@@ -85,8 +34,7 @@
     enabled: true
     state: started
 
-# Without this, the restart waits until the end of the play: the gpu role would
-# smoke-test against a daemon that has not read the new daemon.json, and the
-# eventual restart would bounce the monitoring stack after it was brought up.
+# Without this the restart waits until the end of the play: the gpu role would
+# smoke-test a daemon that never read the new daemon.json.
 - name: Apply any pending Docker restart before the GPU role runs
   ansible.builtin.meta: flush_handlers

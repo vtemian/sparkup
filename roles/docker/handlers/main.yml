@@ -1,8 +1,5 @@
 ---
-# Restarting dockerd stops every running container. site.yml sets
-# `spark_training_active` from nvidia-smi's compute-process list, and
-# `spark_allow_docker_restart` says whether that is acceptable. When it is not,
-# stop loudly rather than converge quietly over somebody's run.
+# Restarting dockerd stops every running container, including a training run.
 - name: Refuse to restart Docker while a training run owns the box
   ansible.builtin.fail:
     msg: >-
