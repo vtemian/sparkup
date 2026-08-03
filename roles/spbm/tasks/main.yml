@@ -35,6 +35,11 @@
         name: "{{ spbm_package }}"
         state: present
 
+    - name: Install the Secure Boot key enrolment tool
+      ansible.builtin.apt:
+        name: mokutil
+        state: present
+
     - name: Read which kernels DKMS has built the module for
       ansible.builtin.command:
         cmd: dkms status -m spbm
