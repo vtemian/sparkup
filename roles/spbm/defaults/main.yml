@@ -6,7 +6,7 @@ spbm_enabled: false
 # The PPA that carries the DKMS package. Built from antheas/spark_hwmon by
 # github.com/vtemian/spark-spbm-builder; nothing is compiled on this box beyond
 # what DKMS does against the running kernel.
-spbm_ppa: ppa:vtemian/spark-spbm
+spbm_ppa: ppa:vladtemian/spark-spbm
 spbm_package: spbm-dkms
 
 # DKMS rebuilds the module for each new kernel, but only if headers for that

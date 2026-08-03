@@ -15,7 +15,7 @@ DKMS package.
 | | |
 |---|---|
 | Default state | **off**. `spbm_enabled: false` |
-| Source | `ppa:vtemian/spark-spbm`, built by [spark-spbm-builder](https://github.com/vtemian/spark-spbm-builder) |
+| Source | `ppa:vladtemian/spark-spbm`, built by [spark-spbm-builder](https://github.com/vtemian/spark-spbm-builder) |
 | What you get | 14 power channels, 4 energy accumulators in mJ, 8 thermal zones |
 | Survives kernel upgrades | yes, via DKMS |
 | Needs a human | **once**, to enrol the signing key at the console |
@@ -102,7 +102,7 @@ driver.
 | Variable | Default | Notes |
 |---|---|---|
 | `spbm_enabled` | `false` | The gate |
-| `spbm_ppa` | `ppa:vtemian/spark-spbm` | Where the DKMS package comes from |
+| `spbm_ppa` | `ppa:vladtemian/spark-spbm` | Where the DKMS package comes from |
 | `spbm_package` | `spbm-dkms` | |
 | `spbm_headers_package` | `linux-headers-nvidia-hwe-24.04` | **Load-bearing.** Without it a new kernel arrives with no headers, DKMS cannot build, and the module silently disappears |
 | `spbm_mok_cert` | `/var/lib/shim-signed/mok/MOK.der` | The key DKMS signs with |
