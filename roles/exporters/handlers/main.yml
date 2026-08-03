@@ -1,7 +1,6 @@
 ---
-# Both handlers reload the unit files before restarting: a template change is
-# invisible to systemd until daemon-reload runs, and a restart on a stale
-# definition looks like success while changing nothing.
+# daemon_reload before restart: a template change is invisible to systemd until
+# reloaded, and a restart on a stale definition looks like success.
 
 - name: Restart node_exporter
   ansible.builtin.systemd_service:

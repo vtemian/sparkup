@@ -27,9 +27,8 @@ RestartSec=5s
 TimeoutStopSec=20s
 SyslogIdentifier=node_exporter
 
-# Hardening. The exporter only ever reads, so nothing needs to be writable.
-# ProtectHome is read-only rather than hidden: hiding it would cost the
-# filesystem collector any series for a separate /home mount.
+# ProtectHome is read-only rather than true: hiding it costs the filesystem
+# collector every series for a separate /home mount.
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
