@@ -13,6 +13,27 @@ pipx install ansible-core ansible-lint     # or your package manager of choice
 make deps                                  # installs the pinned collections
 ```
 
+## What it will not do to your machine
+
+Worth reading before you hand a playbook root.
+
+- **Never flashes firmware.** Config management that flashes an EC on every converge is how a box
+  gets bricked unattended. The `thermal` role asserts the version and reports drift; rollback is a
+  runbook for a human.
+- **Never resets your firewall.** It only ever *adds* allow rules, never a default deny policy.
+  Locking yourself out of a WiFi-only box means walking to it.
+- **Never creates accounts you did not name.** A fresh clone has an empty user list, so nobody
+  else's SSH keys land on your box.
+- **Never disables services it did not create.** DGX OS ships some surprising ones; the `base` role
+  lists them and leaves them alone.
+- **Never sets `default-runtime: nvidia`.** That would inject GPU plumbing into every container,
+  Prometheus and Grafana included.
+- **Never reboots.** The one role that needs a reboot tells you so and stops.
+
+`sparkup` gets the box into a known state and gets metrics into Prometheus. It does not own training
+runs; the wrapper that emits per-run metrics is a separate project, specified in
+[`docs/training-observability.md`](docs/training-observability.md).
+
 ## First run
 
 ```bash

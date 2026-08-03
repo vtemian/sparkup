@@ -29,26 +29,6 @@ Full setup in **[INSTALL_CLAUDE.md](INSTALL_CLAUDE.md)**.
 - **A shared artifact tree** at `/srv/...`, deliberately outside any directory that `rsync --delete`
   owns.
 
-## What it will not do to your machine
-
-This matters more than the feature list, because provisioning tools are trusted with root.
-
-- **Never flashes firmware.** Config management that flashes an EC on every converge is how a box
-  gets bricked unattended. The firmware role asserts the version and reports drift. Rollback is a
-  runbook for a human.
-- **Never resets your firewall.** It only ever *adds* allow rules. Locking yourself out of a
-  WiFi-only box means walking to it.
-- **Never creates accounts you did not name.** A fresh clone has an empty user list. Nobody else's
-  SSH keys land on your box.
-- **Never disables services it did not create.** It lists the surprising ones and leaves them alone.
-- **Never reboots.** The one role that requires a reboot tells you so and stops.
-
-## Scope
-
-`sparkup` gets the box into a known state and gets metrics into Prometheus. It does not own training
-runs. The wrapper that emits per-run metrics and correlates them against these series is a separate
-project, specified in [`docs/training-observability.md`](docs/training-observability.md).
-
 ## Layout
 
 ```
@@ -61,9 +41,3 @@ tests/                everything that runs without a Spark
 ```
 
 Each role has its own README explaining what it does and why.
-
-## Status
-
-Built and unverified against hardware. The offline suite (`make offline`) is green, CI is green, and
-the acceptance test that needs a real box has not run yet. `PROMPT.md` tracks exactly what is proven
-and what is not.
