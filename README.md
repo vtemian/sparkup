@@ -57,6 +57,7 @@ Every one of these cost somebody an afternoon. They are why the roles look the w
 | **`nvidia-smi` underreports the wall by ~2×** | 87 W on the GPU rail against 180 W at the socket. There is no internal path to system power, so cost is measured at the plug or not at all. |
 | **There is no GPU memory metric** | Memory is unified, `nvidia-smi` prints `[N/A]`, and that is correct. `node_memory_*` **is** the GPU memory signal. Do not "fix" it. |
 | **DGX OS hides the GRUB menu behind a drop-in** | Writing `GRUB_TIMEOUT` to `/etc/default/grub` does nothing; `no-grubmenu.cfg` is sourced afterwards and wins. Always check the *generated* `grub.cfg`. |
+| **80 °C is not the limit** | Under sustained bf16 matmul this box sat at 79–80 °C with clocks at 2405 of 3003 MHz and **zero microseconds** of thermal slowdown. The limiter is the power cap, not heat, so the fan-curve advice going around does not apply here. Measure before you mitigate. |
 | **`curl 127.0.0.1:9100` hangs** | Even when the exporter is perfectly healthy. Verify exporters through Prometheus, never by curling them. |
 | **Docker's port publishing bypasses `ufw`** | DNAT sits ahead of the firewall's chains, so a published port is open whatever the policy says. |
 | **A default-deny firewall breaks your own monitoring** | Prometheus scrapes the host exporters through the docker bridge, which lands on the INPUT chain. Securing the box takes its telemetry with it unless you plan for it. |
