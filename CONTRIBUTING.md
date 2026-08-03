@@ -33,8 +33,10 @@ This is enforced, not advisory.
 
 **Destructive by default is a bug.** This repo runs on other people's machines. It only ever *adds*
 firewall allow rules, never resets them. It creates no accounts unless asked. It disables no service
-it did not create. It never flashes firmware and never reboots. A change that widens any of those
-needs a very good reason in the pull request, not just a flag.
+it did not create. It never reboots. It never flashes firmware as a side effect of a converge: the
+`firmware` role is off unless a box opts in, and it stages capsules that only take effect on a
+reboot a human performs. A change that widens any of those needs a very good reason in the pull
+request, not just a flag.
 
 **Anything box-specific goes in `host_vars`, not `group_vars`.** `group_vars/all.yml` holds defaults
 that suit any Spark. Your hostname, your accounts, your firmware version and your paths are yours.

@@ -2,116 +2,117 @@
 # THIS ROLE STAGES FIRMWARE. IT NEVER REBOOTS.
 #
 # fwupd writes a capsule that UEFI applies during the next boot, so the flash
-# does not happen while this runs — it happens while the machine is restarting,
-# with no way to intervene. That is the moment a box can be lost, and choosing
-# it belongs to whoever can watch the machine. Same shape as the kernel role:
-# converge what can be converged, then say what a human has to do.
+# happens while the machine is restarting, with no way to intervene. Choosing
+# that moment belongs to whoever can watch the machine. `--no-reboot-check` is
+# what enforces it: without that flag `fwupdmgr update` offers to reboot, and a
+# run that got a pty can act on the answer.
 #
-# Because nothing is applied until that reboot, a staged capsule is reversible:
-# `fwupdmgr clear-results` and it never happens. That is what makes tracking
-# the vendor's current release safer than pinning a version that goes stale
-# while security and stability fixes pile up behind it.
+# A staged capsule is reversible, but NOT through fwupd — there is no cancel
+# subcommand, and `clear-results` clears a device's update history rather than
+# a pending capsule. Staging writes .cap files into \EFI\UpdateCapsule\ on the
+# ESP and sets OsIndications to 0x04, so
+# `sudo rm /boot/efi/EFI/UpdateCapsule/*.cap` leaves nothing to apply.
+#
+# Idempotence is fwupd's, not ours. `get-updates` exits 2 once every device is
+# current, and the staging task is gated on it exiting 0 instead. `update` is
+# no use for this: it exits 0 on a converged box, so gating on its own result
+# would report a change forever. Nothing here parses fwupd's output to decide
+# anything.
+#
+# There is deliberately no "refuse while training" guard. This role stages and
+# stops, so it disturbs nothing that is running, and the play's pre_tasks
+# already warn when a GPU process is active. An assert here would abort a
+# converge at role nine of ten for a job the role cannot affect — and it would
+# fail open anyway under `--tags firmware`, which skips the pre_tasks that
+# compute spark_training_active.
 
 - name: Stage firmware updates
   when: firmware_update_enabled | bool
   block:
-
-    - name: Refuse to flash firmware while the box is training
-      ansible.builtin.assert:
-        that:
-          - not (spark_training_active | default(false))
-        fail_msg: >-
-          A GPU process is running. Applying firmware needs a reboot, and a
-          reboot kills the run. Wait for it to finish.
-        success_msg: Nothing is training.
 
     - name: Look for the firmware update client
       ansible.builtin.stat:
         path: "{{ firmware_fwupdmgr }}"
       register: firmware_client
 
-    - name: Report that firmware cannot be managed without fwupd
-      ansible.builtin.debug:
-        msg: >-
-          {{ firmware_fwupdmgr }} is not installed, so firmware state can be
-          neither read nor changed. Every firmware task is skipped.
-      when: not firmware_client.stat.exists
-
     - name: Manage firmware through fwupd
       when: firmware_client.stat.exists
       block:
 
-        # Downloads the vendor catalogue. Touches no firmware, so it is not a
-        # change; without it the update check below reads stale metadata.
+        # Downloads the vendor catalogue; touches no firmware, so it is never a
+        # change. rc 2 means the cached metadata is still fresh and rc 101 that
+        # LVFS was unreachable; both leave the check below reading the cache,
+        # which is degraded but safe, so neither is worth failing over.
         - name: Refresh the firmware metadata
           ansible.builtin.command:
-            cmd: "{{ firmware_fwupdmgr }} refresh --force --assume-yes"
-          register: firmware_refresh
+            cmd: "{{ firmware_fwupdmgr }} refresh"
           changed_when: false
           failed_when: false
           check_mode: false
-          when: firmware_refresh_metadata | bool
 
-        - name: Read what the vendor is offering
+        # The idempotency gate, and the only state this role reads. rc 0 means
+        # the vendor is offering something; rc 2 is a converged box, or one with
+        # no updatable devices at all. Anything else fails loudly.
+        - name: Read whether the vendor is offering firmware
           ansible.builtin.command:
-            cmd: "{{ firmware_fwupdmgr }} get-updates --json --no-unreported-check"
-          register: firmware_offered
+            cmd: "{{ firmware_fwupdmgr }} get-updates --no-unreported-check"
+          register: firmware_updates
           changed_when: false
-          # rc 2 is fwupd's "nothing to do", which is a converged box, not a
-          # failure. Anything else is left to fail loudly.
-          failed_when: firmware_offered.rc not in [0, 2]
+          failed_when: firmware_updates.rc not in [0, 2]
           check_mode: false
 
-        - name: Work out which devices have an update pending
-          ansible.builtin.set_fact:
-            firmware_pending: >-
-              {{ (firmware_offered.stdout | from_json).Devices | default([])
-                 | selectattr('Releases', 'defined')
-                 | rejectattr('DeviceId', 'in', firmware_exclude_devices)
-                 | list }}
-          when: firmware_offered.stdout | default('') | trim | length > 0
-
-        - name: Report the firmware updates on offer
+        # Runs under --check too, because the read above does. This is the only
+        # warning an operator gets that a reboot now carries a firmware flash.
+        - name: Report the firmware a reboot will apply
           ansible.builtin.debug:
             msg: >-
-              {{ item.Name }} ({{ item.DeviceId }}):
-              {{ item.Version }} -> {{ (item.Releases | first).Version }}
-              [{{ (item.Releases | first).Urgency | default('unknown') }} urgency]
-          loop: "{{ firmware_pending | default([]) }}"
-          loop_control:
-            label: "{{ item.Name }}"
+              {{ firmware_updates.stdout }}
 
-        # Idempotent by construction: once every device is current, fwupd offers
-        # nothing, firmware_pending is empty, and this does not run. A second
-        # converge reports changed=0 without reinstalling anything.
+              STAGED, NOT APPLIED. UEFI writes this during the next boot, and
+              this role never reboots. Keep the machine powered throughout.
+              fwupd has no cancel command, but until that boot
+              `sudo rm /boot/efi/EFI/UpdateCapsule/*.cap` leaves nothing to
+              apply. Afterwards, move thermal_expected_ec_firmware to the new
+              version or the thermal role will correctly report drift.
+          when: firmware_updates.rc == 0
+
+        # Only reached when something is on offer, so it always changes
+        # something. A non-zero exit is a firmware install that went wrong and
+        # is left to fail the converge.
         - name: Stage the firmware capsules
           ansible.builtin.command:
             cmd: >-
               {{ firmware_fwupdmgr }} update --assume-yes --no-reboot-check
               --no-unreported-check
-          register: firmware_staged
-          changed_when: firmware_staged.rc == 0
-          failed_when: firmware_staged.rc not in [0, 2]
-          when: firmware_pending | default([]) | length > 0
+          changed_when: true
+          when: firmware_updates.rc == 0
 
-        - name: Report what a reboot will apply
-          ansible.builtin.debug:
-            msg: >-
-              {% if firmware_pending | default([]) | length > 0 %}
-              STAGED, NOT APPLIED. UEFI writes
-              {{ firmware_pending | map(attribute='Name') | join(', ') }}
-              during the next boot. This role does not reboot: the flash happens
-              while the machine is restarting with no way to intervene. Keep it
-              powered throughout. Nothing has changed yet, so
-              `fwupdmgr clear-results` still cancels it.
-              Afterwards, move thermal_expected_ec_firmware to the new version
-              or the thermal role will correctly report drift.
-              {% else %}
-              Every device is already on the firmware the vendor offers. Nothing
-              staged, no reboot needed.
-              {% endif %}
+    # Deliberately outside the fwupd block, and unconditional, because this is
+    # the question fwupd cannot answer. Once a capsule is staged, `get-updates`
+    # stops offering the update, so a later converge cannot distinguish "this
+    # box is current" from "this box is armed and waiting for a reboot" — and
+    # the second one silently reads as the first. That matters on a shared
+    # machine: whoever staged it knows, and the next person to converge does
+    # not. It also covers a partial failure, where some capsules were written
+    # before the run aborted.
+    #
+    # The capsules are just files. Their presence IS the pending flash.
+    - name: Look for firmware capsules already staged
+      ansible.builtin.find:
+        paths: "{{ firmware_capsule_dir }}"
+        patterns: "*.cap"
+        file_type: file
+      register: firmware_capsules
+      changed_when: false
+      check_mode: false
 
-    - name: Skip devices the operator excluded
+    - name: Warn that the next boot will write firmware
       ansible.builtin.debug:
-        msg: "Left alone by firmware_exclude_devices: {{ firmware_exclude_devices | join(', ') }}"
-      when: firmware_exclude_devices | length > 0
+        msg: >-
+          {{ firmware_capsules.matched }} firmware capsule(s) are staged in
+          {{ firmware_capsule_dir }}. THE NEXT REBOOT WILL WRITE THEM, whoever
+          performs it and for whatever reason. Keep the machine powered
+          throughout; an interrupted write is not recoverable on this hardware.
+          To cancel instead, delete them — fwupd has no command that will:
+          rm {{ firmware_capsule_dir }}/*.cap
+      when: firmware_capsules.matched | int > 0

@@ -21,9 +21,13 @@ datasource, and live `node`, `gpu` and `power` scrape jobs. Do not break those.
 These are invariants of the repository, not preferences. Breaking one is a defect even if the
 playbook still converges.
 
-1. **Never flash firmware.** No task, no flag, no confirmation prompt. The `thermal` role reads the
-   EC version and asserts it. Rollback is a runbook a human executes while standing next to the
-   machine.
+1. **Never flash firmware unattended.** Nothing may write firmware as a side effect of a converge.
+   The `firmware` role stages capsules and stops; it is off unless a box opts in, and it never
+   reboots, so the flash only happens when a human restarts the machine. `thermal` reads the EC
+   version and asserts it, and never writes. **Rollback is not universally available**: on this
+   hardware fwupd advertises no `self-recovery` and no `dual-image` on any updatable device, and at
+   least one device's current version sits below its own downgrade floor, making its update
+   one-way. See `roles/firmware/README.md` before enabling it.
 2. **Never reset a firewall or set a default policy implicitly.** `base` only *adds* allow rules.
    Enabling ufw is opt-in via `spark_firewall_enable` and asserts SSH is allowed first.
 3. **Never create accounts that were not asked for.** `spark_users` defaults to `[]`.
@@ -106,6 +110,7 @@ role's defaults, or the same tunable exists in two files.
 | `shelly` | not everyone owns a smart plug | `shelly_enabled: true` + `shelly_host` |
 | `thermal` clock cap | trades compute for thermal headroom | `thermal_gpu_clock_cap_enabled` |
 | `thermal` EC assertion | your firmware version is not this box's | `thermal_expected_ec_firmware` |
+| `firmware` | it is the only role that can permanently destroy hardware | `firmware_update_enabled: true` |
 | `kernel` | can leave a headless box unbootable | `kernel_enabled: true` |
 
 **`--tags kernel` alone does nothing.** The tag selects the role, `when: kernel_enabled` discards it,
@@ -131,7 +136,7 @@ make apply BECOME="--become-password-file ~/.sparkup-become"   # must report cha
 Play order, and it is load-bearing:
 
 ```
-base → docker → gpu → users → exporters → shelly → monitoring → thermal → kernel
+base → docker → gpu → users → exporters → shelly → monitoring → thermal → firmware → kernel
 ```
 
 - `docker` precedes `users` because `ansible.builtin.user` fails hard if a group in `groups:` does

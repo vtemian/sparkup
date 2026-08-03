@@ -52,9 +52,9 @@
     # you record your own EC version in host_vars.
     - role: thermal
       tags: [thermal]
-    # Stages firmware and stops; it never reboots, and it refuses to pick a
-    # version for you. Off unless firmware_targets names exact device ids and
-    # versions. This is the only unrecoverable operation in the repo.
+    # Stages firmware and stops. Off unless firmware_update_enabled is set, and
+    # it never reboots, so nothing reaches the hardware until a human restarts
+    # the machine. That reboot is the only unrecoverable operation in the repo.
     - role: firmware
       tags: [firmware]
     # LAST, ALONE, and off by default. This is the one role that can leave a

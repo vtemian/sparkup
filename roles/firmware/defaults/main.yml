@@ -6,12 +6,11 @@
 # reboots, and this role never does that.
 firmware_update_enabled: false
 
-# Devices to leave alone, by fwupd device id. Empty means everything the vendor
-# offers. Use it when one component is known bad on a newer release.
-firmware_exclude_devices: []
-
-# Refresh LVFS metadata before checking. Downloads a catalogue; touches no
-# firmware. Off works from whatever metadata is already cached.
-firmware_refresh_metadata: true
-
+# Absolute path, so the command does not depend on root's PATH, and the file
+# this role stats to decide whether fwupd exists at all.
 firmware_fwupdmgr: /usr/bin/fwupdmgr
+
+# Where fwupd leaves capsules for UEFI to pick up at boot. Checked on every
+# converge, opted in or not: a staged capsule is a pending flash that fwupd
+# stops reporting, and the next person to converge deserves to know.
+firmware_capsule_dir: /boot/efi/EFI/UpdateCapsule

@@ -24,7 +24,10 @@ model does not apply. What does matter:
   `ufw` is the specific trap to watch for.
 - **Anything that weakens Secure Boot, or that could leave a headless box unbootable.**
 - **Anything that could brick hardware.** Firmware is the one genuinely unrecoverable operation
-  here, which is why nothing in this repo flashes it.
+  here. One role can stage it, `firmware`, and the safety properties that keep it out of a routine
+  converge are: it is off unless a box opts in, it never reboots, and a staged capsule can be
+  deleted from the ESP before it is ever applied. A change that weakens any of those three, or that
+  makes any other role write firmware, is a finding.
 - **Supply chain.** Downloads are checksum-verified and container images are pinned by digest. A
   change that replaces a digest with a mutable tag, or drops a checksum, is a finding.
 
