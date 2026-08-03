@@ -84,18 +84,10 @@
         - name: Hash the enrolment password
           ansible.builtin.shell:
             cmd: >-
-              set -o pipefail &&
+              umask 077 &&
               mokutil --generate-hash='{{ spbm_mok_password }}' > /root/.spbm-mok-hash
-          args:
-            creates: /root/.spbm-mok-hash
+          changed_when: true
           no_log: true
-
-        - name: Restrict the hash file
-          ansible.builtin.file:
-            path: /root/.spbm-mok-hash
-            owner: root
-            group: root
-            mode: "0600"
 
         - name: Queue the key for enrolment at the next boot
           ansible.builtin.command:
