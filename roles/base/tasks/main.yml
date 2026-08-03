@@ -1,7 +1,6 @@
 ---
-# avahi rides along in the same apt transaction because it is not optional
-# here: it is the only thing publishing <hostname>.local, and every other role
-# in this repo — plus bbm's scripts/spark.sh — assumes that name resolves.
+# avahi is not optional: it publishes <hostname>.local, which every other role
+# here assumes resolves.
 - name: Install the base utilities and the avahi daemon
   ansible.builtin.apt:
     name:
@@ -25,9 +24,8 @@
     name: "{{ spark_hostname }}"
   notify: Restart avahi-daemon
 
-# Debian-family convention: the machine's own name resolves through 127.0.1.1,
-# not 127.0.0.1. A stale entry here makes sudo pause on every invocation and
-# leaves avahi advertising a name the box no longer answers to.
+# Debian family resolves the machine's own name through 127.0.1.1. A stale entry
+# makes sudo pause on every invocation.
 - name: Keep the 127.0.1.1 entry in /etc/hosts consistent with the hostname
   ansible.builtin.lineinfile:
     path: /etc/hosts
@@ -38,72 +36,57 @@
     mode: "0644"
   notify: Restart avahi-daemon
 
-# Empty means leave the clock alone. Silently moving a stranger's machine to
-# the timezone this repo's author happens to live in is not provisioning.
 - name: Set the system timezone
   community.general.timezone:
     name: "{{ base_timezone }}"
   when: base_timezone | default('', true) | trim | length > 0
 
-- name: Install the firewall packages
-  ansible.builtin.apt:
-    name: "{{ base_firewall_packages }}"
-    state: present
+- name: Manage the ufw firewall
   when: spark_firewall_manage
+  block:
+    - name: Install ufw
+      ansible.builtin.apt:
+        name: ufw
+        state: present
 
-# ADD allow rules. No reset, no delete, and no default policy except through
-# the explicit opt-in below. This box's only link is WiFi with no wired
-# fallback, so a firewall mistake is recovered by physically walking to the
-# machine. Adding an allow rule is the one ufw operation that cannot lock
-# anybody out.
-- name: Allow inbound service ports through ufw
-  community.general.ufw:
-    rule: allow
-    port: "{{ item }}"
-    proto: tcp
-  loop: "{{ spark_firewall_allow_ports }}"
-  when: spark_firewall_manage
+    # ADD allow rules only. No reset, no delete, no default policy except through
+    # the opt-in below: this box's only link is WiFi, so a mistake means walking to it.
+    - name: Allow inbound service ports through ufw
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop: "{{ spark_firewall_allow_ports }}"
 
-# The exporters bind all interfaces, and Prometheus scrapes them from inside a
-# container through the docker bridge gateway. That traffic arrives on the
-# host's INPUT chain, so a default-deny policy drops it and both exporters read
-# down — the monitoring stack breaking as a direct result of securing it.
-# These rules keep the container path open while leaving the ports closed to
-# the LAN, and they are harmless while ufw is inactive.
-- name: Allow containers to reach the host exporters
-  community.general.ufw:
-    rule: allow
-    from_ip: "{{ item.0 }}"
-    port: "{{ item.1 }}"
-    proto: tcp
-  loop: "{{ spark_firewall_docker_subnets | product(spark_firewall_container_ports) | list }}"
-  loop_control:
-    label: "{{ item.0 }} -> {{ item.1 }}"
-  when: spark_firewall_manage
+    # Prometheus scrapes the host exporters from a container via the docker bridge
+    # gateway; default-deny drops that traffic without these rules.
+    - name: Allow containers to reach the host exporters
+      community.general.ufw:
+        rule: allow
+        from_ip: "{{ item.0 }}"
+        port: "{{ item.1 }}"
+        proto: tcp
+      loop: "{{ spark_firewall_docker_subnets | product(spark_firewall_container_ports) | list }}"
+      loop_control:
+        label: "{{ item.0 }} -> {{ item.1 }}"
 
-# Turning ufw on sets a default-deny incoming policy. That is the one firewall
-# operation in this role that can lock somebody out, so it is opt-in, and it
-# refuses to run unless SSH is explicitly allowed first. Ordering matters: the
-# allow rules above have already been applied by the time this runs.
-- name: Refuse to enable the firewall without an SSH allow rule
-  ansible.builtin.assert:
-    that:
-      - spark_firewall_ssh_port | int in (spark_firewall_allow_ports | map('int') | list)
-    fail_msg: >-
-      spark_firewall_enable is on but port {{ spark_firewall_ssh_port }} is not in
-      spark_firewall_allow_ports. Enabling ufw would set a default-deny policy
-      and drop your own SSH session on a box whose only link is WiFi. Add the
-      port, or leave the firewall off.
-    success_msg: >-
-      SSH on {{ spark_firewall_ssh_port }} is allowed, so enabling ufw cannot
-      close the way in.
-  when:
-    - spark_firewall_manage
-    - spark_firewall_enable
+    # Ordering matters: the allow rules above must already be applied when ufw
+    # switches to default-deny.
+    - name: Refuse to enable the firewall without an SSH allow rule
+      ansible.builtin.assert:
+        that:
+          - spark_firewall_ssh_port | int in (spark_firewall_allow_ports | map('int') | list)
+        fail_msg: >-
+          spark_firewall_enable is on but port {{ spark_firewall_ssh_port }} is not in
+          spark_firewall_allow_ports. Enabling ufw would set a default-deny policy
+          and drop your own SSH session on a box whose only link is WiFi. Add the
+          port, or leave the firewall off.
+        success_msg: >-
+          SSH on {{ spark_firewall_ssh_port }} is allowed, so enabling ufw cannot
+          close the way in.
+      when: spark_firewall_enable
 
-- name: Enable the firewall
-  community.general.ufw:
-    state: enabled
-  when:
-    - spark_firewall_manage
-    - spark_firewall_enable
+    - name: Enable the firewall
+      community.general.ufw:
+        state: enabled
+      when: spark_firewall_enable
