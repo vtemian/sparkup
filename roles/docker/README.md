@@ -8,7 +8,7 @@ to converge one config file without disturbing anything the vendor pinned.
 
 ## Where Docker actually comes from — settling an open question
 
-`PROMPT.md` lists "Vendor Docker provenance. Is 29.2.1 from Docker CE upstream
+the original plan listed "Vendor Docker provenance. Is 29.2.1 from Docker CE upstream
 or NVIDIA's repo?" as an open question, because it decides whether this role may
 manage an apt repository. It is measured, and the answer is **NVIDIA's repo**:
 

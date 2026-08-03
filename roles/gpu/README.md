@@ -20,7 +20,7 @@ containers stop working after a vendor update.
 ## CDI: one spec file, in `/etc`
 
 `/etc/cdi` and `/var/run/cdi` did not exist before this role, which matches the
-audit in `PROMPT.md`. The role creates `/etc/cdi` and writes
+audit in the original audit. The role creates `/etc/cdi` and writes
 `/etc/cdi/nvidia.yaml` with:
 
 ```sh
@@ -35,12 +35,12 @@ spec written there is gone after a reboot. The refresh unit that would rewrite i
 triggers on *file changes* (`PathChanged` on `modules.dep` and
 `/usr/bin/nvidia-ctk`), and a reboot changes none of those — so nothing
 regenerates it and GPU containers silently lose their CDI devices until the next
-driver upgrade. `/etc` survives reboots. This is a case where `PROMPT.md`'s
+driver upgrade. `/etc` survives reboots. This is a case where the original plan's
 instruction and the vendor's default disagree, and the plan is right.
 
 ### Contradiction found: the refresh unit writes somewhere else
 
-`PROMPT.md` says to "enable `nvidia-cdi-refresh` if the toolkit provides it". It
+the original plan said to "enable `nvidia-cdi-refresh` if the toolkit provides it". It
 does — but not in the shape the plan assumes. Measured on the box:
 
 ```

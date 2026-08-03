@@ -23,7 +23,7 @@ node_exporter-1.12.1.linux-arm64.tar.gz        + sha256sums.txt
 nvidia_gpu_exporter_1.13.1_linux_arm64.tar.gz  + checksums.txt
 ```
 
-`nvidia_gpu_exporter` **1.3.2 does not exist** — the version PROMPT.md's
+`nvidia_gpu_exporter` **1.3.2 does not exist** — the version the original plan's
 variable registry names was never released. 1.13.1 is the current release and
 the one `group_vars/all.yml` carries.
 

@@ -53,7 +53,7 @@ declares. Override in `host_vars/<host>.yml`.
 | `thermal_ec_device_id` | `8c948e1d…09991` | fwupd device id of *this* box's EC; empty disables the read |
 | `thermal_expected_ec_firmware` | `""` | the version the assertion demands; **empty means no assertion at all** |
 
-**`PROMPT.md`'s variable registry disagrees with this table, and this table is right.** The plan
+**the original variable registry disagrees with this table, and this table is right.** The plan
 put `gpu_clock_cap_enabled`, `gpu_clock_cap_min_mhz`, `gpu_clock_cap_max_mhz` and
 `expected_ec_firmware` in `group_vars/all.yml`. Unprefixed names declared by a role fail the lint
 rule the repo deliberately does not skip, and none of these are the kind of tunable the registry
@@ -186,7 +186,7 @@ time you enable it.
 
 ### `thermal_pin_fwupd` defaults to `false`, and here is the argument
 
-**First, a correction to `PROMPT.md`.** The plan says the enabled refresh timer means "an automatic
+**First, a correction to the original plan.** It said the enabled refresh timer means "an automatic
 update could silently undo a deliberate firmware rollback". That overstates the mechanism.
 `fwupd-refresh.service` runs `fwupdmgr refresh`, which per its own manual page downloads *"the
 latest online metadata from configured and enabled remotes"* and updates the message of the day. It

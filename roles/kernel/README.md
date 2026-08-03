@@ -5,7 +5,7 @@ this role's job is to leave it booting a **signed** kernel, with a **visible** G
 unsigned kernels permanently unable to reinstall themselves — without ever turning Secure Boot off
 and without ever rebooting.
 
-It is the one role in this repo that can make the machine unreachable. `PROMPT.md` sequences it
+It is the one role in this repo that can make the machine unreachable. the original plan sequenced it
 **last, alone, and only with an explicit go-ahead**. It is listed last in `site.yml` and gated on
 `kernel_enabled`, which ships `false`, so a plain `make apply` never reaches it.
 
@@ -53,7 +53,7 @@ Each step assumes the previous one succeeded, and every inversion has a specific
 - **Assert before converge** turns a check into a gate and tempts whoever is on the other end to
   remediate. Assertions are the last thing that runs, precisely so that they only ever report.
 
-Step 2 needs both lines, not just the timeout `PROMPT.md` mentions. Ubuntu ships
+Step 2 needs both lines, not just the timeout alone. Ubuntu ships
 `GRUB_TIMEOUT_STYLE=hidden`, and a hidden menu counts the timeout down invisibly — raising
 `GRUB_TIMEOUT` alone would leave the operator exactly where they started. The role therefore sets
 the style too, and step 6 verifies the *generated* `grub.cfg` rather than trusting the edit.
@@ -80,7 +80,7 @@ makes one of the failure modes above survivable.
       job is at epoch 40.
 - [ ] **You have read `/etc/default/grub` and `/etc/default/grub.d/`.** Drop-ins are sourced *after*
       `/etc/default/grub` and win. Step 6 catches this, but knowing beforehand is cheaper.
-- [ ] **You know which kernel GRUB currently defaults to.** This is open question 2 in `PROMPT.md`
+- [ ] **You know which kernel GRUB currently defaults to.** This is open question 2 in the original audit
       and it was never answered — `/boot/grub/grub.cfg` is root-only and the audit never read it.
       `sudo grep -E "^\s*(set default|menuentry )" /boot/grub/grub.cfg` and `sudo grub-editenv list`
       answer it in two commands.
@@ -139,7 +139,7 @@ not available.
 5. **If Secure Boot is rejecting everything**, the correct fix is still a signed kernel. Do **not**
    disable Secure Boot to get the box up "temporarily" — see below. If you disable it to recover,
    write down that you did, because nothing in this repo will tell you later.
-6. **Only then consider firmware.** `PROMPT.md` E4 is a manual, supervised runbook, and firmware is
+6. **Only then consider firmware.** the E4 firmware runbook is a manual, supervised runbook, and firmware is
    the one unrecoverable operation on this machine. A kernel that will not boot is not a firmware
    problem.
 
@@ -212,7 +212,7 @@ which is the conservative answer.
 
 ## Pinning GRUB by entry id, not by title
 
-`GRUB_DEFAULT=saved` plus `grub-set-default`, as `PROMPT.md` specifies. What gets saved is the
+`GRUB_DEFAULT=saved` plus `grub-set-default`, as the original plan specified. What gets saved is the
 **menu entry id**, parsed out of the generated `grub.cfg`:
 
 ```
@@ -285,7 +285,7 @@ turns into an outage.
 
 ## Honest uncertainty
 
-Carried forward from `PROMPT.md`, because it matters more than the code does:
+Carried forward from the original plan, because it matters more than the code does:
 
 **The packaging split is confirmed** — Ubuntu really does ship `linux-image-unsigned-*` and
 `linux-image-*` as separate binary packages. **The Secure Boot default is confirmed** — it is on,
@@ -309,7 +309,7 @@ below was confirmed against the machine. Each one is a thing to check on the fir
 1. **`/boot/grub/grub.cfg` follows Ubuntu's standard `grub-mkconfig` layout** — `$menuentry_id_option
    '…'` tokens, per-kernel entries nested inside a `gnulinux-advanced-<uuid>` submenu, and the
    `set timeout_style=…` / `set timeout=…` pair emitted by `00_header`. The file is root-only and was
-   never read by the audit (`PROMPT.md` open question 2), so the parsing is written against Ubuntu's
+   never read by the audit (open question 2 of the original audit), so the parsing is written against Ubuntu's
    published template and tested against a synthetic `grub.cfg`, not against this box. Both
    assumptions are guarded: an unrecognised menu fails the "GRUB has no entry for the intended
    kernel" assertion rather than pointing GRUB somewhere arbitrary, and `kernel_assert_grub_menu`
@@ -360,4 +360,4 @@ apt-cache policy linux-image-unsigned-6.17.0-1026-nvidia          # candidate pr
 
 Then run the playbook twice; the second run must report `changed=0`. Then, and only with someone
 able to reach the machine, **reboot once and confirm it comes back** on the intended kernel — that
-is the acceptance test `PROMPT.md` sets for A5, and it is the one this role will never do for you.
+is the acceptance test set for A5, and it is the one this role will never do for you.

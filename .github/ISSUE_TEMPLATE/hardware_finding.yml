@@ -15,7 +15,7 @@ body:
       label: What the docs claim
       description: Quote it, with the file and line if you can.
       placeholder: >
-        PROMPT.md says nvidia_gpu_exporter reports no framebuffer memory on GB10 because memory is
+        The exporters README says nvidia_gpu_exporter reports no framebuffer memory on GB10 because memory is
         unified.
     validations:
       required: true
