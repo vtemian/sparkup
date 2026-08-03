@@ -16,18 +16,13 @@ Full setup in **[INSTALL_CLAUDE.md](INSTALL_CLAUDE.md)**.
 
 ## What you get
 
-- **One dashboard that tells you the truth about the box.** GPU utilisation, temperature, power and
-  clocks; CPU, load, unified memory, disk; and a row showing whether the exporters themselves are
-  alive, because the first question when telemetry looks wrong is whether anything is reporting.
-- **Telemetry that survives a reboot.** `node_exporter` and `nvidia_gpu_exporter` run as systemd
-  units, not containers, so monitoring does not depend on the thing most likely to break.
-- **GPU containers that work.** `docker run --gpus all` on a box where the NVIDIA runtime is not
-  registered out of the box.
-- **Wall-socket power, optionally.** The GPU rail underreports the wall by roughly 2x on this
-  hardware, so if you want to know what a training run actually costs, it has to be measured at the
-  plug.
-- **A shared artifact tree** at `/srv/...`, deliberately outside any directory that `rsync --delete`
-  owns.
+- **A dashboard at `http://spark.local`.** GPU load, temperature, power and clocks, plus CPU,
+  memory and disk. No login to look at it.
+- **Monitoring that comes back after a reboot**, and tells you when it hasn't.
+- **Working GPU containers.** `docker run --gpus all` does what you expect.
+- **Somewhere safe for datasets and checkpoints**, where a laptop sync can't wipe them.
+- **What a run costs in electricity**, if you plug the box into a smart meter. Optional, and the
+  only honest way to get the number: the GPU's own reading misses about half the draw.
 
 ## Layout
 
