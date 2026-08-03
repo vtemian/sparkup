@@ -103,11 +103,21 @@ What is still **not** proven:
 
 **Two claims in this file were wrong, and the converge disproved both:**
 
-- **`ufw` is not enabled. It is `Status: inactive`.** This file has said since the audit that it was
-  "enabled but its rules are unknown". It was never running. The `base` role's allow rules for 22
-  and 80 are therefore in place but dormant, and **nothing is filtering the LAN today** — including
+- **`ufw` was not enabled. It read `Status: inactive`.** This file said since the audit that it was
+  "enabled but its rules are unknown". It was never running, so nothing filtered the LAN, including
   `node_exporter` on 9100 and `nvidia_gpu_exporter` on 9835, both of which bind all interfaces.
-  Open question 1 is answered, and it turned into a decision rather than a lookup.
+  Open question 1 turned into a decision rather than a lookup, and the decision was to switch it on
+  (`spark_firewall_enable`, opt-in, default off).
+
+  **Enabling it needed one thing this file never anticipated.** A default-deny incoming policy drops
+  Prometheus's scrapes of the host exporters, because Prometheus is a container reaching them
+  through the docker bridge gateway and that traffic arrives on the host's INPUT chain. Securing the
+  box would have broken its monitoring. The role therefore also allows Docker's address pool
+  (`172.16.0.0/12`) to reach those two ports, which keeps the container path open while closing them
+  to the LAN. Grafana on 80 is unaffected either way, because Docker's DNAT bypasses ufw for
+  published ports. Resulting state, verified: 22 and 80 open to anywhere, 9100 and 9835 open only to
+  container subnets, all three scrape jobs `up == 1` with samples 0.0s old, and a repeat converge
+  still `changed=0`.
 - **The dpkg damage is gone.** `curl` and `ufw` both read `ii`, and no package is in a non-normal
   state. The interrupted apt transaction was resolved at some point between the audit and the
   converge. No repair was needed and none was performed.
