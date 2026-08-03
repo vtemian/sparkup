@@ -4,7 +4,7 @@ Your DGX Spark, as code.
 
 Takes a box from a fresh DGX OS install to a working training machine: user accounts, Docker with
 the NVIDIA runtime, supervised GPU and system telemetry, and Grafana on `http://spark.local` with no
-login to look at it.
+login to look at it. Optionally, what a training run costs in electricity (requires a smart plug).
 
 ```bash
 make deps      # once
@@ -13,16 +13,6 @@ make apply     # converge
 ```
 
 Full setup in **[INSTALL_CLAUDE.md](INSTALL_CLAUDE.md)**.
-
-## What you get
-
-- **A dashboard at `http://spark.local`.** GPU load, temperature, power and clocks, plus CPU,
-  memory and disk. No login to look at it.
-- **Monitoring that comes back after a reboot**, and tells you when it hasn't.
-- **Working GPU containers.** `docker run --gpus all` does what you expect.
-- **Somewhere safe for datasets and checkpoints**, where a laptop sync can't wipe them.
-- **What a run costs in electricity**, if you plug the box into a smart meter. Optional, and the
-  only honest way to get the number: the GPU's own reading misses about half the draw.
 
 ## Layout
 
