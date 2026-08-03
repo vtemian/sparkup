@@ -1,17 +1,10 @@
 # {{ ansible_managed }}
 #
-# Why a drop-in and not /etc/default/grub: grub-mkconfig sources
-# /etc/default/grub first and then every /etc/default/grub.d/*.cfg in glob
-# order, so the last file to set a variable wins. DGX OS ships
-# no-grubmenu.cfg, which sets GRUB_TIMEOUT=0 and GRUB_TIMEOUT_STYLE=hidden and
-# silently overrides anything written to the base file. The `zz-` prefix sorts
-# this after it. Editing the vendor's file instead would work until the next
-# package update replaced it.
+# DGX OS ships /etc/default/grub.d/no-grubmenu.cfg, which forces the menu off;
+# `zz-` sorts this after it. GRUB_TIMEOUT alone is not enough — hidden counts down.
 
 GRUB_TIMEOUT={{ kernel_grub_timeout }}
 GRUB_TIMEOUT_STYLE=menu
 
-# The vendor sets this to 0, which means a machine that has already failed to
-# boot once shows no menu on the retry. That is the exact moment a menu is
-# worth having, so it matches the normal timeout here.
+# The vendor sets this to 0, hiding the menu on exactly the boot that needs it.
 GRUB_RECORDFAIL_TIMEOUT={{ kernel_grub_recordfail_timeout }}
