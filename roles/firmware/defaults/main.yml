@@ -1,27 +1,17 @@
 ---
-# Firmware is the only genuinely unrecoverable operation in this repository.
-# Everything in this role is built so that a routine converge can never flash
-# anything, and so that no version reaches the hardware that an operator did
-# not name in advance.
-
-# Off. A `make apply` on a box that has not opted in does nothing here.
+# Off. A converge on a box that has not opted in does nothing here.
+#
+# Turning it on means "keep this machine's firmware current". It does not mean
+# "flash on every converge": nothing reaches the hardware until somebody
+# reboots, and this role never does that.
 firmware_update_enabled: false
 
-# What to flash, named explicitly. Empty means nothing, and the role refuses to
-# run rather than picking updates for you.
-#
-# Deliberately NOT "install whatever LVFS is offering today": that turns every
-# converge into an unplanned flash whenever a vendor publishes. Get the device
-# id and version from `fwupdmgr get-updates`, decide, then write them here.
-#
-#   firmware_targets:
-#     - name: Embedded Controller
-#       device_id: 8c948e1db381648c8893897e4d09b7b153309991
-#       version: "0x03000508"
-firmware_targets: []
+# Devices to leave alone, by fwupd device id. Empty means everything the vendor
+# offers. Use it when one component is known bad on a newer release.
+firmware_exclude_devices: []
 
 # Refresh LVFS metadata before checking. Downloads a catalogue; touches no
-# firmware. Off means the role works from whatever metadata is already cached.
+# firmware. Off works from whatever metadata is already cached.
 firmware_refresh_metadata: true
 
 firmware_fwupdmgr: /usr/bin/fwupdmgr
