@@ -1,65 +1,19 @@
 ---
-# Everything this role declares carries the kernel_ prefix, as ansible-lint's
-# production profile (var-naming[no-role-prefix]) requires. Nothing here belongs
-# in group_vars/all.yml: a kernel is not a site-wide tunable, and A5 is run on
-# its own with explicit arguments rather than as part of a routine converge.
-
-# The vendor meta package that actually tracks the signed kernel on DGX OS. The
-# audit found no explicit `linux-image-6.17.0-1029-nvidia` in `dpkg -l` even
-# though that kernel is running, only this meta pointing at 6.17.0-1029.29 — so
-# the concrete image name is discovered from the meta package rather than
-# written down here, where it would rot.
-#
-# This is DGX OS packaging and exists nowhere else, so on a non-DGX box the
-# install step dies with "No package matching 'linux-image-nvidia-hwe-24.04'".
-# Set it to "" there: the expression that builds the install list drops an empty
-# entry, and discovery falls back to the running kernel's own image package.
+# DGX OS packaging; exists nowhere else. On a non-DGX box the install dies with
+# "No package matching ..." — set it to "" there and discovery falls back.
 kernel_meta_package: linux-image-nvidia-hwe-24.04
 
-# Empty means discover. Set it — to a full package name, e.g.
-# `linux-image-6.17.0-1029-nvidia` — only to override the discovery, and only
-# when you know which kernel this box is meant to boot better than its own
-# package metadata does.
-kernel_signed_image_package: ""
-
-# mokutil reports the Secure Boot state. It ships with shim on Ubuntu but is
-# not guaranteed present, and the whole role reads its answer.
-kernel_secure_boot_packages:
-  - mokutil
-
-# GRUB_TIMEOUT is 0 on this box. Raising it is not cosmetic: it is the only
-# thing standing between a bad kernel and a drive to wherever the box lives.
-# GRUB_TIMEOUT alone is not enough either — Ubuntu ships
-# GRUB_TIMEOUT_STYLE=hidden, which counts the timeout down invisibly, so the
-# operator would still be guessing when to hold a key.
+# The only thing between a bad kernel and a drive to wherever the box lives.
 kernel_grub_timeout: 5
-
-# A machine that failed to boot is exactly when a menu earns its keep. DGX OS
-# sets this to 0, which hides the menu on the retry too.
 kernel_grub_recordfail_timeout: 5
 
-# The menu settings are written here, not to /etc/default/grub, because vendor
-# drop-ins are sourced afterwards and win. `zz-` sorts this last.
 kernel_grub_dropin_dir: /etc/default/grub.d
 kernel_grub_dropin_name: zz-sparkup-menu.cfg
 
 kernel_grub_default_file: /etc/default/grub
 kernel_grub_config: /boot/grub/grub.cfg
 
-# Set false for a first pass that lands the menu timeout and nothing else, so a
-# reboot can be proved safe before the boot target moves. See README.md.
+# false lands the menu timeout only, so a reboot can be proved safe first.
 kernel_manage_grub_default: true
 
-# The generated menu is parsed to confirm it will actually appear. Set false
-# only if your grub.cfg is laid out differently from Ubuntu's and you have
-# checked by hand that the menu shows.
-kernel_assert_grub_menu: true
-
 kernel_apt_preferences_file: /etc/apt/preferences.d/no-unsigned-kernels
-
-# Removal is off, and the list is empty, so the role removes nothing until it
-# is told twice. Never a glob: `linux-image-unsigned-*` handed to apt would
-# happily take a kernel you are standing on. On this box the one candidate is
-# `linux-image-unsigned-6.17.0-1026-nvidia`.
-kernel_remove_unsigned: false
-kernel_unsigned_packages: []
