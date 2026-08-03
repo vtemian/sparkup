@@ -3,27 +3,18 @@
 # so the restart is declared first: a stack that has just been restarted has
 # already re-read its configuration, and the reload that follows is a no-op.
 
-# Required, and not redundant with the `state: present` task. A change to a
-# bind-mounted config file does not change compose.yml, so `docker compose up`
-# sees an identical desired state and leaves the containers running with the
-# configuration they read at start. Only a restart re-reads it.
-# `state: restarted` is deliberately non-idempotent and therefore belongs in a
-# handler and nowhere else — in a regular task it would report changed forever.
+# Not redundant with the `state: present` task: a bind-mounted config change does
+# not change compose.yml, so only a restart re-reads it.
 - name: Restart monitoring stack
   community.docker.docker_compose_v2:
     project_src: "{{ monitoring_dir }}"
     project_name: "{{ monitoring_project_name }}"
-    files:
-      - compose.yml
-    # `docker compose restart`, which is enough: a restarted container re-reads
-    # its bind-mounted configuration. It does not accept --wait, which is why
-    # the reload below retries rather than assuming Prometheus is back.
+    # `docker compose restart` does not accept --wait, which is why the reload
+    # below retries rather than assuming Prometheus is back.
     state: restarted
 
-# Preferred over a restart for Prometheus: that is what --web.enable-lifecycle
-# is for. Reloading keeps the TSDB head in memory and the scrape series
-# continuous, where a restart drops both. Retried because the reload may land
-# in the seconds after the stack restart while Prometheus is still binding.
+# Reload, not restart: it keeps the TSDB head in memory and the scrape series
+# continuous. Retried because it can land while Prometheus is still binding.
 - name: Reload Prometheus configuration
   ansible.builtin.uri:
     # The handler runs on the box, so it reaches Prometheus over loopback. A

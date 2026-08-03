@@ -12,9 +12,7 @@
     group: root
     mode: "0755"
 
-# `creates` is the idempotency guard: the spec is written once, and the refresh
-# unit below regenerates it whenever the driver or the toolkit changes. A plain
-# command here would rewrite the file on every converge.
+# `creates` is the idempotency guard; the refresh unit below regenerates the spec.
 - name: Generate the CDI specification for the GPU
   ansible.builtin.command:
     cmd: nvidia-ctk cdi generate --output={{ gpu_cdi_spec_path }}
@@ -37,10 +35,8 @@
 - name: Keep the CDI specification current across driver updates
   when: gpu_cdi_refresh_units.matched | int > 0
   block:
-    # The unit defaults to /var/run/cdi/nvidia.yaml. Left alone it would produce
-    # a second spec declaring the same devices, and the CDI cache drops devices
-    # that two specs both claim. The vendor ships this env file as the
-    # documented override point, so redirect rather than duplicate.
+    # The unit defaults to /var/run/cdi/nvidia.yaml. A second spec declaring the same
+    # devices makes the CDI cache drop them, so redirect rather than duplicate.
     - name: Point the CDI refresh service at the managed specification path
       ansible.builtin.lineinfile:
         path: "{{ gpu_cdi_refresh_env_file }}"
