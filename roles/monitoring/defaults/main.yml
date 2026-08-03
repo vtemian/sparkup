@@ -1,23 +1,12 @@
 ---
-# Tunables that only this role cares about. Everything shared — image tags,
-# ports, retention, exporter ports, the Shelly flag — lives in group_vars/all.yml,
-# which is the registry an upgrade should be a diff of.
-
-# The compose project name, not the directory, is what namespaces the named
-# volumes. Keeping the name the stack already uses means moving it from
-# /home/vlad/monitoring to /opt/monitoring reuses grafana-data (hand-made
-# dashboards) and prometheus-data (history) instead of abandoning them, and
-# lets compose adopt the running containers rather than collide with them on
-# port 80.
+# The project name, not the directory, namespaces the named volumes. Changing it
+# abandons grafana-data (hand-made dashboards) and prometheus-data (history).
 monitoring_project_name: spark-monitoring
 
-# Where the provisioned dashboard JSON is mounted inside the Grafana container.
-# Deliberately not under /var/lib/grafana: that path is the named volume's, and
-# nesting a bind mount inside it is a needless ordering dependency.
+# Not under /var/lib/grafana: that path is the named volume's, and nesting a bind
+# mount inside it is a needless ordering dependency.
 monitoring_dashboards_container_dir: /etc/grafana/dashboards
 
-# Today's Grafana environment, preserved deliberately: no login to view the
-# board, dark theme, and the overview as the landing page.
 monitoring_grafana_anonymous_enabled: true
 monitoring_grafana_anonymous_role: Viewer
 monitoring_grafana_theme: dark

@@ -28,11 +28,8 @@
         state: directory
         mode: "0755"
       loop:
-        - "{{ monitoring_dir }}"
         - "{{ monitoring_dir }}/prometheus"
-        - "{{ monitoring_dir }}/grafana"
         - "{{ monitoring_dir }}/grafana/dashboards"
-        - "{{ monitoring_dir }}/grafana/provisioning"
         - "{{ monitoring_dir }}/grafana/provisioning/datasources"
         - "{{ monitoring_dir }}/grafana/provisioning/dashboards"
         - "{{ monitoring_dir }}/grafana/provisioning/alerting"

@@ -13,9 +13,8 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # The exporters are systemd units on the host, not containers. From inside
-  # this container `localhost` is the container, so the host is named through
-  # the host-gateway alias declared in compose.yml.
+  # Host systemd units, not containers: `localhost` would be the container, so the
+  # host is named through the host-gateway alias declared in compose.yml.
   - job_name: node
     static_configs:
       - targets: ["host.docker.internal:{{ node_exporter_port }}"]
@@ -25,20 +24,8 @@ scrape_configs:
       - targets: ["host.docker.internal:{{ nvidia_gpu_exporter_port }}"]
 {% if power_scrape_target %}
 
-  # Wall-socket power. What this repo owes the training-observability project is
-  # a `power` job, not a particular brand of meter — so the job is emitted from
-  # whatever `power_scrape_target` names, and the bundled Shelly exporter is one
-  # way to fill it rather than the only way. Point it at a Tasmota or Kasa
-  # exporter, or at one already running on another host, and nothing here cares.
-  #
-  # The target is never the meter itself: a smart plug speaks its own RPC, not
-  # the Prometheus exposition format. It is always some exporter that polls the
-  # meter and speaks Prometheus. When that exporter runs on this box, the target
-  # goes through the same host-gateway alias as node and gpu, for the same
-  # reason.
-  #
-  # Emitted only when a target is configured: a permanently-red target teaches
-  # people to ignore red targets.
+  # The target is never the meter itself — a smart plug speaks its own RPC — but
+  # always some exporter. Emitted only when configured; a red target teaches neglect.
   - job_name: power
     metrics_path: {{ power_scrape_metrics_path }}
     static_configs:

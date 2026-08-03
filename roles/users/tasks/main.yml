@@ -4,9 +4,6 @@
     name: "{{ spark_shared_group }}"
     state: present
 
-# No uid is set anywhere in this role. The box this was written for happens to
-# have vlad at 1000 and marius at 1001, but pinning that would collide on any
-# machine where those ids are already taken.
 - name: Create the managed accounts
   ansible.builtin.user:
     name: "{{ item.name }}"
