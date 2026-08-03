@@ -43,7 +43,7 @@ thermal_systemd_unit_dir: /etc/systemd/system
 # differ, the lookup will find nothing, and the assertion is skipped rather
 # than failed — run `fwupdmgr get-devices` there and set your own. Empty
 # disables the firmware read entirely.
-thermal_ec_device_id: 8c948e1db381648c8893897e4d09b7b153309991
+thermal_ec_device_id: ""
 # Empty asserts nothing. This is a per-box fact, not a project constant: another
 # Spark on newer EC firmware is not drifting, it is simply a different machine,
 # and failing a stranger's converge against this box's version would be wrong.
