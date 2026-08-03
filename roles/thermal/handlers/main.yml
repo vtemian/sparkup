@@ -1,13 +1,4 @@
 ---
-# daemon-reload is split out and unconditional: systemd has to be told about a
-# rewritten unit file whether or not anything is allowed to run it, otherwise
-# an operator who starts the cap by hand next week gets the file systemd read
-# at boot rather than the one on disk.
-
-- name: Reload the systemd unit files
-  ansible.builtin.systemd_service:
-    daemon_reload: true
-
 # Gated, because a restart would *start* a stopped oneshot. Without the gate a
 # harmless template edit would apply a clock cap on a box whose owner left the
 # flag off — the failure mode is silent, and it changes how fast their GPU runs.

@@ -21,45 +21,9 @@
     path: "{{ thermal_fwupdmgr_command }}"
   register: thermal_fwupdmgr
 
-- name: Report that firmware state cannot be read
-  ansible.builtin.debug:
-    msg: >-
-      {{ thermal_fwupdmgr_command }} is not installed, so neither the EC
-      firmware version nor the metadata refresh timer can be inspected. Every
-      firmware task is skipped. Nothing else in this role depends on fwupd.
-  when: not thermal_fwupdmgr.stat.exists
-
 - name: Manage the firmware update path
   when: thermal_fwupdmgr.stat.exists
   block:
-    # The timer's state is read from the two symlinks systemd keeps it in,
-    # rather than from `systemctl is-enabled`: the module route is the house
-    # rule, and `is-enabled` is lossy anyway — it exits non-zero for "disabled",
-    # for "masked" and for "no such unit" alike. A mask is a symlink to
-    # /dev/null in /etc; boot-time enablement is a symlink in the target's
-    # .wants directory.
-    - name: Look for a mask on the fwupd metadata refresh timer
-      ansible.builtin.stat:
-        path: "{{ thermal_systemd_unit_dir }}/{{ thermal_fwupd_refresh_timer }}"
-      register: thermal_fwupd_timer_mask
-
-    - name: Look for a boot-time enablement of the fwupd metadata refresh timer
-      ansible.builtin.stat:
-        path: "{{ thermal_systemd_unit_dir }}/timers.target.wants/{{ thermal_fwupd_refresh_timer }}"
-      register: thermal_fwupd_timer_wanted
-
-    - name: Report the state of the fwupd metadata refresh timer
-      ansible.builtin.debug:
-        msg: >-
-          {{ thermal_fwupd_refresh_timer }}:
-          {{ 'masked' if thermal_fwupd_timer_mask.stat.lnk_source | default('') == '/dev/null' else 'not masked' }},
-          {{ 'enabled at boot' if thermal_fwupd_timer_wanted.stat.exists else 'not enabled at boot' }}.
-          thermal_pin_fwupd is {{ thermal_pin_fwupd | bool }}, so this role
-          {{ 'masks it' if thermal_pin_fwupd | bool else 'leaves it alone' }}.
-          The timer refreshes LVFS metadata; it does not install firmware. What
-          installs firmware is a human running `fwupdmgr update`, or a desktop
-          updater acting on the metadata this timer fetched.
-
     # Masking, not disabling: a masked unit resolves to /dev/null and cannot be
     # started by its timer, by boot, by a package post-install script, or by a
     # desktop updater. Disabling only removes the boot symlink, which the next
@@ -101,14 +65,6 @@
         - thermal_fwupd_devices.rc | default(1) == 0
         - thermal_fwupd_devices.stdout | default('') is search('Devices')
 
-    - name: Report the embedded controller firmware version
-      ansible.builtin.debug:
-        msg: >-
-          EC firmware reads {{ thermal_ec_version | default('N/A', true) }};
-          expected {{ thermal_expected_ec_firmware }} on device
-          {{ thermal_ec_device_id }}. N/A means fwupd knows no device with that
-          id — normal on any box that is not the one this repo was audited on.
-
     # Drift is reported, never remediated. If this fails, something updated the
     # EC: find out what, and decide with your eyes open. Do not "fix" it here.
     - name: Assert that the embedded controller firmware has not drifted
@@ -135,14 +91,6 @@
   ansible.builtin.stat:
     path: "{{ thermal_nvidia_smi_command }}"
   register: thermal_nvidia_smi
-
-- name: Report that the GPU clock cap has nothing to cap
-  ansible.builtin.debug:
-    msg: >-
-      {{ thermal_nvidia_smi_command }} is not installed, so the GPU clock cap
-      unit is not deployed. This is the expected outcome on a box that is not a
-      Spark.
-  when: not thermal_nvidia_smi.stat.exists
 
 - name: Manage the GPU clock cap
   when: thermal_nvidia_smi.stat.exists
@@ -171,9 +119,7 @@
         owner: root
         group: root
         mode: "0644"
-      notify:
-        - Reload the systemd unit files
-        - Restart the GPU clock cap
+      notify: Restart the GPU clock cap
 
     # Boot behaviour follows the flag in both directions — that is what the
     # flag declares, and a toggle that cannot be toggled off is not a toggle.
