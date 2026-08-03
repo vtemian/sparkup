@@ -39,6 +39,11 @@
       when: gpu_enabled | bool
     - role: users
       tags: [users]
+    # Whole-system power telemetry as hwmon sensors, from a PPA. Off by
+    # default; needs a one-time key enrolment at the console before the module
+    # can load. Before exporters so the sensors exist when they start.
+    - role: spbm
+      tags: [spbm]
     - role: exporters
       tags: [exporters]
     # Before monitoring: the exporter must exist before Prometheus is told to
