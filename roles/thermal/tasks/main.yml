@@ -1,20 +1,6 @@
 ---
-# THIS ROLE NEVER FLASHES FIRMWARE. Not behind a flag, not behind a
-# confirmation prompt, not ever. It reads the EC version, asserts it, and stops
-# there. Config management that flashes an embedded controller on every
-# converge is how a box gets bricked unattended, and an interrupted EC write is
-# the one genuinely unrecoverable step in this project. The rollback lives in
-# this role's README as a runbook a human executes while standing next to the
-# machine.
-#
-# The other principle here: this role only ever *adds* protection. It masks the
-# firmware auto-update path but never unmasks it, and it starts the clock cap
-# but never stops a running one. Removing a guard is always a deliberate manual
-# step, because every guard in this file exists to survive somebody's absence.
-
-# --------------------------------------------------------------------------
-# E3 — firmware: assert, pin, never flash
-# --------------------------------------------------------------------------
+# This role never flashes firmware and never removes a guard: it masks the fwupd
+# timer but never unmasks, starts the clock cap but never stops a running one.
 
 - name: Look for the firmware update client
   ansible.builtin.stat:
@@ -24,15 +10,8 @@
 - name: Manage the firmware update path
   when: thermal_fwupdmgr.stat.exists
   block:
-    # Masking, not disabling: a masked unit resolves to /dev/null and cannot be
-    # started by its timer, by boot, by a package post-install script, or by a
-    # desktop updater. Disabling only removes the boot symlink, which the next
-    # fwupd package upgrade is free to put back.
-    #
-    # There is no matching unmask task, on purpose. This role has no way to
-    # tell its own mask from one the box's owner applied for their own reasons,
-    # and undoing a firmware guard is not something a converge should do
-    # quietly. `systemctl unmask fwupd-refresh.timer` is the reversal.
+    # Masking, not disabling: disable only removes the boot symlink, which the
+    # next fwupd upgrade puts back. No unmask task on purpose — reverse by hand.
     - name: Mask the fwupd metadata refresh timer
       ansible.builtin.systemd_service:
         name: "{{ thermal_fwupd_refresh_timer }}"
@@ -49,10 +28,7 @@
       check_mode: false
       when: thermal_ec_device_id | default('', true) | trim | length > 0
 
-    # `first | default('')` collapses three cases to one empty string: the
-    # device id names hardware this box does not have, fwupd could not talk to
-    # its daemon, or the lookup was switched off. All three mean "no version to
-    # assert", and the assertion below skips rather than fails on them.
+    # Empty covers all three "no version to assert" cases, so the assert skips.
     - name: Record the embedded controller firmware version
       ansible.builtin.set_fact:
         thermal_ec_version: >-
@@ -65,8 +41,6 @@
         - thermal_fwupd_devices.rc | default(1) == 0
         - thermal_fwupd_devices.stdout | default('') is search('Devices')
 
-    # Drift is reported, never remediated. If this fails, something updated the
-    # EC: find out what, and decide with your eyes open. Do not "fix" it here.
     - name: Assert that the embedded controller firmware has not drifted
       ansible.builtin.assert:
         that:
@@ -83,10 +57,6 @@
         - thermal_ec_version | default('', true) | length > 0
         - thermal_expected_ec_firmware | default('', true) | trim | length > 0
 
-# --------------------------------------------------------------------------
-# E2 — the clock cap, shipped disabled
-# --------------------------------------------------------------------------
-
 - name: Look for the NVIDIA driver CLI
   ansible.builtin.stat:
     path: "{{ thermal_nvidia_smi_command }}"
@@ -95,9 +65,7 @@
 - name: Manage the GPU clock cap
   when: thermal_nvidia_smi.stat.exists
   block:
-    # An inverted or zero range is accepted by the template and rejected by the
-    # driver at boot, which turns a typo into a unit that fails hours later on
-    # a machine nobody is watching. Catch it at converge time instead.
+    # A typo here is accepted by the template and rejected by the driver at boot.
     - name: Assert that the GPU clock cap range is usable
       ansible.builtin.assert:
         that:
@@ -109,9 +77,8 @@
           not a usable range. `nvidia-smi -lgc min,max` needs a positive
           minimum and a maximum at least as large.
 
-    # Installed whether or not it is enabled: the unit is inert until something
-    # starts it, and having it on disk is what makes "cap the clocks for
-    # tonight's run" one command instead of a converge.
+    # Installed whether or not enabled: on disk is what makes turning it on for
+    # one night a single systemctl command.
     - name: Install the GPU clock cap unit
       ansible.builtin.template:
         src: gpu-clock-cap.service.j2
@@ -121,18 +88,14 @@
         mode: "0644"
       notify: Restart the GPU clock cap
 
-    # Boot behaviour follows the flag in both directions — that is what the
-    # flag declares, and a toggle that cannot be toggled off is not a toggle.
     - name: Set whether the GPU clock cap applies at boot
       ansible.builtin.systemd_service:
         name: "{{ thermal_gpu_clock_cap_unit }}"
         enabled: "{{ thermal_gpu_clock_cap_enabled | bool }}"
         daemon_reload: true
 
-    # Started when the flag is on, and never stopped when it is off. Stopping
-    # runs `nvidia-smi -rgc`, so a converge with the default flag would release
-    # a cap an operator had deliberately started for an unattended overnight
-    # run. Releasing it is `systemctl stop {{ thermal_gpu_clock_cap_unit }}`.
+    # Started when on, never stopped when off: `state: stopped` runs
+    # `nvidia-smi -rgc` and would release a cap an operator started by hand.
     - name: Apply the GPU clock cap now
       ansible.builtin.systemd_service:
         name: "{{ thermal_gpu_clock_cap_unit }}"
