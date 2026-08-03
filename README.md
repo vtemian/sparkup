@@ -1,8 +1,6 @@
-<!-- Drop the hand-drawn mascot at .github/mascot.png and uncomment this.
 <p align="center">
   <img src=".github/mascot.png" alt="sparkup" width="240" />
 </p>
--->
 
 <h1 align="center">sparkup</h1>
 
