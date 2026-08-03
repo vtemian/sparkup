@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/vtemian/sparkup/security/advisories/new
+    about: Report privately. Please do not open a public issue for anything with a security dimension.
+  - name: How do I configure X?
+    url: https://github.com/vtemian/sparkup/blob/main/INSTALL_CLAUDE.md
+    about: Setup, configuration, secrets, running without a Spark, and troubleshooting.

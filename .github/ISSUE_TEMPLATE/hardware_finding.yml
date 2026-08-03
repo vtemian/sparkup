@@ -1,0 +1,45 @@
+name: Hardware finding
+description: Something about this hardware that contradicts what the docs claim
+labels: [hardware, documentation]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most valuable kind of report here. Much of what this repo documents was measured
+        on **one** box on one day, and several of those facts are hypotheses. If your machine
+        disagrees, reality wins and the docs should change.
+
+  - type: textarea
+    id: claim
+    attributes:
+      label: What the docs claim
+      description: Quote it, with the file and line if you can.
+      placeholder: >
+        PROMPT.md says nvidia_gpu_exporter reports no framebuffer memory on GB10 because memory is
+        unified.
+    validations:
+      required: true
+
+  - type: textarea
+    id: measured
+    attributes:
+      label: What you measured
+      description: The command and its real output. Raw output beats a summary of it.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: box
+    attributes:
+      label: Machine, driver, firmware
+      description: Model, `nvidia-smi --query-gpu=driver_version --format=csv`, EC version if relevant.
+      placeholder: "DGX Spark, driver 580.173.02, EC 0x03000302"
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: What this changes
+      description: Which role, variable, dashboard panel or runbook is wrong as a result.

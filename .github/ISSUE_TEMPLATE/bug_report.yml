@@ -1,0 +1,70 @@
+name: Bug report
+description: Something the playbook did, or did not do, on a real machine
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If this has a security dimension, please use
+        [private reporting](https://github.com/vtemian/sparkup/security/advisories/new)
+        instead of an issue.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, and what it did instead of what you expected.
+      placeholder: |
+        make apply EXTRA="--tags exporters"
+        The node_exporter unit started but Prometheus shows the target down.
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: >
+        The failing task and its error, or the PLAY RECAP. If a task was not idempotent, both run
+        recaps are worth far more than a description of them.
+      render: text
+    validations:
+      required: true
+
+  - type: dropdown
+    id: hardware
+    attributes:
+      label: Hardware
+      options:
+        - DGX Spark
+        - Another NVIDIA machine
+        - Not NVIDIA hardware
+        - No hardware, this is about the offline test suite
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Output of `ansible --version | head -1` and, if relevant, `uname -r` on the box.
+      placeholder: "ansible [core 2.18.5] / 6.17.0-1029-nvidia"
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant configuration
+      description: >
+        Anything you changed in `group_vars/all.yml` or `host_vars/`. **Remove passwords, keys and
+        anything else you would not post publicly.**
+      render: yaml
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before filing
+      options:
+        - label: "`make offline` passes on my checkout"
+        - label: I read the role's own README
