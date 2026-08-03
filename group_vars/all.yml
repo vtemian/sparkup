@@ -39,8 +39,13 @@ gpu_enabled: true
 kernel_enabled: false
 
 monitoring_dir: /opt/monitoring
-prometheus_image: prom/prometheus:v3.5.0
-grafana_image: grafana/grafana:12.1.0
+# Pinned to what the box already runs. Never pin these BELOW the running
+# version: Grafana migrates its database schema forward only and does not
+# support downgrades, and a Prometheus downgrade can refuse to open a TSDB
+# written by a newer build. Check `docker exec grafana grafana server -v`
+# before bumping either one down.
+prometheus_image: prom/prometheus:v3.13.2
+grafana_image: grafana/grafana:13.1.1
 grafana_port: 80
 # Split rather than one "host:port" string: it is consumed both as a Docker
 # port-binding prefix and as a URL authority, and a value valid for one is not
