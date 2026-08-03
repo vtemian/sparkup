@@ -91,9 +91,14 @@ What *is* proven, and how:
 
 What is still **not** proven:
 
-- **A5 `kernel`, partially.** The apt pin and the visible menu are applied and verified; the boot
-  target has deliberately not been retargeted (`kernel_manage_grub_default: false`), and no reboot
-  has happened yet, so "the box comes back" is still unproven.
+- **A5 `kernel`, done except retargeting.** The apt pin and the visible menu are applied, and the
+  box was rebooted and came back in **44 seconds**. Still on `6.17.0-1029-nvidia` with Secure Boot
+  enabled; both exporters, both containers, ufw, the CDI spec and `/srv/bbm` all survived; all three
+  scrape jobs returned to `up == 1`; `docker run --gpus all` still reports `NVIDIA GB10`; and a
+  converge afterwards reported `changed=0`. The boot target is deliberately **not** retargeted
+  (`kernel_manage_grub_default: false`): `GRUB_DEFAULT=0` boots the newest kernel on disk, the apt
+  pin guarantees that can only ever be a signed one, and menu entry 0 was confirmed to be
+  `vmlinuz-6.17.0-1029-nvidia`.
 
   **Open question 2 is answered, and the answer was a trap.** `/boot/grub/grub.cfg` offers 11
   entries and resolved to `hidden / 0`. Writing `GRUB_TIMEOUT=5` and `GRUB_TIMEOUT_STYLE=menu` into
