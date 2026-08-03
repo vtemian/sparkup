@@ -16,17 +16,6 @@
 # entry, and discovery falls back to the running kernel's own image package.
 kernel_meta_package: linux-image-nvidia-hwe-24.04
 
-# Empty means discover. Set it — to a full package name, e.g.
-# `linux-image-6.17.0-1029-nvidia` — only to override the discovery, and only
-# when you know which kernel this box is meant to boot better than its own
-# package metadata does.
-kernel_signed_image_package: ""
-
-# mokutil reports the Secure Boot state. It ships with shim on Ubuntu but is
-# not guaranteed present, and the whole role reads its answer.
-kernel_secure_boot_packages:
-  - mokutil
-
 # GRUB_TIMEOUT is 0 on this box. Raising it is not cosmetic: it is the only
 # thing standing between a bad kernel and a drive to wherever the box lives.
 # GRUB_TIMEOUT alone is not enough either — Ubuntu ships
@@ -50,16 +39,4 @@ kernel_grub_config: /boot/grub/grub.cfg
 # reboot can be proved safe before the boot target moves. See README.md.
 kernel_manage_grub_default: true
 
-# The generated menu is parsed to confirm it will actually appear. Set false
-# only if your grub.cfg is laid out differently from Ubuntu's and you have
-# checked by hand that the menu shows.
-kernel_assert_grub_menu: true
-
 kernel_apt_preferences_file: /etc/apt/preferences.d/no-unsigned-kernels
-
-# Removal is off, and the list is empty, so the role removes nothing until it
-# is told twice. Never a glob: `linux-image-unsigned-*` handed to apt would
-# happily take a kernel you are standing on. On this box the one candidate is
-# `linux-image-unsigned-6.17.0-1026-nvidia`.
-kernel_remove_unsigned: false
-kernel_unsigned_packages: []
