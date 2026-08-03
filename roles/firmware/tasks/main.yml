@@ -87,32 +87,30 @@
           changed_when: true
           when: firmware_updates.rc == 0
 
-    # Deliberately outside the fwupd block, and unconditional, because this is
-    # the question fwupd cannot answer. Once a capsule is staged, `get-updates`
-    # stops offering the update, so a later converge cannot distinguish "this
-    # box is current" from "this box is armed and waiting for a reboot" — and
-    # the second one silently reads as the first. That matters on a shared
-    # machine: whoever staged it knows, and the next person to converge does
-    # not. It also covers a partial failure, where some capsules were written
-    # before the run aborted.
-    #
-    # The capsules are just files. Their presence IS the pending flash.
-    - name: Look for firmware capsules already staged
-      ansible.builtin.find:
-        paths: "{{ firmware_capsule_dir }}"
-        patterns: "*.cap"
-        file_type: file
-      register: firmware_capsules
-      changed_when: false
-      check_mode: false
+# Outside the block and unconditional, because this is the question fwupd
+# cannot answer. Once a capsule is staged, `get-updates` stops offering the
+# update, so a later converge cannot distinguish "this box is current" from
+# "this box is armed and waiting for a reboot" — and the second one silently
+# reads as the first. That matters on a shared machine: whoever staged it
+# knows, and the next person to converge does not.
+#
+# The capsules are just files. Their presence IS the pending flash.
+- name: Look for firmware capsules already staged
+  ansible.builtin.find:
+    paths: "{{ firmware_capsule_dir }}"
+    patterns: "*.cap"
+    file_type: file
+  register: firmware_capsules
+  changed_when: false
+  check_mode: false
 
-    - name: Warn that the next boot will write firmware
-      ansible.builtin.debug:
-        msg: >-
-          {{ firmware_capsules.matched }} firmware capsule(s) are staged in
-          {{ firmware_capsule_dir }}. THE NEXT REBOOT WILL WRITE THEM, whoever
-          performs it and for whatever reason. Keep the machine powered
-          throughout; an interrupted write is not recoverable on this hardware.
-          To cancel instead, delete them — fwupd has no command that will:
-          rm {{ firmware_capsule_dir }}/*.cap
-      when: firmware_capsules.matched | int > 0
+- name: Warn that the next boot will write firmware
+  ansible.builtin.debug:
+    msg: >-
+      {{ firmware_capsules.matched }} firmware capsule(s) are staged in
+      {{ firmware_capsule_dir }}. THE NEXT REBOOT WILL WRITE THEM, whoever
+      performs it and for whatever reason. Keep the machine powered
+      throughout; an interrupted write is not recoverable on this hardware.
+      To cancel instead, delete them — fwupd has no command that will:
+      rm {{ firmware_capsule_dir }}/*.cap
+  when: firmware_capsules.matched | int > 0
