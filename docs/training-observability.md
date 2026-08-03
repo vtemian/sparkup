@@ -25,7 +25,9 @@ live `node`, `gpu` and `power` scrape jobs.
 
 ### C0: `/srv/bbm`
 `/srv/bbm/{data,checkpoints,runs}`, group `bbm`, setgid so vlad and marius share artifacts.
-**This exists because `rsync --delete` owns `~/bbm`.** Every training path points here.
+**This exists because `rsync --delete` owns `~/bbm`.** Every training path points here. `/srv/bbm`
+and `bbm` are this box's values of `spark_shared_dir` and `spark_shared_group`; the repo defaults
+are `/srv/spark` and `spark`.
 
 ### C1: `trainobs` — the Python package
 Small, dependency-light, deployed to a venv on the box and importable by `bbm`'s future `train/`
@@ -172,21 +174,21 @@ The PromQL, using the counter:
 
 ```promql
 # exact Wh over the run window (dashboard: $__range == the pinned run window)
-increase(shelly_energy_wh_total[$__range])
+increase(shelly_meter_power_watthours_total[$__range])
 
 # marginal: subtract the idle baseline over the same duration
-increase(shelly_energy_wh_total[$__range])
+increase(shelly_meter_power_watthours_total[$__range])
   - (avg_over_time(training_run_idle_baseline_watts[$__range]) * $__range_s / 3600)
 
 # cost, tariff as a Grafana constant variable in currency per kWh
-increase(shelly_energy_wh_total[$__range]) / 1000 * $tariff
+increase(shelly_meter_power_watthours_total[$__range]) / 1000 * $tariff
 ```
 
 Gauge fallback if the exporter lacks a counter — an approximation whose error scales with the
 scrape interval, so say so in the panel description:
 
 ```promql
-avg_over_time(shelly_power_watts[$__range]) * $__range_s / 3600   # Wh
+avg_over_time(shelly_meter_power_current_watts[$__range]) * $__range_s / 3600   # Wh
 ```
 
 **Tariff is a Grafana variable, not a hardcoded number** — it changes, and a variable means no
