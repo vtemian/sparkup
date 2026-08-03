@@ -35,6 +35,15 @@ kernel_secure_boot_packages:
 kernel_grub_timeout: 5
 kernel_grub_timeout_style: menu
 
+# A machine that failed to boot is exactly when a menu earns its keep. DGX OS
+# sets this to 0, which hides the menu on the retry too.
+kernel_grub_recordfail_timeout: 5
+
+# The menu settings are written here, not to /etc/default/grub, because vendor
+# drop-ins are sourced afterwards and win. `zz-` sorts this last.
+kernel_grub_dropin_dir: /etc/default/grub.d
+kernel_grub_dropin_name: zz-sparkup-menu.cfg
+
 kernel_grub_default_file: /etc/default/grub
 kernel_grub_config: /boot/grub/grub.cfg
 

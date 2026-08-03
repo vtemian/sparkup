@@ -91,8 +91,29 @@ What *is* proven, and how:
 
 What is still **not** proven:
 
-- **A5 `kernel`.** Never run. Gated off behind `kernel_enabled`, and GRUB's resolved default entry
-  (open question 2) is therefore still unanswered, because nothing has read `/boot/grub/grub.cfg`.
+- **A5 `kernel`, partially.** The apt pin and the visible menu are applied and verified; the boot
+  target has deliberately not been retargeted (`kernel_manage_grub_default: false`), and no reboot
+  has happened yet, so "the box comes back" is still unproven.
+
+  **Open question 2 is answered, and the answer was a trap.** `/boot/grub/grub.cfg` offers 11
+  entries and resolved to `hidden / 0`. Writing `GRUB_TIMEOUT=5` and `GRUB_TIMEOUT_STYLE=menu` into
+  `/etc/default/grub` did **not** change that: DGX OS ships `/etc/default/grub.d/no-grubmenu.cfg`
+  forcing `GRUB_TIMEOUT=0`, `GRUB_TIMEOUT_STYLE=hidden` and `GRUB_RECORDFAIL_TIMEOUT=0`, and
+  drop-ins are sourced after the base file, so the vendor wins. `update-grub` ran and the generated
+  menu was still hidden. The role now writes `zz-sparkup-menu.cfg`, which sorts last and does not
+  modify a vendor file a package update would replace; the menu resolves to `menu / 5`.
+
+  Two things this vindicates. The assertion that the *generated* file resolves to a visible menu,
+  rather than trusting the edit, is what caught it — and it caught it **before** the boot target
+  moved, which is why that assertion was reordered ahead of `grub-set-default`. And
+  `GRUB_RECORDFAIL_TIMEOUT=0` meant a box that had already failed to boot would show no menu on the
+  retry, which is precisely when one is worth having.
+
+  Also confirmed: the box already runs the signed kernel `6.17.0-1029-nvidia`, installed as a
+  concrete package alongside the meta, with Secure Boot enabled. There was no unsigned kernel to
+  escape from. The pin is now effective (`Candidate: (none)` for `linux-image-unsigned-*`), so apt
+  cannot install or upgrade one. `linux-image-unsigned-6.17.0-1026-nvidia` is still installed and
+  removal stays off.
 - **Wall power.** No plug exists, so `shelly` has never run and there is no `power` job.
 - **E1 thermal evidence.** The counters are flowing now, but no training run has been observed
   through them, so the fan-curve question is still open.

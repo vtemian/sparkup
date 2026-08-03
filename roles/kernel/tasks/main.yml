@@ -107,24 +107,29 @@
 # ---------------------------------------------------------------------------
 # 2. The menu, before the boot target moves. GRUB_TIMEOUT on its own does not
 #    do it: Ubuntu ships GRUB_TIMEOUT_STYLE=hidden, and a hidden menu counts
-#    the timeout down invisibly. Both lines are needed for the menu to appear.
+#    the timeout down invisibly. Both settings are needed for a menu to appear.
+#
+#    They go in a drop-in rather than /etc/default/grub because writing the
+#    base file is not enough on this hardware. grub-mkconfig sources the base
+#    file and then every /etc/default/grub.d/*.cfg in glob order, and DGX OS
+#    ships no-grubmenu.cfg forcing the menu back off. Measured on this box: the
+#    base file said menu/5 and the generated grub.cfg still resolved to
+#    hidden/0. The `zz-` prefix sorts this last, so it wins without modifying a
+#    vendor file that a package update would replace.
 # ---------------------------------------------------------------------------
 
-- name: Raise the GRUB menu timeout
-  ansible.builtin.lineinfile:
-    path: "{{ kernel_grub_default_file }}"
-    regexp: '^#?\s*GRUB_TIMEOUT='
-    line: "GRUB_TIMEOUT={{ kernel_grub_timeout }}"
+- name: Ensure the GRUB drop-in directory exists
+  ansible.builtin.file:
+    path: "{{ kernel_grub_dropin_dir }}"
+    state: directory
     owner: root
     group: root
-    mode: "0644"
-  notify: Update GRUB
+    mode: "0755"
 
-- name: Show the GRUB menu rather than hiding it
-  ansible.builtin.lineinfile:
-    path: "{{ kernel_grub_default_file }}"
-    regexp: '^#?\s*GRUB_TIMEOUT_STYLE='
-    line: "GRUB_TIMEOUT_STYLE={{ kernel_grub_timeout_style }}"
+- name: Show the GRUB menu, overriding any vendor drop-in that hides it
+  ansible.builtin.template:
+    src: zz-sparkup-menu.cfg.j2
+    dest: "{{ kernel_grub_dropin_dir }}/{{ kernel_grub_dropin_name }}"
     owner: root
     group: root
     mode: "0644"
