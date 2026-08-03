@@ -19,8 +19,8 @@ cat <<'SCOPE'
 =============================================================================
 What this covers, and what it does not
 
-  base    tested. Needs systemd for avahi, hostnamectl and service_facts, so
-          the container boots a real init.
+  base    tested. Needs systemd for avahi and hostnamectl, so the container
+          boots a real init.
   users   tested. Accounts, groups and the shared tree. The GitHub key import
           is not exercised: it needs the network and a real account.
 
