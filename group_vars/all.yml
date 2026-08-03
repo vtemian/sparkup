@@ -22,6 +22,22 @@ spark_shared_subdirs: [data, checkpoints, runs]
 # link is WiFi means walking to it.
 spark_firewall_manage: true
 spark_firewall_allow_ports: [22, 80]
+spark_firewall_ssh_port: 22
+
+# Turning ufw ON is the one firewall operation that can lock you out, because it
+# sets a default-deny incoming policy. Opt in deliberately, ideally while you
+# can still reach the machine physically. The role asserts SSH is allowed first
+# and refuses otherwise.
+spark_firewall_enable: false
+
+# Prometheus runs in a container and scrapes the host exporters through the
+# docker bridge gateway, so that traffic arrives on the host's INPUT chain. Once
+# a default-deny policy exists it is dropped unless these subnets are allowed to
+# reach the exporter ports, and the monitoring stack breaks as a direct result of
+# securing the box. 172.16.0.0/12 covers Docker's default address pool; the LAN
+# is not in it, so the ports stay closed to everyone else.
+spark_firewall_docker_subnets: ["172.16.0.0/12"]
+spark_firewall_container_ports: [9100, 9835]
 
 # Docker's apt repo is added ONLY when Docker is absent. DGX OS ships Docker
 # from repo.download.nvidia.com; adding upstream on top fights the vendor.

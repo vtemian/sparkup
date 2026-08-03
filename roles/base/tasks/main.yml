@@ -51,10 +51,11 @@
     state: present
   when: spark_firewall_manage
 
-# ADD allow rules, and nothing else. No reset, no default policy, no delete,
-# no enable or disable. This box's only link is WiFi with no wired fallback,
-# so a firewall mistake is recovered by physically walking to the machine.
-# Adding an allow rule is the one ufw operation that cannot lock anybody out.
+# ADD allow rules. No reset, no delete, and no default policy except through
+# the explicit opt-in below. This box's only link is WiFi with no wired
+# fallback, so a firewall mistake is recovered by physically walking to the
+# machine. Adding an allow rule is the one ufw operation that cannot lock
+# anybody out.
 - name: Allow inbound service ports through ufw
   community.general.ufw:
     rule: allow
@@ -62,6 +63,50 @@
     proto: tcp
   loop: "{{ spark_firewall_allow_ports }}"
   when: spark_firewall_manage
+
+# The exporters bind all interfaces, and Prometheus scrapes them from inside a
+# container through the docker bridge gateway. That traffic arrives on the
+# host's INPUT chain, so a default-deny policy drops it and both exporters read
+# down — the monitoring stack breaking as a direct result of securing it.
+# These rules keep the container path open while leaving the ports closed to
+# the LAN, and they are harmless while ufw is inactive.
+- name: Allow containers to reach the host exporters
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item.0 }}"
+    port: "{{ item.1 }}"
+    proto: tcp
+  loop: "{{ spark_firewall_docker_subnets | product(spark_firewall_container_ports) | list }}"
+  loop_control:
+    label: "{{ item.0 }} -> {{ item.1 }}"
+  when: spark_firewall_manage
+
+# Turning ufw on sets a default-deny incoming policy. That is the one firewall
+# operation in this role that can lock somebody out, so it is opt-in, and it
+# refuses to run unless SSH is explicitly allowed first. Ordering matters: the
+# allow rules above have already been applied by the time this runs.
+- name: Refuse to enable the firewall without an SSH allow rule
+  ansible.builtin.assert:
+    that:
+      - spark_firewall_ssh_port | int in (spark_firewall_allow_ports | map('int') | list)
+    fail_msg: >-
+      spark_firewall_enable is on but port {{ spark_firewall_ssh_port }} is not in
+      spark_firewall_allow_ports. Enabling ufw would set a default-deny policy
+      and drop your own SSH session on a box whose only link is WiFi. Add the
+      port, or leave the firewall off.
+    success_msg: >-
+      SSH on {{ spark_firewall_ssh_port }} is allowed, so enabling ufw cannot
+      close the way in.
+  when:
+    - spark_firewall_manage
+    - spark_firewall_enable
+
+- name: Enable the firewall
+  community.general.ufw:
+    state: enabled
+  when:
+    - spark_firewall_manage
+    - spark_firewall_enable
 
 # Read-only, and gated on the same flag as the rules above: a box that told
 # this role to keep its hands off the firewall does not want it running ufw
