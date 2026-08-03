@@ -12,7 +12,9 @@ make check     # see what would change
 make apply     # converge
 ```
 
-Full setup in **[INSTALL_CLAUDE.md](INSTALL_CLAUDE.md)**.
+Setup, configuration and operations live in **[INSTALL_CLAUDE.md](INSTALL_CLAUDE.md)**. It is
+written for AI agents driving this repo, which makes it blunt about invariants and failure modes;
+it is also the complete reference if you are doing it by hand.
 
 ## Layout
 
