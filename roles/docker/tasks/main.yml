@@ -1,5 +1,4 @@
 ---
-
 - name: Install Docker, containerd and the compose plugin
   ansible.builtin.apt:
     name: "{{ docker_packages }}"

@@ -48,9 +48,10 @@
         fail_msg: >-
           EC firmware is {{ thermal_ec_version }}, expected
           {{ thermal_expected_ec_firmware }}. Something flashed this box. This
-          role never does, and it will not put the old version back — a rollback
-          is the manual runbook in roles/thermal/README.md, with preconditions.
-          If the new version is intended, update thermal_expected_ec_firmware.
+          role never does, and it will not put the old version back:
+          `fwupdmgr downgrade {{ thermal_ec_device_id }}` is the manual route,
+          and it reboots. If the new version is intended, update
+          thermal_expected_ec_firmware.
         success_msg: >-
           EC firmware is {{ thermal_expected_ec_firmware }}, as expected.
       when:

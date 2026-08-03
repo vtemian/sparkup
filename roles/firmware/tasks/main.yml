@@ -42,14 +42,8 @@
           changed_when: true
           when: firmware_updates.rc == 0
 
-# Outside the block and unconditional, because this is the question fwupd
-# cannot answer. Once a capsule is staged, `get-updates` stops offering the
-# update, so a later converge cannot distinguish "this box is current" from
-# "this box is armed and waiting for a reboot" — and the second one silently
-# reads as the first. That matters on a shared machine: whoever staged it
-# knows, and the next person to converge does not.
-#
-# The capsules are just files. Their presence IS the pending flash.
+# Outside the block and unconditional: once a capsule is staged `get-updates`
+# stops offering it, so "armed and waiting for a reboot" reads as "current".
 - name: Look for firmware capsules already staged
   ansible.builtin.find:
     paths: "{{ firmware_capsule_dir }}"

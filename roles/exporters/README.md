@@ -13,7 +13,7 @@
 | `exporters_node_collectors` | `cpu`, `meminfo`, `loadavg`, `hwmon`, `thermal_zone`, `netdev`, `uname`, `os`, `textfile`, `filesystem`, `stat` | under `--collector.disable-defaults` |
 | `exporters_node_filesystem_mount_points_exclude` | see defaults | stops the collector hanging on snap loops and Docker overlays |
 | `exporters_node_filesystem_fs_types_exclude` | see defaults | same |
-| `exporters_gpu_query_fields` | 30 `nvidia-smi` fields | explicit list, not the exporter's `AUTO` |
+| `exporters_gpu_query_fields` | 31 `nvidia-smi` fields | explicit list, not the exporter's `AUTO` |
 
 ```sh
 systemctl status node_exporter nvidia_gpu_exporter
