@@ -14,7 +14,7 @@
   <a href="#quick-start">Quick start</a> &middot;
   <a href="#what-it-looks-like">Dashboard</a> &middot;
   <a href="INSTALL_CLAUDE.md">Operating guide</a> &middot;
-  <a href="#what-this-box-taught-us">Field notes</a>
+  <a href="#learned-the-hard-way">Learned the hard way</a>
 </p>
 
 ---
@@ -48,7 +48,7 @@ Setup, configuration and operations live in **[INSTALL_CLAUDE.md](INSTALL_CLAUDE
 written for AI agents driving this repo, which makes it blunt about invariants and failure modes;
 it is also the complete reference if you are doing it by hand.
 
-## What this box taught us
+## Learned the hard way
 
 Every one of these cost somebody an afternoon. They are why the roles look the way they do.
 
