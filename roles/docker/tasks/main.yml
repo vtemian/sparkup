@@ -32,15 +32,19 @@
         group: root
         mode: "0644"
 
+    # deb822 rather than the one-line format: ansible.builtin.apt_repository is
+    # deprecated and goes away in ansible-core 2.25.
     - name: Register Docker's upstream apt repository
-      ansible.builtin.apt_repository:
-        repo: >-
-          deb [arch={{ docker_apt_architecture }}
-          signed-by=/etc/apt/keyrings/docker.asc]
-          {{ docker_upstream_repo_url }}
-          {{ ansible_facts['distribution_release'] }} stable
-        filename: docker
+      ansible.builtin.deb822_repository:
+        name: docker
+        types: [deb]
+        uris: "{{ docker_upstream_repo_url }}"
+        suites: "{{ ansible_facts['distribution_release'] }}"
+        components: [stable]
+        architectures: "{{ docker_apt_architecture }}"
+        signed_by: /etc/apt/keyrings/docker.asc
         state: present
+        mode: "0644"
 
     - name: Refresh the apt cache so the new repository is visible
       ansible.builtin.apt:
