@@ -1,0 +1,154 @@
+---
+# THIS ROLE STAGES FIRMWARE. IT NEVER REBOOTS, AND IT NEVER PICKS A VERSION.
+#
+# fwupd writes a capsule that UEFI applies on the next boot, so the flash does
+# not happen while this runs — it happens while the machine is restarting,
+# unattended, with no way to intervene. That is the moment a box is lost. This
+# role therefore does the staging and stops, and a human chooses when the
+# machine reboots, in the same shape as the kernel role.
+#
+# Four things must all be true before anything is staged: the operator opted
+# in, they named the exact device and version, fwupd is actually offering that
+# version, and nothing is training. Any one missing and the role does nothing.
+
+- name: Stage firmware updates
+  when: firmware_update_enabled | bool
+  block:
+
+    - name: Refuse to flash firmware without an explicit target
+      ansible.builtin.assert:
+        that:
+          - firmware_targets | length > 0
+        fail_msg: >-
+          firmware_update_enabled is on but firmware_targets is empty. This role
+          will not choose versions for you: taking whatever LVFS offers turns
+          every converge into an unplanned flash. Run `fwupdmgr get-updates`,
+          decide, and name the device id and version in host_vars.
+        success_msg: "{{ firmware_targets | length }} firmware target(s) declared."
+
+    - name: Refuse to flash firmware while the box is training
+      ansible.builtin.assert:
+        that:
+          - not (spark_training_active | default(false))
+        fail_msg: >-
+          A GPU process is running. Applying this needs a reboot, and a reboot
+          kills the run. Wait for it to finish.
+        success_msg: Nothing is training.
+
+    - name: Look for the firmware update client
+      ansible.builtin.stat:
+        path: "{{ firmware_fwupdmgr }}"
+      register: firmware_client
+
+    - name: Refuse to continue without fwupd
+      ansible.builtin.assert:
+        that:
+          - firmware_client.stat.exists
+        fail_msg: >-
+          {{ firmware_fwupdmgr }} is not installed, so firmware state can be
+          neither read nor changed.
+
+    # Downloads the vendor catalogue. Touches no firmware, so it is not a
+    # change; without it the offered-version check below reads stale metadata.
+    - name: Refresh the firmware metadata
+      ansible.builtin.command:
+        cmd: "{{ firmware_fwupdmgr }} refresh --force --assume-yes"
+      register: firmware_refresh
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      when: firmware_refresh_metadata | bool
+
+    - name: Read what the vendor is currently offering
+      ansible.builtin.command:
+        cmd: "{{ firmware_fwupdmgr }} get-updates --json --no-unreported-check"
+      register: firmware_offered
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Read the firmware versions installed now
+      ansible.builtin.command:
+        cmd: "{{ firmware_fwupdmgr }} get-devices --json --no-unreported-check"
+      register: firmware_installed
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Index the installed and offered versions by device id
+      ansible.builtin.set_fact:
+        firmware_current: >-
+          {{ dict((firmware_installed.stdout | from_json).Devices
+                  | selectattr('DeviceId', 'defined')
+                  | map(attribute='DeviceId') | list
+                | zip((firmware_installed.stdout | from_json).Devices
+                  | selectattr('DeviceId', 'defined')
+                  | map(attribute='Version') | list)) }}
+        firmware_available: >-
+          {{ dict((firmware_offered.stdout | from_json).Devices | default([])
+                  | selectattr('Releases', 'defined')
+                  | map(attribute='DeviceId') | list
+                | zip((firmware_offered.stdout | from_json).Devices | default([])
+                  | selectattr('Releases', 'defined')
+                  | map(attribute='Releases') | map('first')
+                  | map(attribute='Version') | list)) }}
+
+    - name: Report the firmware state this role resolved
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.name }} ({{ item.device_id }}):
+          installed {{ firmware_current[item.device_id] | default('unknown') }},
+          requested {{ item.version }},
+          vendor offering {{ firmware_available[item.device_id] | default('nothing') }}.
+      loop: "{{ firmware_targets }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # The gate that matters. A version only reaches the hardware if the operator
+    # asked for exactly it AND the vendor is currently publishing exactly it.
+    # A typo, a stale host_vars, or a vendor that has moved on all stop here
+    # rather than flashing something nobody chose.
+    - name: Refuse any target the vendor is not offering
+      ansible.builtin.assert:
+        that:
+          - firmware_current[item.device_id] | default('') == item.version
+            or firmware_available[item.device_id] | default('') == item.version
+        fail_msg: >-
+          {{ item.name }} is at
+          {{ firmware_current[item.device_id] | default('an unknown version') }}
+          and you asked for {{ item.version }}, but the vendor is offering
+          {{ firmware_available[item.device_id] | default('nothing') }}. This
+          role will not flash a version it cannot see published. Re-check
+          `fwupdmgr get-updates`.
+      loop: "{{ firmware_targets }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # Already at the requested version means nothing to do, which is what makes
+    # a second converge report changed=0 instead of reinstalling firmware.
+    - name: Stage the firmware capsule
+      ansible.builtin.command:
+        cmd: >-
+          {{ firmware_fwupdmgr }} install {{ item.device_id }} {{ item.version }}
+          --assume-yes --no-reboot-check
+      register: firmware_staged
+      changed_when: firmware_staged.rc == 0
+      loop: "{{ firmware_targets }}"
+      loop_control:
+        label: "{{ item.name }} -> {{ item.version }}"
+      when: firmware_current[item.device_id] | default('') != item.version
+
+    - name: Report whether anything was staged
+      ansible.builtin.debug:
+        msg: >-
+          {% if firmware_staged.changed | default(false) %}
+          FIRMWARE STAGED, NOT APPLIED. UEFI writes it during the next boot.
+          This role does not reboot: the flash happens while the machine is
+          restarting with no way to intervene, so choosing that moment belongs
+          to whoever can watch it. Keep the machine powered throughout.
+          Afterwards, update thermal_expected_ec_firmware in host_vars or the
+          thermal role will correctly report drift on the next converge.
+          {% else %}
+          Every declared target is already at its requested version. Nothing
+          was staged and nothing needs a reboot.
+          {% endif %}

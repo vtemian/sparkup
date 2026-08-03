@@ -52,6 +52,11 @@
     # you record your own EC version in host_vars.
     - role: thermal
       tags: [thermal]
+    # Stages firmware and stops; it never reboots, and it refuses to pick a
+    # version for you. Off unless firmware_targets names exact device ids and
+    # versions. This is the only unrecoverable operation in the repo.
+    - role: firmware
+      tags: [firmware]
     # LAST, ALONE, and off by default. This is the one role that can leave a
     # headless WiFi-only box unbootable. Run it with --tags kernel, deliberately,
     # with someone able to walk to the machine.
