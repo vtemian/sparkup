@@ -1,25 +1,18 @@
 ---
-# Off. Installing an out-of-tree kernel module is not something a converge
-# should do to a box that did not ask for it.
+# Off. An out-of-tree kernel module is not a converge's business by default.
 spbm_enabled: false
 
-# The PPA that carries the DKMS package. Built from antheas/spark_hwmon by
-# github.com/vtemian/spark-spbm-builder; nothing is compiled on this box beyond
-# what DKMS does against the running kernel.
+# Built from antheas/spark_hwmon by github.com/vtemian/spark-spbm-builder.
 spbm_ppa: ppa:vladtemian/spark-spbm
 spbm_package: spbm-dkms
 
-# DKMS rebuilds the module for each new kernel, but only if headers for that
-# kernel arrive with it. This meta package is what guarantees that; without it
-# the module silently vanishes on the next kernel upgrade.
+# The meta package, not a versioned one: without headers arriving with each new
+# kernel the module silently vanishes on the next upgrade.
 spbm_headers_package: linux-headers-nvidia-hwe-24.04
 
-# Secure Boot rejects unsigned modules. DKMS signs with this key, and a human
-# must enrol it once at the console before the module can load.
+# DKMS signs with this key; a human enrols it once at the console.
 spbm_mok_cert: /var/lib/shim-signed/mok/MOK.der
 
-# The one-time password typed at the MokManager screen on the next boot. Empty
-# means the package is installed but the key is never queued, leaving the
-# module built and unloadable. Pass it with `-e spbm_mok_password=...` for a
-# single run so it stays out of every file.
+# Typed at the MokManager screen on the next boot. Pass with
+# `-e spbm_mok_password=...` for a single run; empty leaves the module unloadable.
 spbm_mok_password: ""
