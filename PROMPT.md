@@ -187,7 +187,7 @@ Read-only audit over SSH. These are facts, not estimates — the playbook must c
 | GPU | NVIDIA GB10, driver 580.173.02, CUDA 13.0, sm_121, persistence mode on |
 | CPU / RAM | 20 cores (10× Cortex-X925 + 10× Cortex-A725), 121 GiB unified, 15 GiB swap |
 | Disk | one NVMe 3.7 TB, `/` only — **no separate `/home`**, 65 GB used (2%), plus 13 snap loops |
-| Network | **WiFi only** (`wlP9s9`); no wired IPv4. NetworkManager. SSID `Wunderlabs`, both bands |
+| Network | **WiFi only** (`wlP9s9`); no wired IPv4. NetworkManager. One SSID on both bands |
 
 **Users.** `vlad` (1000): `sudo`, `docker`, `adm`, one `ssh-rsa` key. `marius` (1001): `sudo`,
 **not in `docker`** — a real gap to fix. No passwordless sudo for either.
@@ -428,7 +428,7 @@ the LAN. Do not blanket-reset `ufw` — locking yourself out of a WiFi-only box 
 ### A2: `users`
 `vlad` (1000) and `marius` (1001), shell `/bin/bash`, groups `sudo` + **`docker`** (marius lacks
 `docker` today — this closes it). Keys via `ansible.posix.authorized_key`, marius's pulled from
-`https://github.com/balajmarius.keys`. `exclusive: false` — never orphan a working key. Docker
+`https://github.com/<their-username>.keys`. `exclusive: false` — never orphan a working key. Docker
 group membership needs a reconnect; use `meta: reset_connection` if a later task depends on it.
 Also create group `bbm` containing both, for `/srv/bbm`.
 
@@ -623,7 +623,7 @@ CEE 7/7 plug — correct for Romania, with vast headroom over a ~240 W box. Gen3
 so energy is exact rather than an artefact of our scrape interval, and Prometheus's counter
 handling copes correctly when it resets on device reboot.
 
-Setup tasks: join `Wunderlabs` (2.4 GHz — the plug is 2.4-only, same subnet), give it a **DHCP
+Setup tasks: join the house SSID (2.4 GHz — the plug is 2.4-only, same subnet), give it a **DHCP
 reservation** on the router exactly as the Spark has, **plug only the Spark's PSU into it** (a
 monitor on the same socket silently corrupts every run's energy), and **disable the relay** in the
 device config — this model switches as well as meters, and a stray tap in the Shelly app would cut
