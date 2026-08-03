@@ -173,6 +173,13 @@
     kernel_grub_menu_settings: >-
       {{ kernel_grub_cfg.content | b64decode
          | regex_findall('set timeout_style=([a-z]+)\s+set timeout=([0-9-]+)') }}
+    # Submenu ids, taken from the file rather than guessed from a prefix. A
+    # per-kernel entry nested in a submenu is only selectable as
+    # "<submenu id>>><entry id>", and which submenus exist is the only reliable
+    # way to know whether that prefix is required.
+    kernel_grub_submenu_ids: >-
+      {{ kernel_grub_cfg.content | b64decode
+         | regex_findall("submenu[^\n]*?menuentry_id_option '([^']+)'") }}
 
 - name: Report how the generated GRUB menu will behave
   ansible.builtin.debug:
@@ -181,6 +188,32 @@
       {{ kernel_grub_menu_settings | first | default(['unparsed', 'unparsed'], true) | join(' / ') }}
       (timeout_style / timeout), and offers
       {{ kernel_grub_entry_ids | length }} menu entries.
+
+# Before the boot target moves, not after. The edit to /etc/default/grub is
+# already done; what is checked here is whether it SURVIVED into the generated
+# menu, which is the only thing that catches a drop-in under
+# /etc/default/grub.d/ overriding it. Verifying that after retargeting would
+# leave exactly the combination this role promises never to create: a moved
+# boot target behind a hidden menu on a box nobody can reach.
+- name: Assert that the GRUB menu will be visible
+  ansible.builtin.assert:
+    that:
+      - kernel_grub_menu_settings | length > 0
+      - kernel_grub_menu_settings[0][0] == kernel_grub_timeout_style
+      - kernel_grub_menu_settings[0][1] | int != 0
+    fail_msg: >-
+      {{ kernel_grub_config }} does not resolve to a visible menu
+      ({{ kernel_grub_menu_settings | first | default(['unparsed', 'unparsed'], true) | join(' / ') }}).
+      The usual cause is a drop-in under /etc/default/grub.d/, which is sourced
+      after /etc/default/grub and wins. Fix that and re-run; do not reboot into
+      a hidden menu on a box you cannot reach. If instead the generated file is
+      simply laid out differently from Ubuntu's, check the menu by hand and set
+      kernel_assert_grub_menu to false.
+    success_msg: >-
+      The menu appears for {{ kernel_grub_menu_settings[0][1] }} seconds.
+  when:
+    - kernel_assert_grub_menu | bool
+    - not ansible_check_mode
 
 - name: Point GRUB at the signed kernel
   when: kernel_manage_grub_default | bool
@@ -191,8 +224,8 @@
     - name: Compose the saved entry that selects the intended kernel
       ansible.builtin.set_fact:
         kernel_grub_target: >-
-          {{ [kernel_grub_entry_ids | select('match', 'gnulinux-advanced-')
-              | list | first | default('', true),
+          {{ [(kernel_grub_submenu_ids | select('match', 'gnulinux-advanced-') | list
+               + kernel_grub_submenu_ids | list) | first | default('', true),
               kernel_grub_entry_ids
               | select('search', '^gnulinux-' ~ (kernel_intended_version | regex_escape) ~ '-advanced-')
               | list | first | default('', true)]
@@ -203,6 +236,13 @@
         that:
           - kernel_grub_target | length > 0
           - kernel_intended_version in kernel_grub_target
+          # If the menu nests anything, the target must carry a submenu prefix.
+          # A bare NESTED id is unresolvable at top level: `set default=`
+          # matches nothing and GRUB boots entry 0, the newest kernel on disk,
+          # which is the exact outcome this role exists to prevent. Every other
+          # assumption here fails loudly; this one would fail open, so it is
+          # checked rather than trusted.
+          - kernel_grub_submenu_ids | length == 0 or '>' in kernel_grub_target
         fail_msg: >-
           {{ kernel_grub_config }} has no entry for
           {{ kernel_intended_version }}, so there is nothing safe to point the
@@ -305,26 +345,6 @@
       NVIDIA's own Aerial-on-Spark guide tells people to disable it, and this
       project deliberately does not. Re-enable it in firmware and converge again.
     success_msg: Secure Boot is enabled.
-
-- name: Assert that the GRUB menu will be visible
-  ansible.builtin.assert:
-    that:
-      - kernel_grub_menu_settings | length > 0
-      - kernel_grub_menu_settings[0][0] == kernel_grub_timeout_style
-      - kernel_grub_menu_settings[0][1] | int != 0
-    fail_msg: >-
-      {{ kernel_grub_config }} does not resolve to a visible menu
-      ({{ kernel_grub_menu_settings | first | default(['unparsed', 'unparsed'], true) | join(' / ') }}).
-      The usual cause is a drop-in under /etc/default/grub.d/, which is sourced
-      after /etc/default/grub and wins. Fix that and re-run; do not reboot into
-      a hidden menu on a box you cannot reach. If instead the generated file is
-      simply laid out differently from Ubuntu's, check the menu by hand and set
-      kernel_assert_grub_menu to false.
-    success_msg: >-
-      The menu appears for {{ kernel_grub_menu_settings[0][1] }} seconds.
-  when:
-    - kernel_assert_grub_menu | bool
-    - not ansible_check_mode
 
 - name: Assert that the box is running the intended signed kernel
   ansible.builtin.assert:

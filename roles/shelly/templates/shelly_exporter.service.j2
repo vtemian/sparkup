@@ -27,8 +27,21 @@ ExecStartPre=-{{ shelly_docker_bin }} rm --force {{ shelly_container_name }}
 # listed under the Gen1 variable is simply never discovered, and says nothing
 # about it. An IP address, not a .local name: the container has no mDNS
 # resolver, which is why the plug needs a DHCP reservation.
+# Host networking rather than --publish, and this is a firewall decision, not a
+# convenience. Docker inserts its DNAT and DOCKER-USER rules ahead of ufw's
+# chains, so a published port is reachable from the LAN whatever ufw says —
+# and this exporter serves unauthenticated device inventory (mac, name,
+# firmware version, wifi rssi) alongside the power series. The repo's stated
+# posture is that 9090/9100/9835 stay off the LAN; 9924 belongs in that class
+# and is the only one --publish would put beyond ufw's reach. On the host
+# network it is an ordinary listening port that ufw governs like any other,
+# exactly as the native node and gpu exporter units are.
+#
+# Prometheus still reaches it: it scrapes through host.docker.internal, the
+# same host-gateway path it uses for those two.
 ExecStart={{ shelly_docker_bin }} run --rm --name {{ shelly_container_name }} \
-    --publish {{ shelly_exporter_port }}:{{ shelly_container_port }} \
+    --network host \
+    --env SERVER_PORT={{ shelly_exporter_port }} \
     --env SHELLY_GEN2DEVICES_HOSTS={{ shelly_host }} \
     --security-opt no-new-privileges \
     --cap-drop ALL \

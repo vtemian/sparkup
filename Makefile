@@ -37,12 +37,21 @@ idempotence: ## Converge, then prove a second run changes nothing
 		|| { echo "NOT IDEMPOTENT: second run changed something"; exit 1; }
 
 # Everything below runs without a Spark. Docker is the only requirement.
-.PHONY: offline dashboard roles-test harness-up harness-down
+.PHONY: offline dashboard dashboard-live roles-test harness-up harness-down
 
-offline: lint syntax dashboard roles-test ## Every check that needs no Spark
+offline: lint syntax dashboard dashboard-live roles-test ## Every check that needs no Spark
 
 dashboard: ## Parse every panel query and check it names a metric we emit
 	python3 tests/check_dashboard.py
+
+# The offline check matches node_memory_/node_filesystem_ by prefix, because an
+# exhaustive list of what /proc/meminfo yields would be a claim about a kernel.
+# So a typo INSIDE a real family passes it. Evaluating every query against a
+# Prometheus holding real samples is what catches that, and leaving it as a
+# manual step means it never runs.
+dashboard-live: ## Evaluate every panel query against a live Prometheus, then tear down
+	SPARKUP_HARNESS_OPEN=0 ./tests/harness-up.sh
+	./tests/harness-down.sh
 
 roles-test: ## Converge base and users in containers twice, expect changed=0
 	./tests/role-idempotence.sh

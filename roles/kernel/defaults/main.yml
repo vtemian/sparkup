@@ -9,6 +9,11 @@
 # though that kernel is running, only this meta pointing at 6.17.0-1029.29 — so
 # the concrete image name is discovered from the meta package rather than
 # written down here, where it would rot.
+#
+# This is DGX OS packaging and exists nowhere else, so on a non-DGX box the
+# install step dies with "No package matching 'linux-image-nvidia-hwe-24.04'".
+# Set it to "" there: the expression that builds the install list drops an empty
+# entry, and discovery falls back to the running kernel's own image package.
 kernel_meta_package: linux-image-nvidia-hwe-24.04
 
 # Empty means discover. Set it — to a full package name, e.g.

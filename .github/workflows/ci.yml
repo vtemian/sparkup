@@ -86,6 +86,20 @@ jobs:
       - name: Every panel query parses, and names a metric an exporter emits
         run: python3 tests/check_dashboard.py
 
+      # The step above matches node_memory_/node_filesystem_ by prefix, so a
+      # typo inside a real family passes it. This brings the real stack up
+      # against synthetic metrics and fails on any panel that returns no data,
+      # which is the only thing that catches that class offline.
+      - name: Install the collections the harness renders templates with
+        run: ansible-galaxy collection install --requirements-file requirements.yml
+
+      - name: Every panel query returns data from a live Prometheus
+        run: make dashboard-live
+
+      - name: Tear the harness down even if it failed
+        if: always()
+        run: ./tests/harness-down.sh || true
+
   roles:
     name: role idempotence in containers
     runs-on: ubuntu-24.04

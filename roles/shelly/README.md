@@ -8,7 +8,7 @@ Wall-socket power and cumulative energy, from a **Shelly Plug M Gen3** read by
 | Meter | Shelly Plug M Gen3, local JSON-RPC, no cloud |
 | Exporter | `ghcr.io/easimon/shelly-exporter` 3.0.0, digest-pinned, `linux/arm64` verified |
 | Runs as | `shelly_exporter.service`, a container under a systemd unit, `Restart=always` |
-| Listens on | `shelly_exporter_port` = 9924 on the host, 8080 inside the container |
+| Listens on | `shelly_exporter_port` = 9924, on the host network so ufw governs it |
 | Metrics path | **`/prometheus`**, not `/metrics` |
 | The number that matters | `shelly_meter_power_watthours_total` — a **counter**, in watt-hours |
 | Default state | **off**. `shelly_enabled: false`, the role no-ops, the `power` job is absent |
@@ -180,8 +180,33 @@ unchanged unit file cannot quietly start running different software.
 The unit deliberately omits the `ProtectSystem=strict` block the other exporter
 units carry. This process is a Docker client talking to a root-equivalent
 socket — sandboxing it is theatre, and a read-only `/run` would block the
-socket outright. The boundary that matters is the container, which runs as
-uid 65535 with `--cap-drop ALL --security-opt no-new-privileges`.
+socket outright. The container runs as uid 65535 with `--cap-drop ALL
+--security-opt no-new-privileges`.
+
+### Why `--network host` and not `--publish`
+
+This is a firewall decision. Docker inserts its DNAT and `DOCKER-USER` rules
+**ahead of** ufw's chains, so a container port published with `--publish` is
+reachable from the LAN no matter what ufw says. That matters here because this
+exporter serves more than power: alongside the meter series it exposes `mac`,
+`name`, `type` and `firmwareVersion` labels and `shelly_wifi_rssi_dbmw`, all
+unauthenticated. Device inventory for anyone on the WiFi.
+
+The repo's stated posture is that 9090, 9100 and 9835 stay off the LAN.
+Port 9924 belongs in that class, and `--publish` is the one way to put it
+beyond ufw's reach. On the host network it is an ordinary listening port that
+ufw governs like any other, exactly as the native `node` and `gpu` exporter
+units are.
+
+Loopback publishing (`127.0.0.1:9924:8080`) is **not** the alternative:
+Prometheus is containerised and reaches the host through `host.docker.internal`
+— the bridge gateway, not loopback — so a loopback bind breaks scraping
+entirely. Host networking keeps that path working, which is the same path the
+other two exporters already use.
+
+`SERVER_PORT` sets the listening port inside the container, since with host
+networking there is no port mapping to do it. Verified against the pinned
+image: `SERVER_PORT=9924` and `GET /prometheus` returns 200.
 
 ## The scrape target: what was wrong and what it is now
 
@@ -397,7 +422,6 @@ sudo systemctl daemon-reload
 
 ## Wiring
 
-This role is not in `site.yml` yet; that is handled separately. When it lands
-it belongs before `monitoring`, whose `prometheus.yml` gains the `power` job,
-and it can run in parallel with `exporters` — the two share nothing but the
-Prometheus config they both feed.
+This role runs from `site.yml`, sequenced before `monitoring` so the exporter exists before
+Prometheus is told to scrape it. It is a complete no-op while `shelly_enabled` is false. It shares
+nothing with `exporters` but the Prometheus config they both feed.
