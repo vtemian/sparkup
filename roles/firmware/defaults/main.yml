@@ -1,16 +1,9 @@
 ---
-# Off. A converge on a box that has not opted in does nothing here.
-#
-# Turning it on means "keep this machine's firmware current". It does not mean
-# "flash on every converge": nothing reaches the hardware until somebody
-# reboots, and this role never does that.
+# Off. On means "stage firmware"; nothing reaches the hardware until a reboot.
 firmware_update_enabled: false
 
-# Absolute path, so the command does not depend on root's PATH, and the file
-# this role stats to decide whether fwupd exists at all.
+# Absolute path: also the file the role stats to decide whether fwupd exists.
 firmware_fwupdmgr: /usr/bin/fwupdmgr
 
-# Where fwupd leaves capsules for UEFI to pick up at boot. Checked on every
-# converge, opted in or not: a staged capsule is a pending flash that fwupd
-# stops reporting, and the next person to converge deserves to know.
+# Where fwupd leaves capsules for UEFI. Their presence IS a pending flash.
 firmware_capsule_dir: /boot/efi/EFI/UpdateCapsule

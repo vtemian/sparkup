@@ -1,30 +1,6 @@
 ---
-# THIS ROLE STAGES FIRMWARE. IT NEVER REBOOTS.
-#
-# fwupd writes a capsule that UEFI applies during the next boot, so the flash
-# happens while the machine is restarting, with no way to intervene. Choosing
-# that moment belongs to whoever can watch the machine. `--no-reboot-check` is
-# what enforces it: without that flag `fwupdmgr update` offers to reboot, and a
-# run that got a pty can act on the answer.
-#
-# A staged capsule is reversible, but NOT through fwupd — there is no cancel
-# subcommand, and `clear-results` clears a device's update history rather than
-# a pending capsule. Staging writes .cap files into \EFI\UpdateCapsule\ on the
-# ESP and sets OsIndications to 0x04, so
-# `sudo rm /boot/efi/EFI/UpdateCapsule/*.cap` leaves nothing to apply.
-#
-# Idempotence is fwupd's, not ours. `get-updates` exits 2 once every device is
-# current, and the staging task is gated on it exiting 0 instead. `update` is
-# no use for this: it exits 0 on a converged box, so gating on its own result
-# would report a change forever. Nothing here parses fwupd's output to decide
-# anything.
-#
-# There is deliberately no "refuse while training" guard. This role stages and
-# stops, so it disturbs nothing that is running, and the play's pre_tasks
-# already warn when a GPU process is active. An assert here would abort a
-# converge at role nine of ten for a job the role cannot affect — and it would
-# fail open anyway under `--tags firmware`, which skips the pre_tasks that
-# compute spark_training_active.
+# THIS ROLE STAGES FIRMWARE AND NEVER REBOOTS. `--no-reboot-check` is what
+# enforces it: without the flag `fwupdmgr update` offers to reboot and can act.
 
 - name: Stage firmware updates
   when: firmware_update_enabled | bool
@@ -39,10 +15,8 @@
       when: firmware_client.stat.exists
       block:
 
-        # Downloads the vendor catalogue; touches no firmware, so it is never a
-        # change. rc 2 means the cached metadata is still fresh and rc 101 that
-        # LVFS was unreachable; both leave the check below reading the cache,
-        # which is degraded but safe, so neither is worth failing over.
+        # rc 2 is fresh cache, rc 101 is LVFS unreachable. Both leave the check
+        # below reading the cache — degraded but safe, so nothing fails here.
         - name: Refresh the firmware metadata
           ansible.builtin.command:
             cmd: "{{ firmware_fwupdmgr }} refresh"
@@ -50,9 +24,7 @@
           failed_when: false
           check_mode: false
 
-        # The idempotency gate, and the only state this role reads. rc 0 means
-        # the vendor is offering something; rc 2 is a converged box, or one with
-        # no updatable devices at all. Anything else fails loudly.
+        # rc 0 means the vendor is offering something; rc 2 is a converged box.
         - name: Read whether the vendor is offering firmware
           ansible.builtin.command:
             cmd: "{{ firmware_fwupdmgr }} get-updates --no-unreported-check"
@@ -61,24 +33,7 @@
           failed_when: firmware_updates.rc not in [0, 2]
           check_mode: false
 
-        # Runs under --check too, because the read above does. This is the only
-        # warning an operator gets that a reboot now carries a firmware flash.
-        - name: Report the firmware a reboot will apply
-          ansible.builtin.debug:
-            msg: >-
-              {{ firmware_updates.stdout }}
-
-              STAGED, NOT APPLIED. UEFI writes this during the next boot, and
-              this role never reboots. Keep the machine powered throughout.
-              fwupd has no cancel command, but until that boot
-              `sudo rm /boot/efi/EFI/UpdateCapsule/*.cap` leaves nothing to
-              apply. Afterwards, move thermal_expected_ec_firmware to the new
-              version or the thermal role will correctly report drift.
-          when: firmware_updates.rc == 0
-
-        # Only reached when something is on offer, so it always changes
-        # something. A non-zero exit is a firmware install that went wrong and
-        # is left to fail the converge.
+        # Only reached when something is on offer, so it always changes something.
         - name: Stage the firmware capsules
           ansible.builtin.command:
             cmd: >-
@@ -113,4 +68,6 @@
       throughout; an interrupted write is not recoverable on this hardware.
       To cancel instead, delete them — fwupd has no command that will:
       rm {{ firmware_capsule_dir }}/*.cap
+      Once they are applied, move thermal_expected_ec_firmware to the new
+      version or the thermal role will correctly report drift.
   when: firmware_capsules.matched | int > 0
