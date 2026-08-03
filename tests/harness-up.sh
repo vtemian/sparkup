@@ -37,10 +37,11 @@ if ! docker info >/dev/null 2>&1; then
     exit 1
 fi
 
-# compose.yml.j2 pins container_name: prometheus and container_name: grafana,
-# which overrides the per-project naming the project name would otherwise give.
-# Two stacks on one machine therefore collide. Refuse rather than adopt or
-# clobber somebody else's containers.
+# compose.yml.j2 no longer pins container_name, so this harness and a real
+# monitoring stack get distinct per-project container names and can coexist.
+# A container literally named `prometheus` or `grafana` can still exist though,
+# from an older stack that did pin it, and it would hold the ports. Refuse
+# rather than clobber somebody else's containers.
 for name in prometheus grafana; do
     existing="$(docker ps -aq --filter "name=^${name}$")"
     if [ -n "${existing}" ]; then
@@ -48,9 +49,8 @@ for name in prometheus grafana; do
             "${existing}")"
         if [ "${owner}" != "${PROJECT}" ]; then
             echo "a container named '${name}' already exists and belongs to" >&2
-            echo "'${owner:-no compose project}', not ${PROJECT}. The monitoring role's" >&2
-            echo "compose template pins container_name, so the harness cannot run" >&2
-            echo "alongside it. Stop that container first." >&2
+            echo "'${owner:-no compose project}', not ${PROJECT}. It predates the" >&2
+            echo "removal of container_name from the compose template. Stop it first." >&2
             exit 1
         fi
     fi

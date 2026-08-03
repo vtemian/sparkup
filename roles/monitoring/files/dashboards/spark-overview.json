@@ -434,7 +434,7 @@
     {
       "id": 15,
       "type": "stat",
-      "title": "Shared artifact directory — /srv/bbm",
+      "title": "Root filesystem (holds the shared artifact directory)",
       "description": "Datasets, checkpoints and run metadata live in /srv/bbm, outside ~/bbm, because the laptop rsyncs ~/bbm with --delete and would erase anything written there. /srv/bbm is a directory on the root filesystem, not a mount of its own, so node_exporter emits no series for it — a query for mountpoint=\"/srv/bbm\" would match nothing, and these figures are the root filesystem's, which is the pool /srv/bbm actually draws from. Repoint this panel if it ever gets its own filesystem.",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 35 },

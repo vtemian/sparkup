@@ -13,9 +13,5 @@ shelly_image_ref: "{{ shelly_image_repository }}@{{ shelly_exporter_image_digest
 
 shelly_container_name: shelly-exporter
 
-# Fixed by the image (EXPOSE 8080) and not a tunable. The host side is
-# shelly_exporter_port, which is what Prometheus scrapes.
-shelly_container_port: 8080
-
 shelly_docker_bin: /usr/bin/docker
 shelly_unit_name: shelly_exporter.service

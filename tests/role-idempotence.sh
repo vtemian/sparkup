@@ -129,6 +129,15 @@ if echo "${recap}" | grep -qvE 'failed=0'; then
     echo "FAILED: a task failed on the second converge" >&2
     exit 1
 fi
+# A host ansible could not reach still prints changed=0 and failed=0, so those
+# two checks pass on a run that did nothing at all. Only set -e aborting earlier
+# saves this, and relying on that indirection is how a suite starts passing
+# vacuously.
+if echo "${recap}" | grep -qvE 'unreachable=0'; then
+    echo
+    echo "UNREACHABLE: a container did not answer, so nothing was proved" >&2
+    exit 1
+fi
 
 echo
 echo "IDEMPOTENT: base and users both reported changed=0 on the second run"

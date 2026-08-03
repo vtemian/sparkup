@@ -7,12 +7,17 @@
 # that mount makes the filesystem collector recurse every Docker overlay and
 # hang, which is how disk metrics were lost in the first place.
 
+# No container_name on either service. Fixing it would defeat the per-project
+# namespacing the name below exists to provide: two stacks could never coexist
+# on one machine, including a real one and the local test harness. Compose names
+# them <project>-<service>-1 instead. Service names stay `prometheus` and
+# `grafana`, which is what the Grafana datasource resolves over the compose
+# network, so nothing downstream changes.
 name: {{ monitoring_project_name }}
 
 services:
   prometheus:
     image: {{ prometheus_image }}
-    container_name: prometheus
     restart: unless-stopped
     # THE TRAP: Prometheus runs in a container but its targets are on the host.
     # Inside the container `localhost` is the container itself, so :9100 and
@@ -46,7 +51,6 @@ services:
 
   grafana:
     image: {{ grafana_image }}
-    container_name: grafana
     restart: unless-stopped
     depends_on:
       - prometheus

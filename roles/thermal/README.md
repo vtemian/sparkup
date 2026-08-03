@@ -51,7 +51,7 @@ declares. Override in `host_vars/<host>.yml`.
 | `thermal_fwupd_refresh_timer` | `fwupd-refresh.timer` | the timer to mask |
 | `thermal_systemd_unit_dir` | `/etc/systemd/system` | where units, masks and enablement symlinks live |
 | `thermal_ec_device_id` | `8c948e1d…09991` | fwupd device id of *this* box's EC; empty disables the read |
-| `thermal_expected_ec_firmware` | `0x03000302` | the version the assertion demands |
+| `thermal_expected_ec_firmware` | `""` | the version the assertion demands; **empty means no assertion at all** |
 
 **`PROMPT.md`'s variable registry disagrees with this table, and this table is right.** The plan
 put `gpu_clock_cap_enabled`, `gpu_clock_cap_min_mhz`, `gpu_clock_cap_max_mhz` and
@@ -246,6 +246,20 @@ sudo fwupdmgr block-firmware <checksum>
 The EC version is read with `fwupdmgr get-devices --json`, `changed_when: false`, and compared
 against `thermal_expected_ec_firmware`. Drift is a **failed assertion** and nothing else — the role
 will not put the old version back, and the failure message says so.
+
+**It is off until you set your own version.** `thermal_expected_ec_firmware` defaults to `""` and
+an empty value skips the assertion entirely, because asserting one box's firmware version on
+somebody else's machine is meaningless: a different Spark on newer firmware is not drifting, it is a
+different machine. Record yours in `host_vars` and the guard arms itself:
+
+```sh
+fwupdmgr get-devices --json | python3 -c "import json,sys; print([(d.get('DeviceId'),d.get('Version')) for d in json.load(sys.stdin)['Devices']])"
+```
+
+**Take the version from `--json`, not from the CLI table.** The assertion compares strings exactly,
+and if fwupd ever renders that field differently in the two outputs, a value copied from the table
+fails the converge with *"Something flashed this box"* on a box nobody touched. A false positive on
+the one assertion whose entire job is to be believed is worse than no assertion.
 
 Three behaviours, all verified against simulated `fwupdmgr` output rather than assumed:
 

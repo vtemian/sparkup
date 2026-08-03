@@ -254,6 +254,26 @@ def expected_metrics(collectors: list[str], gpu_fields: list[str]) -> tuple[set[
     return names, prefixes
 
 
+def walk_panels(node: object) -> list[dict]:
+    """Every panel anywhere in the dashboard, including inside collapsed rows.
+
+    A row exported while collapsed carries its children in row["panels"] instead
+    of at the top level. Iterating dashboard["panels"] alone would stop checking
+    them the moment somebody collapses a row in the UI and re-exports, which is
+    a silent loss of coverage rather than a failure.
+    """
+    found: list[dict] = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "panels" and isinstance(value, list):
+                found.extend(p for p in value if isinstance(p, dict))
+            found.extend(walk_panels(value))
+    elif isinstance(node, list):
+        for value in node:
+            found.extend(walk_panels(value))
+    return found
+
+
 def walk_targets(node: object, panel: str = "dashboard") -> list[tuple[str, str, str]]:
     """Collect (panel, refId, expr) from anywhere in the dashboard JSON.
 
@@ -462,7 +482,8 @@ def offline_checks(dashboard: dict, exprs: list[tuple[str, str, str]]) -> int:
         )
     print(f"  uid {expected_uid!r} matches monitoring_grafana_home_dashboard")
 
-    ids = [p.get("id") for p in dashboard.get("panels", [])]
+    all_panels = walk_panels(dashboard)
+    ids = [p.get("id") for p in all_panels]
     duplicates = {i for i in ids if ids.count(i) > 1}
     if duplicates:
         raise CheckFailed(f"panel ids are not unique: {sorted(duplicates)}")
@@ -476,7 +497,7 @@ def offline_checks(dashboard: dict, exprs: list[tuple[str, str, str]]) -> int:
         raise CheckFailed(f"no datasource uid found in {DATASOURCE_TEMPLATE}")
     wrong = {
         json.dumps(p.get("datasource"))
-        for p in dashboard.get("panels", [])
+        for p in all_panels
         if p.get("datasource") and p["datasource"].get("uid") != datasource_uid.group(1)
     }
     if wrong:

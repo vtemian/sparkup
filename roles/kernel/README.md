@@ -6,8 +6,13 @@ unsigned kernels permanently unable to reinstall themselves — without ever tur
 and without ever rebooting.
 
 It is the one role in this repo that can make the machine unreachable. `PROMPT.md` sequences it
-**last, alone, and only with an explicit go-ahead**, and it is deliberately not wired into
-`site.yml`'s role list by default.
+**last, alone, and only with an explicit go-ahead**. It is listed last in `site.yml` and gated on
+`kernel_enabled`, which ships `false`, so a plain `make apply` never reaches it.
+
+**`--tags kernel` alone does not run this role.** The tag selects it; the `when: kernel_enabled`
+discards it, and the run reports success having done nothing. Every command below therefore passes
+`-e kernel_enabled=true`. Leaving it out is not a harmless mistake: you would believe the visible
+GRUB menu had landed and reboot a box that still has a hidden menu at timeout 0.
 
 ## This role never reboots
 
@@ -82,15 +87,24 @@ makes one of the failure modes above survivable.
 
 ### Landing the timeout on its own
 
-Wiring the role into `site.yml` is handled separately; the commands below assume it is listed as
-`- role: kernel` with `tags: [kernel]`, so that A5 is only ever reached by asking for it.
+Both the tag and `kernel_enabled=true` are required; the tag alone silently skips the role.
 
 ```sh
 # 1. menu visible, boot target untouched
-ansible-playbook site.yml -K --tags kernel -e kernel_manage_grub_default=false
+ansible-playbook site.yml -K --tags kernel \
+  -e kernel_enabled=true -e kernel_manage_grub_default=false
 # 2. reboot by hand, confirm the menu appears and the box comes back
 # 3. now let the role retarget GRUB
-ansible-playbook site.yml -K --tags kernel
+ansible-playbook site.yml -K --tags kernel -e kernel_enabled=true
+```
+
+After step 1, confirm the role actually ran before you reboot. A run that skipped it reports
+`ok=0 changed=0` for every kernel task:
+
+```sh
+grub-editenv list                     # saved_entry unchanged at this point
+grep -E '^GRUB_TIMEOUT' /etc/default/grub
+grep -cE '^set timeout_style=menu' /boot/grub/grub.cfg    # must be 1, not 0
 ```
 
 With `kernel_manage_grub_default: false` the role still installs the signed kernel, still writes the
@@ -260,6 +274,7 @@ kernel's version. So:
 
 ```sh
 ansible-playbook site.yml -K --tags kernel \
+  -e kernel_enabled=true \
   -e kernel_remove_unsigned=true \
   -e '{"kernel_unsigned_packages": ["linux-image-unsigned-6.17.0-1026-nvidia"]}'
 ```

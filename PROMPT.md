@@ -52,6 +52,49 @@ interesting problem. When a choice is between clever and boring, pick boring.
 Idempotence is the acceptance test, not a nicety. A playbook that cannot run twice is a shell
 script with extra syntax.
 
+## Status (2026-08-03)
+
+**Everything below is written and none of it has met the definition of done above**, because that
+definition needs the hardware and the box has been off-network since the build started. Read every
+phase heading as "built, unverified" unless this section says otherwise.
+
+Nine roles exist and are wired into `site.yml` in this order:
+
+```
+base → docker → gpu → users → exporters → shelly → monitoring → thermal → kernel
+               (gpu_enabled)              (off)                          (off)
+```
+
+What *is* proven, and how:
+
+- `ansible-lint` (production profile) and `ansible-playbook site.yml --syntax-check` pass, on a
+  fresh clone with no `host_vars` at all
+- `make dashboard` parses all 21 panel queries with real `promtool` and traces all 17 referenced
+  metrics back to an enabled exporter, so a panel cannot query a metric nobody emits
+- `make roles-test` converges `base` and `users` twice in containers and gets `changed=0`
+- `make harness-up` runs Grafana and Prometheus locally against synthetic metrics, so the dashboard
+  is editable without a Spark
+- CI runs all of the above on every push
+
+What is **not** proven, and cannot be until the box is reachable:
+
+- the second-run `changed=0` for `docker`, `gpu`, `exporters`, `shelly`, `monitoring`, `thermal`
+- every claim in "Measured facts" that needed root: the `ufw` rules (open question 1) and GRUB's
+  resolved default entry (open question 2). The first `make check` answers both.
+- whether `community.docker` detects changes correctly against **Compose v5.0.2** — its change
+  detection scrapes compose's stderr against a 2.x vocabulary, so it could *under*-report and let a
+  false `changed=0` through
+- `make spark-parity`, the canary that provisioning has not perturbed Pillow/freetype
+
+**One repair is owed before idempotence can pass at all.** `curl` sits in dpkg state
+`install ok unpacked` and `ufw` in `triggers-pending` from an apt transaction that was interrupted
+at some point. `python-apt` therefore reports `curl` as not installed and the package task reports
+`changed` forever. Run `sudo dpkg --configure -a` on the box; do not work around it in a role.
+
+Phases C (training observability) and D2 (per-run energy correlation) are out of scope here and
+specified in `docs/training-observability.md`. D0 needs a plug that has not been bought. E1 needs a
+real training run. A5 needs someone standing next to the machine.
+
 ## Decisions already made (do not re-litigate)
 
 **Ansible, not shell or Nix.** The box is a mutable vendor image (DGX OS) that NVIDIA updates
