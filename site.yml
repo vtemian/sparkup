@@ -3,9 +3,8 @@
   hosts: spark
   become: true
   gather_facts: true
-  # Handlers run in definition order across every role, and a failing handler
-  # would otherwise skip the ones behind it — leaving new exporter units never
-  # reloaded and a new prometheus.yml never read.
+  # Handlers run in definition order across all roles; one failure skips the rest,
+  # leaving new exporter units unreloaded and a new prometheus.yml unread.
   force_handlers: true
 
   pre_tasks:
@@ -39,32 +38,22 @@
       when: gpu_enabled | bool
     - role: users
       tags: [users]
-    # Whole-system power telemetry as hwmon sensors, from a PPA. Off by
-    # default; needs a one-time key enrolment at the console before the module
-    # can load. Before exporters so the sensors exist when they start.
+    # Before exporters: the hwmon sensors must exist before the exporters start.
     - role: spbm
       tags: [spbm]
     - role: exporters
       tags: [exporters]
-    # Before monitoring: the exporter must exist before Prometheus is told to
-    # scrape it. A complete no-op until shelly_enabled is true.
+    # Before monitoring: the exporter must exist before Prometheus is told to scrape it.
     - role: shelly
       tags: [shelly]
     - role: monitoring
       tags: [monitoring]
-    # Everything in here is inert unless switched on: the clock cap ships
-    # disabled, fwupd is left alone, and the firmware assertion is skipped until
-    # you record your own EC version in host_vars.
     - role: thermal
       tags: [thermal]
-    # Stages firmware and stops. Off unless firmware_update_enabled is set, and
-    # it never reboots, so nothing reaches the hardware until a human restarts
-    # the machine. That reboot is the only unrecoverable operation in the repo.
     - role: firmware
       tags: [firmware]
-    # LAST, ALONE, and off by default. This is the one role that can leave a
-    # headless WiFi-only box unbootable. Run it with --tags kernel, deliberately,
-    # with someone able to walk to the machine.
+    # LAST and alone: the only role that can leave a headless WiFi-only box
+    # unbootable. Run it deliberately with someone able to reach the machine.
     - role: kernel
       tags: [kernel]
       when: kernel_enabled | bool

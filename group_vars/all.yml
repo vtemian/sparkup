@@ -1,71 +1,47 @@
 ---
-# Defaults that suit any DGX Spark. Nothing personal belongs in this file —
-# put users, shared paths and anything site-specific in host_vars/<host>.yml.
+# Project-wide registry. Per-box values go in host_vars/<host>.yml.
 
 spark_hostname: spark
 
-# Accounts the playbook manages. Empty by default: a fresh clone must not
-# invent users on someone else's box. See host_vars/spark.yml for the shape.
-#   - name: alice
-#     groups: [sudo, docker]
-#     github_keys: alice-on-github   # or false to manage keys yourself
+# Empty by default: a fresh clone must not invent users on someone else's box.
+# See host_vars/spark.yml.example for the shape.
 spark_users: []
 
-# Shared artifact tree, deliberately outside any directory that a laptop
-# rsyncs with --delete. setgid so members of the group share what they write.
+# Keep this outside any directory a laptop rsyncs with --delete. setgid so the
+# group shares what it writes.
 spark_shared_dir: /srv/spark
 spark_shared_group: spark
 spark_shared_subdirs: [data, checkpoints, runs]
 
-# ufw: this role only ever ADDS allow rules. It never resets the firewall and
-# never sets a default deny policy — locking yourself out of a box whose only
-# link is WiFi means walking to it.
+# The role only ADDS allow rules; it never resets ufw or sets a default policy.
 spark_firewall_manage: true
 spark_firewall_allow_ports: [22, 80]
 spark_firewall_ssh_port: 22
 
-# Turning ufw ON is the one firewall operation that can lock you out, because it
-# sets a default-deny incoming policy. Opt in deliberately, ideally while you
-# can still reach the machine physically. The role asserts SSH is allowed first
-# and refuses otherwise.
+# Enabling ufw sets default-deny incoming — the one operation that can lock you
+# out. The role asserts SSH is allowed first and refuses otherwise.
 spark_firewall_enable: false
 
-# Prometheus runs in a container and scrapes the host exporters through the
-# docker bridge gateway, so that traffic arrives on the host's INPUT chain. Once
-# a default-deny policy exists it is dropped unless these subnets are allowed to
-# reach the exporter ports, and the monitoring stack breaks as a direct result of
-# securing the box. 172.16.0.0/12 covers Docker's default address pool; the LAN
-# is not in it, so the ports stay closed to everyone else.
+# Prometheus scrapes host exporters from a container via the docker bridge, so
+# that traffic hits the host INPUT chain and default-deny drops it without these.
 spark_firewall_docker_subnets: ["172.16.0.0/12"]
 spark_firewall_container_ports: [9100, 9835]
 
-# Docker's apt repo is added ONLY when Docker is absent. DGX OS ships Docker
-# from repo.download.nvidia.com; adding upstream on top fights the vendor.
-docker_manage_upstream_repo: true
-
-# nvidia-container-toolkit is not in stock Ubuntu — it comes from NVIDIA's repo,
-# which DGX OS configures. Turn this off on a box without it rather than having
-# the play die partway through.
+# nvidia-container-toolkit comes from NVIDIA's repo, which DGX OS configures.
+# Turn off on a box without it rather than dying partway through the play.
 gpu_enabled: true
 
-# The Secure Boot kernel work. Off by default and sequenced last, because it is
-# the only role that can leave a headless box unbootable. It never reboots — it
-# tells you a reboot is required and stops — but the reboot that follows is
-# where the risk lives. Turn it on for one deliberate, supervised run.
+# Off by default: the only role that can leave a headless box unbootable.
 kernel_enabled: false
 
 monitoring_dir: /opt/monitoring
-# Pinned to what the box already runs. Never pin these BELOW the running
-# version: Grafana migrates its database schema forward only and does not
-# support downgrades, and a Prometheus downgrade can refuse to open a TSDB
-# written by a newer build. Check `docker exec grafana grafana server -v`
-# before bumping either one down.
+# Never pin BELOW the running version: Grafana migrates its schema forward only,
+# and Prometheus can refuse a TSDB written by a newer build.
 prometheus_image: prom/prometheus:v3.13.2
 grafana_image: grafana/grafana:13.1.1
 grafana_port: 80
-# Split rather than one "host:port" string: it is consumed both as a Docker
-# port-binding prefix and as a URL authority, and a value valid for one is not
-# always valid for the other.
+# Split, not "host:port": used both as a Docker port-binding prefix and as a URL
+# authority, and a value valid for one is not always valid for the other.
 prometheus_bind_address: "127.0.0.1"
 prometheus_port: 9090
 prometheus_retention: 30d
@@ -74,64 +50,33 @@ prometheus_scrape_interval: 15s
 # timestamps. Turning this off breaks that contract.
 prometheus_enable_remote_write_receiver: true
 
-# Verified to publish linux-arm64 assets. Several exporters are amd64-only;
-# check before bumping.
+# Check linux-arm64 assets before bumping; several exporters are amd64-only.
 node_exporter_version: "1.12.1"
 node_exporter_port: 9100
 nvidia_gpu_exporter_version: "1.13.1"
 nvidia_gpu_exporter_port: 9835
 
-# ---------------------------------------------------------------------------
-# Wall-socket power
-#
-# nvidia-smi sees the GPU rail only, and the gap to the wall is not a constant:
-# published readings sit 60-90 W above it under load and the multiplier grows
-# past 10x at idle. No supported interface exposes system power, so cost is
-# measured at the socket or not measured at all.
-#
-# What this repo owes the training-observability project is a `power` scrape
-# job — not a brand of meter. These two variables ARE that contract. Anything
-# that speaks the Prometheus exposition format can fill it: a Tasmota or Kasa
-# exporter, a Zigbee bridge, or an exporter already running on another host.
-# Empty means no power job is emitted at all.
-#
-# The bundled Shelly role below is one convenient way to fill it, and sets
-# these automatically when it is switched on. It is not the only way, and
-# nothing outside roles/shelly assumes it.
+# The `power` scrape job is the contract with the training-observability project:
+# any Prometheus-format exporter fills it. Empty means no power job is emitted.
 power_scrape_target: "{{ shelly_scrape_host ~ ':' ~ shelly_exporter_port if shelly_enabled | bool else '' }}"
 power_scrape_metrics_path: "{{ shelly_exporter_metrics_path if shelly_enabled | bool else '/metrics' }}"
 
-# ---------------------------------------------------------------------------
-# The bundled Shelly Plug M Gen3 exporter — entirely optional.
-#
-# Leave this false and the role is a complete no-op: nothing downloaded,
-# nothing installed, no scrape job. Turn it on only once the plug exists, has
-# joined the 2.4 GHz SSID and holds a DHCP reservation.
+# False makes roles/shelly a complete no-op and emits no power scrape job.
 shelly_enabled: false
 
-# TWO DIFFERENT HOSTS, and confusing them is the bug this pair exists to
-# prevent. shelly_host is the PLUG — the exporter's configuration, the device
-# it polls over JSON-RPC. It is never a scrape target: the plug speaks Shelly
-# RPC, not the Prometheus exposition format. Use the reserved IP rather than a
-# .local name; the exporter runs in a container with no mDNS resolver.
+# The PLUG, polled over JSON-RPC — never a scrape target. Use its reserved IP:
+# the exporter runs in a container with no mDNS resolver.
 shelly_host: ""
-# shelly_scrape_host is where PROMETHEUS looks. The exporter is a separate
-# process on the Spark, and Prometheus is containerised, so it reaches the host
-# through the host-gateway alias — exactly as the node and gpu jobs do.
+# Where PROMETHEUS looks: the Spark, through the host-gateway alias.
 shelly_scrape_host: host.docker.internal
 shelly_exporter_port: 9924
-
-# easimon/shelly-exporter: of the three maintained candidates it is the only
-# one that exports cumulative watt-hours as a Prometheus counter, which is the
-# whole point (roles/shelly/README.md has the evidence). Verified to carry
-# linux/arm64 in its manifest index — several exporters are amd64-only — and
-# pinned by that index digest, which is the image's checksum.
-shelly_exporter_version: "3.0.0"
-shelly_exporter_image_digest: "sha256:3032562bcff4415a39de32a169ac2c2e200ae27c9bed551cded3831d31437ac9"
-# Spring Boot's actuator serves the exposition format at /prometheus, not at
-# the /metrics every other exporter here uses.
+# Spring Boot's actuator serves the exposition format here, not at /metrics.
 shelly_exporter_metrics_path: /prometheus
 
-# A container restart is survivable mid-training; set this false to refuse
-# disruptive work while a GPU process is running.
+# easimon/shelly-exporter 3.0.0, the only maintained candidate exporting
+# cumulative watt-hours as a counter and carrying linux/arm64. The digest is the
+# pin: a tag is mutable, a digest names immutable content.
+shelly_exporter_image_digest: "sha256:3032562bcff4415a39de32a169ac2c2e200ae27c9bed551cded3831d31437ac9"
+
+# False refuses disruptive work while a GPU process is running.
 spark_allow_docker_restart: true

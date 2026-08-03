@@ -1,72 +1,39 @@
 ---
-# Copy this to host_vars/spark.yml and edit it. That file is the only one most
-# people need to touch, and it is deliberately NOT tracked in git: it names the
-# accounts that get sudo on your machine and whose GitHub keys can log in.
+# cp host_vars/spark.yml.example host_vars/spark.yml — untracked, because it
+# names the accounts that get sudo and whose GitHub keys can log in.
 #
-#     cp host_vars/spark.yml.example host_vars/spark.yml
-#
-# The inventory host is named `spark` regardless of your machine's real
-# hostname — ansible_host in inventory/hosts.yml carries the address — so this
-# filename stays correct even if your box is called something else.
+# The inventory host stays named `spark` whatever your machine is called, so
+# this filename is correct either way. Put ansible_user here too if the account
+# you SSH in as is not the placeholder in inventory/hosts.yml.
 
-# Accounts to manage. `groups` is what each user gets on top of their own; the
-# shared group is appended by the role, so do not repeat it here. `github_keys`
-# takes a GitHub username whose public keys are installed, or false to manage
-# keys yourself.
-#
-# Anyone listed here with `sudo` is root-equivalent on your box, and anyone
-# whose GitHub account you name can log in as them. Only list people you mean.
+# `groups` is on top of the user's own; the shared group is appended by the role.
+# `github_keys` is a GitHub username whose keys are installed, or false.
 spark_users:
   - name: you
     groups: [sudo, docker]
     github_keys: false
 
-# The shared artifact tree. Point it anywhere outside a directory that a laptop
-# rsyncs with --delete. Renaming it after data exists is a migration, not an edit.
+# Outside any directory a laptop rsyncs with --delete. Renaming this after data
+# exists is a migration, not an edit.
 spark_shared_dir: /srv/spark
 spark_shared_group: spark
 
-# Set if your box is somewhere with a clock you want managed. Empty leaves it
-# alone, which is the default.
+# Empty leaves the clock alone.
 # base_timezone: Europe/Bucharest
 
-# Your box's EC firmware version and fwupd device id, both from
-#   fwupdmgr get-devices --json
-# Take them from the JSON, not the CLI table: the assertion compares strings
-# exactly, and a value copied from the table can fail a converge on a box nobody
-# touched. Once set, the thermal role asserts the version every converge and
-# fails on drift, which is how you find out something flashed the box. It never
-# flashes anything itself. Leave empty until you know your own values;
-# asserting someone else's is meaningless.
+# From `fwupdmgr get-devices --json`, not the CLI table: the thermal role compares
+# strings exactly and asserts on every converge. Leave empty until you know yours.
+# thermal_ec_device_id: "<your box's EC device id>"
 # thermal_expected_ec_firmware: "0x03000302"
-# thermal_ec_device_id: 8c948e1db381648c8893897e4d09b7b153309991
 
-# Only for a box migrating off a hand-rolled cron + flock + bash loop that
-# scraped nvidia-smi into a textfile collector. The exporters role replaces it
-# with a supervised systemd unit; the old one must go in the same change or
-# both write GPU metrics.
-# exporters_retire_legacy_gpu_script: true
-# exporters_legacy_gpu_cron_user: someone
-# exporters_legacy_gpu_script: /home/someone/monitoring/gpu-metrics.sh
+# Stages firmware on converge; UEFI applies it at the next boot, which nothing
+# here performs for you.
+# firmware_update_enabled: true
 
-# Only for a box migrating off a containerised node-exporter that owns :9100.
-# The host unit cannot bind the port until the container is gone.
-# exporters_remove_legacy_container: true
-
-# --- wall-socket power, entirely optional --------------------------------
-# Measuring at the plug is the only honest way to cost a run: nvidia-smi sees
-# the GPU rail only, and no supported interface on this hardware exposes system
-# power. The gap is not a fixed multiplier, so it cannot be estimated away.
-#
-# If you have a Shelly Plug M Gen3, this is the whole configuration — the
-# bundled exporter is installed and the scrape job appears:
+# Wall-socket power, optional. Either the bundled Shelly role:
 # shelly_enabled: true
 # shelly_host: 192.168.1.141      # the plug's reserved IP, never a .local name
 #
-# If you have any OTHER meter, ignore the Shelly role entirely and just point
-# Prometheus at whatever already speaks the exposition format:
+# or any other meter that already speaks the exposition format:
 # power_scrape_target: tasmota.lan:9999
 # power_scrape_metrics_path: /metrics
-#
-# Set neither and there is simply no power job. Nothing else breaks: no
-# dashboard panel queries these metrics.
