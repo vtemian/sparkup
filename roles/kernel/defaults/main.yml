@@ -33,7 +33,6 @@ kernel_secure_boot_packages:
 # GRUB_TIMEOUT_STYLE=hidden, which counts the timeout down invisibly, so the
 # operator would still be guessing when to hold a key.
 kernel_grub_timeout: 5
-kernel_grub_timeout_style: menu
 
 # A machine that failed to boot is exactly when a menu earns its keep. DGX OS
 # sets this to 0, which hides the menu on the retry too.
