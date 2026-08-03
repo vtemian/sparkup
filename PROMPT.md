@@ -54,9 +54,22 @@ script with extra syntax.
 
 ## Status (2026-08-03)
 
-**Everything below is written and none of it has met the definition of done above**, because that
-definition needs the hardware and the box has been off-network since the build started. Read every
-phase heading as "built, unverified" unless this section says otherwise.
+**Converged on the real box, and the second run reported `changed=0`.** The definition of done is
+met, except wall power, which needs a plug that does not exist yet.
+
+```
+run 1: ok=81  changed=41  failed=0
+run 2: ok=72  changed=0   failed=0
+```
+
+Verified after converging, through Prometheus rather than by curling anything: `up == 1` for
+`node`, `gpu` and `prometheus`; `node_filesystem_avail_bytes` present for the first time (3.76 TB
+free on `/`); five `nvidia_smi_clocks_event_reasons_counters_*` series, which is the Phase E signal;
+both exporters active as systemd units; the stack serving from `/opt/monitoring` on the pinned
+images with the Grafana volume and its dashboard intact; the legacy `gpu-metrics.sh` crontab lines
+gone; `nvidia` registered as a Docker runtime and a CUDA 13 container seeing the GPU; `vlad` and
+`marius` both in `docker` and `bbm`; `/srv/bbm` setgid. `make spark-parity` still matches on all
+four digests across all seven fixtures, so provisioning did not perturb Pillow/freetype.
 
 Nine roles exist and are wired into `site.yml` in this order:
 
@@ -76,20 +89,28 @@ What *is* proven, and how:
   is editable without a Spark
 - CI runs all of the above on every push
 
-What is **not** proven, and cannot be until the box is reachable:
+What is still **not** proven:
 
-- the second-run `changed=0` for `docker`, `gpu`, `exporters`, `shelly`, `monitoring`, `thermal`
-- every claim in "Measured facts" that needed root: the `ufw` rules (open question 1) and GRUB's
-  resolved default entry (open question 2). The first `make check` answers both.
-- whether `community.docker` detects changes correctly against **Compose v5.0.2** — its change
-  detection scrapes compose's stderr against a 2.x vocabulary, so it could *under*-report and let a
-  false `changed=0` through
-- `make spark-parity`, the canary that provisioning has not perturbed Pillow/freetype
+- **A5 `kernel`.** Never run. Gated off behind `kernel_enabled`, and GRUB's resolved default entry
+  (open question 2) is therefore still unanswered, because nothing has read `/boot/grub/grub.cfg`.
+- **Wall power.** No plug exists, so `shelly` has never run and there is no `power` job.
+- **E1 thermal evidence.** The counters are flowing now, but no training run has been observed
+  through them, so the fan-curve question is still open.
+- **Compose v5 change detection.** `community.docker` scrapes compose stderr against a 2.x
+  vocabulary and the box runs v5.0.2, so a false `changed=0` remains possible in principle. Run 2
+  reported `changed=0` and the containers were genuinely converged, which is consistent but not
+  proof.
 
-**One repair is owed before idempotence can pass at all.** `curl` sits in dpkg state
-`install ok unpacked` and `ufw` in `triggers-pending` from an apt transaction that was interrupted
-at some point. `python-apt` therefore reports `curl` as not installed and the package task reports
-`changed` forever. Run `sudo dpkg --configure -a` on the box; do not work around it in a role.
+**Two claims in this file were wrong, and the converge disproved both:**
+
+- **`ufw` is not enabled. It is `Status: inactive`.** This file has said since the audit that it was
+  "enabled but its rules are unknown". It was never running. The `base` role's allow rules for 22
+  and 80 are therefore in place but dormant, and **nothing is filtering the LAN today** — including
+  `node_exporter` on 9100 and `nvidia_gpu_exporter` on 9835, both of which bind all interfaces.
+  Open question 1 is answered, and it turned into a decision rather than a lookup.
+- **The dpkg damage is gone.** `curl` and `ufw` both read `ii`, and no package is in a non-normal
+  state. The interrupted apt transaction was resolved at some point between the audit and the
+  converge. No repair was needed and none was performed.
 
 Phases C (training observability) and D2 (per-run energy correlation) are out of scope here and
 specified in `docs/training-observability.md`. D0 needs a plug that has not been bought. E1 needs a

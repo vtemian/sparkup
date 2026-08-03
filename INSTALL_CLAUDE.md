@@ -108,7 +108,18 @@ Set neither and there is simply no power job; no dashboard panel queries those m
 
 1. **Interactive** (default). `make apply` prompts once via `-K`.
 2. **Passwordless sudo.** `make apply BECOME=`.
-3. **Unattended.** Encrypt it, and keep the vault password file outside the repository:
+3. **A password file**, for unattended runs. One file, outside the repo, readable only by you:
+
+```bash
+install -m 600 /dev/null ~/.sparkup-become
+read -rs "P?sudo password: " && printf '%s' "$P" > ~/.sparkup-become && unset P   # zsh
+# bash: read -rs -p "sudo password: " P && printf '%s' "$P" > ~/.sparkup-become && unset P
+
+make apply BECOME="--become-password-file ~/.sparkup-become"
+```
+
+4. **Vault**, if you would rather not keep a plaintext password on disk. Encrypt it, and keep the
+   vault password file outside the repository:
 
 ```bash
 ansible-vault encrypt_string 'your-sudo-password' --name 'ansible_become_password' \
@@ -190,6 +201,13 @@ Two of those combinations matter:
   `roles/kernel/README.md` before running it, and read the preflight checklist there first.
 
 ## Troubleshooting
+
+**`make check` fails with "Group &lt;x&gt; does not exist" on a brand new box.** Expected, and harmless.
+Check mode does not actually create the shared group, so the task that adds users to it has nothing
+to join. It is an artifact of the dry run, not a problem with the playbook: run `make apply` and
+every subsequent `make check` is clean. If you want a dry run to get further than that on a fresh
+box, create the group by hand first, or run `make apply EXTRA="--tags base,docker,gpu"` and check the
+rest afterwards.
 
 **`curl 127.0.0.1:9100` hangs even though the exporter is fine.** Known on this hardware. Verify
 exporters through Prometheus (`up`, `scrape_samples_scraped`), never by curling them locally.
