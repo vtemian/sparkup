@@ -36,10 +36,27 @@
     mode: "0644"
   notify: Restart avahi-daemon
 
-- name: Set the system timezone
-  community.general.timezone:
-    name: "{{ base_timezone }}"
+# Not community.general.timezone. On this hardware the EFI RTC registers but
+# cannot be read — `rtc-efi: hctosys: unable to read the hardware clock` at boot
+# — so bare `timedatectl` exits 1. The module reads that as "no systemd", falls
+# back to a path that needs `hwclock`, and arm64 Ubuntu's util-linux ships that
+# binary's documentation and not the binary. Writing the timezone works; only
+# reading the clock does not, so drive the write directly.
+- name: Read the configured timezone
+  ansible.builtin.command:
+    cmd: readlink -f /etc/localtime
+  register: base_localtime
+  changed_when: false
+  check_mode: false
   when: base_timezone | default('', true) | trim | length > 0
+
+- name: Set the system timezone
+  ansible.builtin.command:
+    cmd: timedatectl set-timezone {{ base_timezone | quote }}
+  changed_when: true
+  when:
+    - base_timezone | default('', true) | trim | length > 0
+    - base_localtime.stdout | default('') != '/usr/share/zoneinfo/' ~ base_timezone
 
 - name: Install ufw
   ansible.builtin.apt:
