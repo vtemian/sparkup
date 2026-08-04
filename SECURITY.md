@@ -19,9 +19,9 @@ model does not apply. What does matter:
   and Prometheus are unauthenticated by design, and Docker's port publishing bypassing `ufw` is the
   specific trap to watch for.
 - **Anything that weakens Secure Boot, or that could leave a headless box unbootable.**
-- **Anything that could brick hardware.** Only `firmware` stages it, and weakening any of its three
-  safety properties is a finding: off unless a box opts in, never reboots, and a staged capsule can
-  be deleted from the ESP before it is ever applied.
+- **Anything that could brick hardware.** Only `firmware` stages it, and weakening either of its
+  safety properties is a finding: it never reboots, and a staged capsule can be deleted from the ESP
+  before it is ever applied.
 - **Supply chain.** Downloads are checksum-verified and container images are pinned to an exact
   version or digest; replacing either with a floating tag is a finding.
 
