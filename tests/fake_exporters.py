@@ -27,6 +27,7 @@ import argparse
 import math
 import threading
 import time
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 GPU_UUID = "GPU-00000000-0000-0000-0000-000000000000"
@@ -318,7 +319,12 @@ def gpu_metrics(box: Box) -> str:
 def handler_for(body):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802 - the base class names it
-            if self.path not in ("/metrics", "/"):
+            # Ignore the query string. node_exporter takes `collect[]` and
+            # `exclude[]` there, which the monitoring role uses to scrape the
+            # textfile collector on its own slower interval, and comparing the
+            # full path would 404 every such scrape.
+            path = urllib.parse.urlparse(self.path).path
+            if path not in ("/metrics", "/"):
                 self.send_error(404)
                 return
             payload = body().encode("utf-8")

@@ -44,6 +44,11 @@ prometheus_port: 9090
 # `prometheus_tsdb_head_series` against free space before growing the exporter set.
 prometheus_retention: 1y
 prometheus_scrape_interval: 15s
+# The textfile collector holds durable records rather than live readings, so it
+# is scraped on its own slower interval. Must stay well under Prometheus's
+# --query.lookback-delta (5m), or those series intermittently disappear from
+# instant queries.
+prometheus_textfile_scrape_interval: 60s
 
 # The one switch in this repo, and the reason it exists: `spbm` installs a
 # third-party DKMS module into kernel space, and Secure Boot will not load it

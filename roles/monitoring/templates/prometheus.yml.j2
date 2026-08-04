@@ -18,6 +18,24 @@ scrape_configs:
   - job_name: node
     static_configs:
       - targets: ["host.docker.internal:{{ node_exporter_port }}"]
+    # The textfile collector carries durable records that other projects drop
+    # there: immutable rows that do not need re-recording every scrape. It is
+    # scraped separately below, slower. `collect[]` and `exclude[]` are
+    # mutually exclusive within one job, which is why this is two jobs against
+    # one target rather than one job with both.
+    params:
+      "exclude[]": ["textfile"]
+
+  # Deliberately slower than the rest of the node job. Do NOT raise this past
+  # --query.lookback-delta (5m by default): beyond it these series
+  # intermittently vanish from instant queries, which is worse than the storage
+  # it saves. 60s keeps a 5x margin.
+  - job_name: node_textfile
+    scrape_interval: {{ prometheus_textfile_scrape_interval }}
+    static_configs:
+      - targets: ["host.docker.internal:{{ node_exporter_port }}"]
+    params:
+      "collect[]": ["textfile"]
 
   - job_name: gpu
     static_configs:
