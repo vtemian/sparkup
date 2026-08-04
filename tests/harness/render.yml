@@ -21,7 +21,10 @@
 
   tasks:
     # The same tree the monitoring role creates, including the two empty
-    # provisioning directories Grafana logs an error for when they are absent.
+    # provisioning directories Grafana logs an error for when they are absent,
+    # and the shared dashboard drop the compose file bind-mounts. Docker
+    # refuses to start the stack if a bind source is missing, so this one is
+    # not optional even though nothing writes to it here.
     - name: Create the rendered stack directories
       ansible.builtin.file:
         path: "{{ item }}"
@@ -34,6 +37,7 @@
         - "{{ monitoring_dir }}/grafana/provisioning/dashboards"
         - "{{ monitoring_dir }}/grafana/provisioning/alerting"
         - "{{ monitoring_dir }}/grafana/provisioning/plugins"
+        - "{{ spark_shared_dir }}/dashboards"
 
     - name: Render the compose file
       ansible.builtin.template:

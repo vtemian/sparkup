@@ -13,7 +13,9 @@ spark_users: []
 # group shares what it writes.
 spark_shared_dir: /srv/spark
 spark_shared_group: spark
-spark_shared_subdirs: [data, checkpoints, runs]
+# `dashboards` is bind-mounted into Grafana by the monitoring role. Dropping it
+# leaves that mount pointing at a directory nothing creates.
+spark_shared_subdirs: [data, checkpoints, runs, dashboards]
 
 # ufw ends up default-deny, so this is the complete list of what stays
 # reachable. The role asserts the port you are connected on is in it.

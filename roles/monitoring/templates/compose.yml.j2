@@ -58,7 +58,16 @@ services:
       - GF_USERS_HOME_PAGE={{ monitoring_grafana_home_dashboard }}
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:{{ monitoring_dashboards_container_dir }}:ro
+      # Two sibling mounts under a directory Docker creates in the container's
+      # own layer. Neither may be the other's parent: mounting one inside a
+      # read-only bind mount fails at container init, because runc has to
+      # create the mountpoint and the parent refuses the write.
+      - ./grafana/dashboards:{{ monitoring_dashboards_container_dir }}/spark:ro
+      # Other projects hand Grafana a dashboard by writing here. The directory
+      # is setgid to the shared group, so a job installs its own board without
+      # root. The `spark` provider walks its path recursively and picks these
+      # up, so this needs no second provider and cannot collide with one.
+      - "{{ spark_shared_dir }}/dashboards:{{ monitoring_dashboards_container_dir }}/sparks:ro"
       # Named, and named the same as before the move: dashboards built by hand
       # in the UI live here and nowhere else. Losing this volume loses them.
       - grafana-data:/var/lib/grafana
