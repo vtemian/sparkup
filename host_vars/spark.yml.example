@@ -6,6 +6,12 @@
 # this filename is correct either way. Put ansible_user here too if the account
 # you SSH in as is not the placeholder in inventory/hosts.yml.
 
+# What the machine is renamed to, and the name it publishes over mDNS — so
+# http://<this>.local reaches Grafana. Defaults to `spark`; change it here if you
+# want something else, and put the same value in inventory/hosts.yml's
+# ansible_host once the first converge has made it resolve.
+# spark_hostname: spark
+
 # `groups` is on top of the user's own; the shared group is appended by the role.
 # `github_keys` is a GitHub username whose keys are installed, or false.
 spark_users:

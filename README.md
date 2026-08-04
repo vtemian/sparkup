@@ -30,7 +30,8 @@ with Secure Boot **enabled** — the playbook refuses to start otherwise, before
 
 Read this list. On a converged box it will:
 
-- **Rename the host to `spark`** and publish it over mDNS as `spark.local`.
+- **Rename the host to `spark`** and publish it over mDNS as `spark.local`. Set `spark_hostname`
+  in your `host_vars` for a different name.
 - **Enable `ufw` with a default-deny incoming policy.** Only 22 and 80 stay open. Anything else you
   serve stops answering. It asserts the port your SSH session arrived on is allowed first, so it
   cannot lock you out, but it will not ask about your other services.

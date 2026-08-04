@@ -1,6 +1,8 @@
 ---
 # Project-wide registry. Per-box values go in host_vars/<host>.yml.
 
+# The machine is renamed to this and publishes it over mDNS. Override per box
+# in host_vars if you want something else.
 spark_hostname: spark
 
 # Empty by default: a fresh clone must not invent users on someone else's box.
