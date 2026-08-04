@@ -39,6 +39,14 @@ prometheus_port: 9090
 prometheus_retention: 30d
 prometheus_scrape_interval: 15s
 
+# The one switch in this repo, and the reason it exists: `spbm` installs a
+# third-party DKMS module into kernel space, and Secure Boot will not load it
+# until somebody enrols its key at a blue MokManager screen, with a keyboard and
+# a monitor attached to the box. No converge can finish that step. Off means no
+# whole-system power or energy and an empty Power row on the dashboard; nothing
+# else changes. roles/spbm/README.md is the procedure for turning it on.
+spbm_enabled: false
+
 # Check linux-arm64 assets before bumping; several exporters are amd64-only.
 node_exporter_version: "1.12.1"
 node_exporter_port: 9100

@@ -8,8 +8,9 @@ are in [CLAUDE.md](CLAUDE.md), which loads automatically; read it first and do n
 training runs. The wrapper that emits per-run metrics and correlates them against these series is a
 separate project, specified in [`docs/training-observability.md`](docs/training-observability.md).
 What sparkup guarantees it: Prometheus with the remote-write receiver enabled, a provisioned Grafana
-datasource, and live `node` and `gpu` scrape jobs — power arrives on `node`, from the firmware. Do
-not break those.
+datasource, and live `node` and `gpu` scrape jobs. Do not break those. Power is **not** guaranteed —
+it arrives on `node` from the firmware only where `spbm_enabled` is true, so the wrapper's energy and
+cost figures have to degrade rather than fail when the series is absent.
 
 ---
 
@@ -50,7 +51,7 @@ Three tiers. Putting a value in the wrong one is the most common mistake.
 
 | Tier | Holds | Example |
 |---|---|---|
-| `group_vars/all.yml` | defaults suiting **any** Spark, and anything several roles share | `prometheus_image`, `spark_firewall_allow_ports` |
+| `group_vars/all.yml` | defaults suiting **any** Spark, and anything several roles share | `prometheus_image`, `spark_firewall_allow_ports`, `spbm_enabled` |
 | `host_vars/<host>.yml` | one box's identity. **Untracked** | `spark_users`, `spark_hostname`, `base_timezone` |
 | `roles/<r>/defaults/main.yml` | tunables only that role reads, prefixed with the role name | `kernel_grub_timeout`, `spbm_mok_cert` |
 
@@ -58,13 +59,20 @@ Three tiers. Putting a value in the wrong one is the most common mistake.
 Registry variables are read unprefixed and declared only in `group_vars`; do not redeclare them in a
 role's defaults, or the same tunable exists in two files.
 
-### There are no gates
+### There is exactly one gate
 
-Every role runs on every converge. There is no variable anywhere in this repo whose job is to
-decide whether a feature happens — see [CLAUDE.md](CLAUDE.md) for why, and do not add one.
+`spbm_enabled`, declared in `group_vars/all.yml`, defaulting to **false**, read in exactly one place:
+the `when:` on the `spbm` role in `site.yml`. Every other role runs on every converge, and no other
+variable in this repo decides whether a feature happens — see [CLAUDE.md](CLAUDE.md) for the test
+`spbm_enabled` passes and a second flag would not, and do not add one.
 
-The two things that could once be switched off are now guarded by asserts instead, which is the
-shape to copy if you are ever tempted to add a toggle for safety:
+Grep for it before assuming it is read anywhere else. It is not passed into a template, not consulted
+by `exporters`, and not consulted by `monitoring`: the dashboard ships the Power row either way, and
+those panels explain their own emptiness rather than being generated conditionally. Templating the
+dashboard is not an option anyway — see the `copy`, never `template` trap below.
+
+The two things that could once *also* be switched off are guarded by asserts instead, which is the
+shape to copy if you are tempted to add a toggle for safety:
 
 - **ufw** ends default-deny, and `base` refuses to enable it unless the port **this connection
   arrived on** is in `spark_firewall_allow_ports`. It reads that port off
@@ -85,10 +93,26 @@ that measurement.
 
 ### Where power comes from
 
-The firmware, through `spbm`, and nowhere else. The driver registers 14 power channels (`sys_total`,
-`dc_input`, `cpu_gpu`, `soc_pkg`, `gpu`, the PL1/PL2 limits) and **4 energy accumulators** (`pkg`,
-`cpu_e`, `cpu_p`, `gpu`) as hwmon sensors, which node_exporter's already-enabled `hwmon` collector
-picks up for free. No extra exporter, no extra scrape job, no hardware.
+The firmware, through `spbm`, and nowhere else — **and only if somebody asked for it.** On a default
+box there is no power and no energy at all, and the three panels on the dashboard's Power row read
+"No data". That is the expected state, not a fault to chase.
+
+Enabling it is two steps and the second one is not yours:
+
+```yaml
+# host_vars/spark.yml
+spbm_enabled: true
+```
+
+`make apply` builds and signs the module and queues its key; then a **human at the machine** reboots
+with a keyboard and monitor attached and answers MokManager. Secure Boot will not load the module
+until that key is trusted, there is no SSH at that screen, and no converge can complete it. Never
+flip this variable for a box you cannot reach, and never flip it on someone's behalf.
+
+The driver registers 14 power channels (`sys_total`, `dc_input`, `cpu_gpu`, `soc_pkg`, `gpu`, the
+PL1/PL2 limits) and **4 energy accumulators** (`pkg`, `cpu_e`, `cpu_p`, `gpu`) as hwmon sensors,
+which node_exporter's already-enabled `hwmon` collector picks up for free. No extra exporter, no
+extra scrape job, no hardware.
 
 `node_hwmon_power_watt` is a gauge; `node_hwmon_energy_input_joule_total` is a **counter**,
 which is the right shape for energy over a window. Both are labelled `chip` and `sensor`, where
@@ -133,6 +157,8 @@ base → docker → gpu → users → spbm → exporters → monitoring → firm
   a containerised node-exporter. Running `--tags monitoring` alone on an unmigrated box removes host
   metrics and gives nothing back.
 - `spbm` precedes `exporters` so its hwmon channels exist before node_exporter starts reading them.
+  It is skipped entirely unless `spbm_enabled` is true, which is the default — `skipping: [spark]`
+  under the `spbm` tasks is correct output, not a failure.
 
 ---
 
@@ -147,13 +173,16 @@ curl -s --get http://127.0.0.1:9090/api/v1/query --data-urlencode 'query=time() 
 ```
 
 `up == 1` says nothing about power: node_exporter answers whether or not the `spbm` module loaded.
-Check that the channels exist — an empty result means the module is built but not loaded, which
-means the signing key is not enrolled:
+Only run this check on a box where `spbm_enabled` is true — anywhere else the empty result is the
+design, and reporting it as a fault wastes somebody's afternoon:
 
 ```bash
 curl -s --get http://127.0.0.1:9090/api/v1/query \
   --data-urlencode 'query=node_hwmon_power_watt'
 ```
+
+Where it *is* enabled, an empty result means the module is built but not loaded, which means the
+signing key is not enrolled and somebody still has to walk to the box.
 
 Other checks worth running after a converge: `docker info --format '{{json .Runtimes}}'` lists
 `nvidia`; `docker run --rm --gpus all nvidia/cuda:13.0.3-base-ubuntu24.04 nvidia-smi`;
@@ -265,6 +294,17 @@ stubbed. A fake that reported success would be worse than no test.
 - **`spbm_headers_package` is what makes the module survive a kernel upgrade.** DKMS can only
   rebuild against headers that arrive with the new kernel. Remove that meta package and there is no
   error — just a missing module, and a metric that stopped, after the next kernel.
+- **A skipped role leaves its registers undefined, and `default('')` then lies.** `site.yml`'s
+  reboot summary asks whether the MOK key is enrolled by reading `spbm_mok_test.stdout`. With `spbm`
+  skipped that variable does not exist, `default('')` yields no match, and the box is told to expect
+  a MokManager screen that will never appear. Anything reading a `spbm_*` register must test
+  `spbm_enabled` first.
+- **Neither dashboard check can tell you the Power row is dead.** `make dashboard` allows
+  `node_hwmon_` by prefix because the `hwmon` collector is enabled regardless — NVMe and SoC
+  temperatures come through it — and `make dashboard-live` passes because
+  `tests/fake_exporters.py` synthesises the spbm power, energy and label series. Both are correct:
+  they check the panels against a box where `spbm_enabled` is true. Do not "fix" the harness by
+  removing those synthetic channels; that would only stop the row being checked at all.
 
 ---
 

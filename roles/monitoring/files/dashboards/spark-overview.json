@@ -167,7 +167,7 @@
       "id": 4,
       "type": "timeseries",
       "title": "GPU power draw",
-      "description": "The GPU rail only \u2014 roughly half of what the box actually pulls. It cannot see CPU, memory, NVMe, fans or PSU conversion loss, so never cost a run from this number. Whole-system power is the Power row below.",
+      "description": "The GPU rail only \u2014 roughly half of what the box actually pulls. It cannot see CPU, memory, NVMe, fans or PSU conversion loss, so never cost a run from this number. Whole-system power is the Power row below, which is empty unless spbm is switched on.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -389,7 +389,7 @@
       "id": 20,
       "type": "timeseries",
       "title": "System power",
-      "description": "Whole-system power from the firmware's SPBM region, via the spbm driver. `sys_total` is the box; `dc_input` is what arrives from the PSU. Both are DC-side and exclude PSU conversion loss, so a wall meter reads a little higher. Empty means the spbm module is built but not loaded, which means its Secure Boot key has not been enrolled yet.",
+      "description": "Whole-system power from the firmware's SPBM region, via the spbm driver. `sys_total` is the box; `dc_input` is what arrives from the PSU. Both are DC-side and exclude PSU conversion loss, so a wall meter reads a little higher. This whole row is empty until you ask for it: set spbm_enabled: true, converge, then enrol the module's Secure Boot key at the console. Empty with spbm already on means the module is built but not loaded, which means the key is still not enrolled. See roles/spbm/README.md.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -443,7 +443,7 @@
       "id": 21,
       "type": "stat",
       "title": "Drawing now",
-      "description": "`sys_total` at the last scrape. The GPU rail alone is roughly half of this, which is why costing a run from nvidia-smi understates it.",
+      "description": "`sys_total` at the last scrape. The GPU rail alone is roughly half of this, which is why costing a run from nvidia-smi understates it. Needs spbm; see the System power panel.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -499,7 +499,7 @@
       "id": 22,
       "type": "stat",
       "title": "Energy over this range",
-      "description": "The sys_total gauge integrated over the selected range. There is no whole-system energy counter in the firmware \u2014 only pkg, cpu_e, cpu_p and gpu have one \u2014 so this is an integral whose error scales with the scrape interval. At 15s over a run measured in hours that is well under a percent.",
+      "description": "The sys_total gauge integrated over the selected range. There is no whole-system energy counter in the firmware \u2014 only pkg, cpu_e, cpu_p and gpu have one \u2014 so this is an integral whose error scales with the scrape interval. At 15s over a run measured in hours that is well under a percent. Needs spbm; see the System power panel.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -787,7 +787,7 @@
       "id": 11,
       "type": "timeseries",
       "title": "Temperatures \u2014 every hwmon sensor",
-      "description": "Every temperature the kernel exposes under hwmon: the SoC thermal zone, the NVMe sensors, and the eight zones the spbm driver adds. spbm's power and energy channels are on the Power row, not here.",
+      "description": "Every temperature the kernel exposes under hwmon: the SoC thermal zone, the NVMe sensors, and — with spbm switched on — the eight zones its driver adds. spbm's power and energy channels are on the Power row, not here.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

@@ -90,7 +90,10 @@
     - role: users
       tags: [users]
     # Before exporters: the hwmon sensors must exist before the exporters start.
+    # Off unless asked for: it is kernel-space code from outside Ubuntu, and it
+    # cannot be finished without a human at the console. See group_vars/all.yml.
     - role: spbm
+      when: spbm_enabled | bool
       tags: [spbm]
     - role: exporters
       tags: [exporters]
@@ -117,7 +120,7 @@
                 ~ ' attached; there is no network and no SSH at that point. Miss it'
                 ~ ' and it cancels harmlessly. Until the key is enrolled there are'
                 ~ ' no power or energy metrics.']
-               if not spark_mok_enrolled else [])
+               if spark_mok_pending else [])
             + (['  * WRITE FIRMWARE. ' ~ spark_capsules_pending ~ ' capsule(s) are'
                 ~ ' staged. Keep the machine powered throughout — an interrupted'
                 ~ ' write is not recoverable on this hardware. To cancel instead:'
@@ -132,12 +135,16 @@
                if spark_reboot_is_quiet else [])
           }}
       vars:
-        spark_mok_enrolled: >-
-          {{ 'is already enrolled' in (spbm_mok_test.stdout | default('', true)) }}
+        # `spbm_mok_test` is undefined when the role was skipped, which reads the
+        # same as "not enrolled" — so the flag, not the default, decides here.
+        spark_mok_pending: >-
+          {{ (spbm_enabled | bool)
+             and 'is already enrolled' not in (spbm_mok_test.stdout | default('', true)) }}
         spark_capsules_pending: "{{ firmware_capsules.matched | default(0) }}"
         spark_reboot_changes_kernel: >-
           {{ ansible_kernel != (kernel_intended_version | default(ansible_kernel, true)) }}
         spark_reboot_is_quiet: >-
-          {{ ('is already enrolled' in (spbm_mok_test.stdout | default('', true)))
+          {{ (not (spbm_enabled | bool)
+              or 'is already enrolled' in (spbm_mok_test.stdout | default('', true)))
              and (firmware_capsules.matched | default(0) | int == 0)
              and ansible_kernel == (kernel_intended_version | default(ansible_kernel, true)) }}

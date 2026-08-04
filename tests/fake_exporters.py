@@ -51,7 +51,10 @@ HWMON_SENSORS = (
 )
 
 # The spbm driver's power channels, as node_exporter's hwmon collector renders
-# them. `chip` is derived from the sysfs device path, not the driver name, and
+# them. Emitted unconditionally even though `spbm_enabled` defaults to false:
+# the harness exists to prove the dashboard's Power row works on a box that
+# opted in, and dropping these would stop that row being checked at all.
+# `chip` is derived from the sysfs device path, not the driver name, and
 # this is the value a real Spark produces — unguessable, which is why every
 # dashboard query joins node_hwmon_sensor_label rather than naming a chip.
 # Watts are (idle, span) and roughly match the real box: a GPU rail near 87 W

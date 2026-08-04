@@ -4,20 +4,58 @@ Installs the `spark_hwmon` DKMS driver from a PPA and queues its signing key for
 whole-system power and energy as hwmon sensors. It does not reboot; the key is enrolled by hand at
 the console.
 
+**Off by default.** This is the only role a plain `make apply` does not run, and the only one that
+asks for two things the rest of the playbook never does: third-party code running in kernel space,
+and a person standing at the machine with a keyboard and a monitor. Skipping it costs you the Power
+row on the dashboard and nothing else.
+
+## Turning it on
+
+```yaml
+# host_vars/spark.yml
+spbm_enabled: true
+```
+
+```bash
+make apply     # builds and signs the module, queues the key, stays green
+```
+
+Then reboot **with a keyboard and a monitor attached**. Before the OS loads, shim shows a blue
+MokManager screen: Enroll MOK, Continue, Yes, then type the password (`sparkup` unless you changed
+it). There is no network and no SSH at that point, so this step cannot be done remotely and cannot
+be done by the playbook. The screen waits `spbm_mok_timeout` seconds — miss it and it cancels
+harmlessly, and the next converge queues the key again.
+
+Check it afterwards through Prometheus, never by curling the exporter:
+
+```sh
+curl -s --get http://127.0.0.1:9090/api/v1/query \
+  --data-urlencode 'query=node_hwmon_power_watt'
+```
+
+An empty result means the module is built but not loaded, which means the key is still not trusted.
+Every converge says so until it is.
+
+## Turning it off again
+
+Setting `spbm_enabled: false` stops the role running; it removes nothing. The module stays
+installed, the PPA stays configured and the metrics keep arriving. Undoing it for real means
+removing the `spbm-dkms` package and the `spark-spbm` apt source by hand.
+
+## Variables
+
 | Variable | Default | |
 |---|---|---|
+| `spbm_enabled` | `false` | lives in `group_vars/all.yml`, not here: `site.yml` reads it to decide whether the role runs at all |
 | `spbm_ppa` | `ppa:vladtemian/spark-spbm` | carries the DKMS package |
 | `spbm_package` | `spbm-dkms` | |
 | `spbm_headers_package` | `linux-headers-nvidia-hwe-24.04` | kept installed so DKMS can rebuild for a new kernel |
 | `spbm_mok_cert` | `/var/lib/shim-signed/mok/MOK.der` | the key DKMS signs with |
+| `spbm_mok_timeout` | `120` | seconds MokManager waits for a keypress. shim's own default of 10 is too short for a display to wake |
 | `spbm_mok_password` | `sparkup` | typed once at MokManager. Not a secret; do not put one here |
 
-The converge queues the key and stays green. To finish it, reboot: before the OS loads, shim shows a
-blue MokManager screen — Enroll MOK, Continue, Yes, then type the password. It needs a keyboard
-attached; there is no network and no SSH at that point. Miss the prompt and it cancels harmlessly,
-and the next converge queues it again.
+## What you get
 
-Until the key is trusted the module is built but cannot load, and every converge says so. Afterwards
 node_exporter's `hwmon` collector picks the channels up with no further configuration:
 
 ```sh

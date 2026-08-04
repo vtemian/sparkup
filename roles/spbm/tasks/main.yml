@@ -16,7 +16,7 @@
       github.com/antheas/spark_hwmon, packaged by
       github.com/vtemian/spark-spbm-builder. It runs in kernel space and is not
       part of Ubuntu or DGX OS. It is what provides whole-system power and
-      energy; drop the spbm role from site.yml if you would rather not have it.
+      energy; set spbm_enabled back to false if you would rather not have it.
 
 - name: Add the PPA carrying the DKMS package
   ansible.builtin.apt_repository:

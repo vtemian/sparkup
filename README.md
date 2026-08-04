@@ -11,8 +11,9 @@
 ---
 
 Takes a box from a fresh DGX OS install to a working training machine: user accounts, Docker with
-the NVIDIA runtime, supervised GPU and system telemetry, whole-system power and energy read from
-the firmware, and Grafana on `http://spark.local` with no login to look at it.
+the NVIDIA runtime, supervised GPU and system telemetry, and Grafana on `http://spark.local` with no
+login to look at it. Whole-system power and energy are available too, from the firmware, if you opt
+in to a kernel module.
 
 ## What it looks like
 
@@ -39,14 +40,30 @@ Read this list. On a converged box it will:
   replaced, so a `data-root` or registry mirror survives.
 - **Serve Grafana on port 80 with anonymous read access, reachable from your LAN.** No login. See
   [SECURITY.md](SECURITY.md).
-- **Install a third-party kernel module.** Whole-system power comes from `spbm`, a DKMS driver built
-  from [antheas/spark_hwmon](https://github.com/antheas/spark_hwmon), packaged by
-  [vtemian/spark-spbm-builder](https://github.com/vtemian/spark-spbm-builder) and served from
-  `ppa:vladtemian/spark-spbm`. It runs in kernel space. If you would rather not, remove the `spbm`
-  role from `site.yml` and you lose only the power and energy metrics.
 - **Stage any firmware `fwupd` offers**, which the next reboot writes. Older EC firmware reports
   wrong CPU power values, which is why this is not optional. It never reboots for you.
 - **Repoint GRUB** at the signed kernel and pin unsigned kernels out of apt.
+
+## Whole-system power, if you want it
+
+`nvidia-smi` sees the GPU rail alone, which is about half of what the box pulls. The firmware knows
+the real figure, and [`spbm`](roles/spbm/README.md) is what reads it: a DKMS driver built from
+[antheas/spark_hwmon](https://github.com/antheas/spark_hwmon), packaged by
+[vtemian/spark-spbm-builder](https://github.com/vtemian/spark-spbm-builder) and served from
+`ppa:vladtemian/spark-spbm`.
+
+It is **off by default**, because it costs two things nothing else here does: third-party code in
+kernel space, and a trip to the machine. Secure Boot will not load the module until its key is
+enrolled at a blue MokManager screen that needs a keyboard and a monitor, and no converge can do
+that for you. Leave it off and the Power row on the dashboard stays empty; nothing else differs.
+
+```yaml
+# host_vars/spark.yml
+spbm_enabled: true
+```
+
+Then `make apply`, reboot with a keyboard attached, and enrol the key.
+[roles/spbm/README.md](roles/spbm/README.md) has the screen-by-screen version.
 
 ## Setup
 
@@ -69,12 +86,12 @@ Then `make apply` again. It must report `changed=0`.
 
 ## The first reboot
 
-The converge ends by printing what your next reboot will do, because it is usually three things at
-once: a blue MokManager screen asking for the Secure Boot key password (`sparkup` unless you changed
-it), a firmware write, and a boot into the signed kernel. Do it with a keyboard attached and mains
-power — an interrupted firmware write is not recoverable on this hardware.
+The converge ends by printing what your next reboot will do, because it is usually two things at
+once: a firmware write and a boot into the signed kernel. Do it on mains power — an interrupted
+firmware write is not recoverable on this hardware.
 
-Power and energy metrics only appear after that key is enrolled.
+With `spbm_enabled: true` there is a third: a blue MokManager screen asking for the Secure Boot key
+password (`sparkup` unless you changed it), which needs a keyboard and a monitor attached.
 
 ## Layout
 
@@ -87,8 +104,9 @@ roles/                base, docker, gpu, users, spbm, exporters, monitoring, fir
 tests/                everything that runs without a Spark
 ```
 
-Each role has its own README. There are no feature flags: running the playbook produces the machine
-described above, and per-box identity lives in `host_vars`.
+Each role has its own README. Running the playbook produces the machine described above, and per-box
+identity lives in `host_vars`. The one thing you can switch on or off is `spbm_enabled`, because it
+is the one thing that needs your consent to run third-party code in kernel space.
 
 No Spark? `make offline` runs lint, every dashboard query against a real Prometheus, and two
 roles converged twice in containers.

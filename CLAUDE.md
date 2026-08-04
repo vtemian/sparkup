@@ -27,7 +27,9 @@ Invariants, not preferences. Breaking one is a defect even if the playbook conve
    password lives outside the repo.
 6. **Never disable a service the repo did not create.**
 7. **Idempotence is the acceptance test.** A task reporting `changed` on every run is unfinished.
-8. **Never query a metric nobody emits.** Enforced by `make dashboard`.
+8. **Never query a metric nobody emits.** Enforced by `make dashboard`. A panel whose metric only
+   exists under `spbm_enabled: true` must say so in its own description: an empty panel that does
+   not explain itself reads as a broken one.
 9. **Pin versions, and never below what the box already runs.** Grafana migrates its schema forward
    only.
 10. **Never make `users` authoritative.** `append: true` and `exclusive: false` are deliberate.
@@ -39,6 +41,8 @@ Invariants, not preferences. Breaking one is a defect even if the playbook conve
 Do not decide these alone, even with working sudo:
 
 - Widening or weakening firewall policy on a box you cannot physically reach.
+- Turning `spbm_enabled` on. It commits its owner to third-party kernel-space code and to standing
+  at the machine with a keyboard.
 - Running the `kernel` role, or rebooting.
 - Anything touching firmware.
 - Publishing outward, including making the repository public.
@@ -50,13 +54,18 @@ Everything else, execute. Never ask a human to run a command you can run yoursel
 
 **Running this playbook produces the reference box. That is the whole product.** Somebody clones
 this because they want the machine it describes, so a default that gives them less than that is a
-bug. Identity goes in `host_vars` — accounts, hostname, timezone, this box's EC device id. Anything
-else that differs between a fresh clone and the reference box is a defect, not a preference.
+bug. Identity goes in `host_vars` — accounts, hostname, timezone, this box's EC device id, and
+whether its owner consented to `spbm`. Anything else that differs between a fresh clone and the
+reference box is a defect, not a preference.
 
-**There are no feature flags. Do not add one.** Not to make a role optional, not to make a
-verification skippable, not to be careful. This repo had nineteen booleans and produced no power
-readings, because `spbm_enabled: false` is indistinguishable from the feature not existing. A
-verification with an off switch is a verification that gets switched off.
+**There is one flag, `spbm_enabled`. Do not add a second.** Not to make a role optional, not to make
+a verification skippable, not to be careful. Nineteen booleans here once produced no power readings
+at all, because a default saying "maybe do the thing this repo exists to do" is indistinguishable
+from the feature not existing, and a verification with an off switch is a verification that gets
+switched off. `spbm_enabled` passes a test nothing else in this repo passes: it puts third-party
+code into kernel space, and the install cannot be completed without a human physically at the
+machine. Consent and physical presence, not caution. Anything that can be finished over SSH does not
+qualify, and neither does anything whose only argument is that it might be unwanted.
 
 When something is genuinely dangerous, **guard it with an assert that fails loudly**, not a default
 that silently does nothing. `base` refuses to enable ufw unless the port the current connection

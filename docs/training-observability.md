@@ -14,13 +14,16 @@ A small wrapper around a training/fine-tuning round that exposes, per run:
 - **training metrics** — epoch, step, loss, learning rate, grad-norm, tokens/sec, steps/sec
 - **system metrics** — already provided by `sparkup` (CPU, load, unified memory, temperatures, GPU
   utilisation/power/clocks). The wrapper does not re-collect these; it correlates against them.
-- **energy** — already provided by `sparkup` as firmware power and energy channels on the `node`
-  job, via the `spbm` driver. The wrapper turns them into per-run energy and cost.
+- **energy** — provided by `sparkup` as firmware power and energy channels on the `node` job, via
+  the `spbm` driver, **on boxes that opted into it**. The wrapper turns them into per-run energy and
+  cost, and must still produce a run report on a box where they are absent.
 
 What `sparkup` guarantees it can rely on: a Prometheus at `127.0.0.1:9090` with the remote-write
 receiver enabled, a Grafana at `http://spark.local` with a provisioned Prometheus datasource, and
-live `node` and `gpu` scrape jobs. Power arrives on `node`, as `node_hwmon_power_watt` and
-`node_hwmon_energy_input_joule_total`; there is no separate power job.
+live `node` and `gpu` scrape jobs. Power is not in that guarantee. Where it exists it arrives on
+`node`, as `node_hwmon_power_watt` and `node_hwmon_energy_input_joule_total`, with no separate power
+job; where `spbm_enabled` is false those series do not exist and the energy and cost figures have to
+be reported as unavailable rather than as zero.
 
 ## Phase C — training observability (the k6 part)
 

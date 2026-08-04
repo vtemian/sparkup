@@ -26,3 +26,8 @@ spark_shared_group: spark
 
 # Empty leaves the clock alone.
 # base_timezone: Europe/Bucharest
+
+# Whole-system power and energy, from a third-party DKMS module. Uncommenting
+# this commits you to a trip to the box: Secure Boot will not load the module
+# until you enrol its key at a console screen. roles/spbm/README.md.
+# spbm_enabled: true
