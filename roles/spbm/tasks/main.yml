@@ -1,83 +1,102 @@
 ---
+# Whole-system power and energy, read from the firmware's power budget region.
+# nvidia-smi sees the GPU rail alone, which is roughly half of what the box draws.
+#
 # Secure Boot will not load a module signed by an untrusted key, and a key only
-# enters the trust store through MokManager, at the console. This role queues and stops.
+# enters the trust store through MokManager, at the console. This role installs
+# the driver and queues the key; a human finishes it with a keyboard.
 
-- name: Install the SPBM power telemetry driver
-  when: spbm_enabled | bool
+- name: Add the PPA carrying the DKMS package
+  ansible.builtin.apt_repository:
+    repo: "{{ spbm_ppa }}"
+    state: present
+    update_cache: true
+    filename: spark-spbm
+
+# Before the module: DKMS needs headers to build against.
+- name: Ensure kernel headers arrive with every new kernel
+  ansible.builtin.apt:
+    name: "{{ spbm_headers_package }}"
+    state: present
+
+- name: Install the SPBM DKMS package
+  ansible.builtin.apt:
+    name: "{{ spbm_package }}"
+    state: present
+
+- name: Install the Secure Boot key enrolment tool
+  ansible.builtin.apt:
+    name: mokutil
+    state: present
+
+- name: Check whether the module signing key is already enrolled
+  ansible.builtin.command:
+    cmd: mokutil --test-key {{ spbm_mok_cert }}
+  register: spbm_mok_test
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# Queuing is not idempotent on its own — `mokutil --import` reports a change
+# every run — so the request already sitting in MokNew is what makes a second
+# converge quiet.
+- name: Read the keys already queued for enrolment
+  ansible.builtin.command:
+    cmd: mokutil --list-new
+  register: spbm_mok_queued
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# Matched on the CN value alone: `--list-new` and `openssl -subject` disagree
+# about the spaces around the `=`, and only the value is stable between them.
+- name: Read the signing key's common name
+  ansible.builtin.command:
+    cmd: openssl x509 -in {{ spbm_mok_cert }} -inform DER -noout -subject
+  register: spbm_mok_subject
+  changed_when: false
+  check_mode: false
+
+- name: Queue the module signing key for enrolment
+  when:
+    - "'is already enrolled' not in (spbm_mok_test.stdout | default(''))"
+    - spbm_mok_common_name not in (spbm_mok_queued.stdout | default(''))
+  vars:
+    spbm_mok_common_name: >-
+      {{ spbm_mok_subject.stdout | regex_replace('^.*?CN\s*=\s*', '') | regex_replace(',.*$', '') | trim }}
   block:
 
-    - name: Add the PPA carrying the DKMS package
-      ansible.builtin.apt_repository:
-        repo: "{{ spbm_ppa }}"
-        state: present
-        update_cache: true
-        filename: spark-spbm
+    # mokutil prompts on a tty, which Ansible cannot answer. --generate-hash
+    # plus --hash-file is the documented way round it.
+    - name: Hash the enrolment password
+      ansible.builtin.shell:
+        cmd: >-
+          umask 077 &&
+          mokutil --generate-hash='{{ spbm_mok_password }}' > /root/.spbm-mok-hash
+      changed_when: true
+      no_log: true
 
-    # Before the module: DKMS needs headers to build against.
-    - name: Ensure kernel headers arrive with every new kernel
-      ansible.builtin.apt:
-        name: "{{ spbm_headers_package }}"
-        state: present
-
-    - name: Install the SPBM DKMS package
-      ansible.builtin.apt:
-        name: "{{ spbm_package }}"
-        state: present
-
-    - name: Install the Secure Boot key enrolment tool
-      ansible.builtin.apt:
-        name: mokutil
-        state: present
-
-    - name: Check whether the module signing key is already enrolled
+    - name: Queue the key for enrolment at the next boot
       ansible.builtin.command:
-        cmd: mokutil --test-key {{ spbm_mok_cert }}
-      register: spbm_mok_test
-      changed_when: false
-      failed_when: false
-      check_mode: false
+        cmd: mokutil --import {{ spbm_mok_cert }} --hash-file /root/.spbm-mok-hash
+      register: spbm_mok_import
+      changed_when: spbm_mok_import.rc == 0
 
-    - name: Enrol the module signing key
-      when: "'is already enrolled' not in (spbm_mok_test.stdout | default(''))"
-      block:
+    - name: Remove the hash file
+      ansible.builtin.file:
+        path: /root/.spbm-mok-hash
+        state: absent
 
-        - name: Refuse to queue a key without a password for the console
-          ansible.builtin.assert:
-            that:
-              - spbm_mok_password | default('', true) | trim | length > 0
-            fail_msg: >-
-              {{ spbm_mok_cert }} is not enrolled, so the module cannot load.
-              Queuing it needs a one-time password that you type at the
-              MokManager screen during the next boot. Re-run with
-              -e spbm_mok_password=... and keep it out of any file.
-
-        # mokutil prompts on a tty, which Ansible cannot answer. --generate-hash
-        # plus --hash-file is the documented way round it.
-        - name: Hash the enrolment password
-          ansible.builtin.shell:
-            cmd: >-
-              umask 077 &&
-              mokutil --generate-hash='{{ spbm_mok_password }}' > /root/.spbm-mok-hash
-          changed_when: true
-          no_log: true
-
-        - name: Queue the key for enrolment at the next boot
-          ansible.builtin.command:
-            cmd: mokutil --import {{ spbm_mok_cert }} --hash-file /root/.spbm-mok-hash
-          register: spbm_mok_import
-          changed_when: spbm_mok_import.rc == 0
-
-        - name: Remove the hash file
-          ansible.builtin.file:
-            path: /root/.spbm-mok-hash
-            state: absent
-
-        - name: Report what the operator has to do at the console
-          ansible.builtin.debug:
-            msg: >-
-              KEY QUEUED, NOT YET TRUSTED. Reboot, and before the OS loads shim
-              shows a blue MokManager screen: Enroll MOK, Continue, Yes, then
-              type the password you passed as spbm_mok_password. It needs a
-              keyboard attached; there is no network and no SSH at that point.
-              Miss the prompt and it cancels harmlessly, then re-run this role.
-              Until the key is enrolled the module is built but cannot load.
+# Outside the block so it prints on every converge until the key is trusted,
+# not only on the run that queued it.
+- name: Report what the operator has to do at the console
+  ansible.builtin.debug:
+    msg: >-
+      POWER TELEMETRY IS QUEUED, NOT YET LIVE. The driver is built and signed,
+      but Secure Boot will not load it until its key is trusted. Reboot, and
+      before the OS loads shim shows a blue MokManager screen: Enroll MOK,
+      Continue, Yes, then type "{{ spbm_mok_password }}". It needs a keyboard
+      attached; there is no network and no SSH at that point. Miss the prompt
+      and it cancels harmlessly — re-run this role. Until then
+      node_hwmon_power_input_watt returns nothing.
+  when: "'is already enrolled' not in (spbm_mok_test.stdout | default(''))"
