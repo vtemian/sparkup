@@ -8,6 +8,58 @@
   force_handlers: true
 
   pre_tasks:
+    # Every precondition is checked here, before any role changes anything, and
+    # tagged `always` so `--tags kernel` cannot skip the checks that protect it.
+    # A run that cannot finish must refuse while the box is still untouched.
+    - name: Refuse to run against the shipped inventory placeholder
+      ansible.builtin.assert:
+        that:
+          - ansible_user | default('') != 'youruser'
+        fail_msg: >-
+          inventory/hosts.yml still has the placeholder `ansible_user: youruser`.
+          Edit it to the account you SSH in as, and set ansible_host to your
+          box's address — `spark.local` only resolves after this playbook has
+          installed avahi and renamed the machine, so on a fresh box use its IP.
+      run_once: true
+      delegate_to: localhost
+      become: false
+      tags: [always]
+
+    # Before reading the state with it: on a box where shim never pulled it in,
+    # `mokutil --sb-state` would fail and read as "Secure Boot is off".
+    - name: Install the Secure Boot query tool
+      ansible.builtin.apt:
+        name: mokutil
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      tags: [always]
+
+    - name: Read the Secure Boot state
+      ansible.builtin.command: mokutil --sb-state
+      register: spark_sb_state
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      tags: [always]
+
+    # A policy of this recipe, not a technical requirement: with Secure Boot off
+    # the modules would load more easily. NVIDIA's Aerial-on-Spark guide tells
+    # people to disable it; the answer to a kernel that will not boot is a
+    # signed kernel, not switching the protection off.
+    - name: Assert that Secure Boot is enabled
+      ansible.builtin.assert:
+        that:
+          - "'SecureBoot enabled' in (spark_sb_state.stdout | default('', true))"
+        fail_msg: >-
+          `mokutil --sb-state` reports
+          "{{ spark_sb_state.stdout | default('nothing at all', true) | trim }}".
+          This recipe assumes Secure Boot is on and neither enables nor disables
+          it. Nothing has been changed on this box. Re-enable it in firmware and
+          converge again, or use a different recipe.
+        success_msg: Secure Boot is enabled.
+      tags: [always]
+
     - name: Detect training processes on the GPU
       ansible.builtin.command: nvidia-smi --query-compute-apps=pid,process_name --format=csv,noheader
       register: spark_gpu_apps
@@ -50,3 +102,42 @@
     # if a reboot is needed to finish.
     - role: kernel
       tags: [kernel]
+
+  # Everything a reboot will do, in one place. The roles that queue this work
+  # are hundreds of lines apart in the output, and a person who reboots without
+  # having read all three is the failure mode this exists to prevent.
+  post_tasks:
+    - name: Report what the next reboot will do
+      ansible.builtin.debug:
+        msg: >-
+          {{
+            ['THE NEXT REBOOT OF THIS BOX WILL:']
+            + (['  * Stop at a blue MokManager screen. Choose Enroll MOK, Continue,'
+                ~ ' Yes, then type "' ~ spbm_mok_password ~ '". It needs a keyboard'
+                ~ ' attached; there is no network and no SSH at that point. Miss it'
+                ~ ' and it cancels harmlessly. Until the key is enrolled there are'
+                ~ ' no power or energy metrics.']
+               if not spark_mok_enrolled else [])
+            + (['  * WRITE FIRMWARE. ' ~ spark_capsules_pending ~ ' capsule(s) are'
+                ~ ' staged. Keep the machine powered throughout — an interrupted'
+                ~ ' write is not recoverable on this hardware. To cancel instead:'
+                ~ ' rm ' ~ firmware_capsule_dir ~ '/*.cap']
+               if spark_capsules_pending | int > 0 else [])
+            + (['  * Boot ' ~ kernel_intended_version ~ ' instead of '
+                ~ ansible_kernel ~ '. GRUB points at it and the menu is visible'
+                ~ ' for ' ~ kernel_grub_timeout ~ 's if you need to pick something else.']
+               if spark_reboot_changes_kernel else [])
+            + (['  * Nothing unexpected. No key to enrol, no firmware staged, and'
+                ~ ' it is already running the kernel this repo intends.']
+               if spark_reboot_is_quiet else [])
+          }}
+      vars:
+        spark_mok_enrolled: >-
+          {{ 'is already enrolled' in (spbm_mok_test.stdout | default('', true)) }}
+        spark_capsules_pending: "{{ firmware_capsules.matched | default(0) }}"
+        spark_reboot_changes_kernel: >-
+          {{ ansible_kernel != (kernel_intended_version | default(ansible_kernel, true)) }}
+        spark_reboot_is_quiet: >-
+          {{ ('is already enrolled' in (spbm_mok_test.stdout | default('', true)))
+             and (firmware_capsules.matched | default(0) | int == 0)
+             and ansible_kernel == (kernel_intended_version | default(ansible_kernel, true)) }}

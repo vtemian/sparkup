@@ -17,14 +17,40 @@
     group: root
     mode: "0755"
 
-- name: Template the Docker daemon configuration
-  ansible.builtin.template:
-    src: daemon.json.j2
+# Read-merge-write, never a plain template: somebody's daemon.json may carry a
+# data-root, registry mirrors or proxy settings, and replacing the file wholesale
+# would silently drop them. Only the keys below are this repo's business.
+- name: Read any existing Docker daemon configuration
+  ansible.builtin.slurp:
+    src: "{{ docker_config_dir }}/daemon.json"
+  register: docker_existing_config
+  failed_when: false
+
+- name: Merge the nvidia runtime and log limits into the daemon configuration
+  ansible.builtin.copy:
+    content: "{{ docker_merged_config | to_nice_json }}\n"
     dest: "{{ docker_config_dir }}/daemon.json"
     owner: root
     group: root
     mode: "0644"
     validate: python3 -m json.tool %s
+  vars:
+    docker_current_config: >-
+      {{ (docker_existing_config.content | default('') | b64decode | from_json)
+         if (docker_existing_config.content is defined) else {} }}
+    docker_merged_config: >-
+      {{ docker_current_config
+         | combine({'runtimes': docker_current_config.runtimes | default({})
+                    | combine({'nvidia': {'path': docker_nvidia_runtime_path,
+                                          'runtimeArgs': []}}),
+                    'log-driver': docker_log_driver,
+                    'log-opts': docker_current_config['log-opts'] | default({})
+                    | combine({'max-size': docker_log_max_size,
+                               'max-file': docker_log_max_file | string})}) }}
+  # Compared as parsed JSON, not as bytes: a file that already says the right
+  # thing in a different key order or indentation is converged, and rewriting it
+  # would restart dockerd — killing every container — to change whitespace.
+  when: docker_merged_config != docker_current_config
   notify: Docker configuration changed
 
 - name: Enable and start Docker

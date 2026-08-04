@@ -6,6 +6,18 @@
 # enters the trust store through MokManager, at the console. This role installs
 # the driver and queues the key; a human finishes it with a keyboard.
 
+# Said out loud on every converge, not buried in a role README: this installs
+# third-party code that runs in kernel space, and whoever runs the playbook is
+# the one making that trust decision.
+- name: Name the third-party source this driver comes from
+  ansible.builtin.debug:
+    msg: >-
+      Installing spbm, a DKMS kernel module, from {{ spbm_ppa }}. Source:
+      github.com/antheas/spark_hwmon, packaged by
+      github.com/vtemian/spark-spbm-builder. It runs in kernel space and is not
+      part of Ubuntu or DGX OS. It is what provides whole-system power and
+      energy; drop the spbm role from site.yml if you would rather not have it.
+
 - name: Add the PPA carrying the DKMS package
   ansible.builtin.apt_repository:
     repo: "{{ spbm_ppa }}"

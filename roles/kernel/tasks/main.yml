@@ -2,20 +2,6 @@
 # This role NEVER reboots. The box is headless, WiFi-only and has already
 # failed to boot once over kernel signatures; power-cycling it is a human's call.
 
-- name: Install the Secure Boot tooling
-  ansible.builtin.apt:
-    name: mokutil
-    state: present
-    update_cache: true
-    cache_valid_time: 3600
-
-- name: Read the Secure Boot state
-  ansible.builtin.command: mokutil --sb-state
-  register: kernel_sb_state
-  changed_when: false
-  failed_when: false
-  check_mode: false
-
 # dpkg-query, never `apt-cache depends`: apt-cache answers for the *candidate*
 # version, so a newer kernel in the vendor archive becomes "the intended" one.
 - name: Read the kernel image the installed meta package depends on
@@ -35,8 +21,6 @@
           | regex_findall('linux-image-([0-9][A-Za-z0-9.+~-]*)')
           | first | default('', true))
          or ansible_kernel }}
-    kernel_secure_boot_enabled: >-
-      {{ 'SecureBoot enabled' in (kernel_sb_state.stdout | default('', true)) }}
 
 # Install before anything points at it. `state: present`, never `latest`: this
 # converges the kernel the box already boots, it does not look for newer ones.
@@ -175,28 +159,15 @@
     group: root
     mode: "0644"
 
-- name: Assert that Secure Boot is enabled
-  ansible.builtin.assert:
-    that:
-      - kernel_secure_boot_enabled | bool
-    fail_msg: >-
-      `mokutil --sb-state` reports
-      "{{ kernel_sb_state.stdout | default('nothing at all', true) | trim }}".
-      This role neither enables nor disables Secure Boot. The fix for a kernel
-      that will not boot is a signed kernel, not switching the protection off —
-      NVIDIA's own Aerial-on-Spark guide tells people to disable it, and this
-      project deliberately does not. Re-enable it in firmware and converge again.
-    success_msg: Secure Boot is enabled.
-
-- name: Assert that the box is running the intended signed kernel
-  ansible.builtin.assert:
-    that:
-      - ansible_kernel == kernel_intended_version
-    fail_msg: >-
-      Running {{ ansible_kernel }}; intended {{ kernel_intended_version }}.
-      A REBOOT IS REQUIRED and this role will never perform one. Everything
-      else has converged: the signed kernel is installed, GRUB points at it and
-      the menu is visible. Reboot the box by hand, with someone able to reach it
-      physically, then converge again to turn this assertion green.
-    success_msg: >-
-      Running the intended signed kernel {{ ansible_kernel }}.
+# Not an assert: needing a reboot is the correct end state of a first converge,
+# not a fault, and failing here would stop the play before the summary that
+# tells somebody what that reboot does. site.yml checks Secure Boot up front.
+- name: Report that the signed kernel is installed but not yet running
+  ansible.builtin.debug:
+    msg: >-
+      A REBOOT IS REQUIRED to finish. Running {{ ansible_kernel }}; intended
+      {{ kernel_intended_version }}. Everything this role can do is done: the
+      signed kernel is installed, GRUB points at it and the menu is visible.
+      Nothing here will reboot for you — do it by hand, with somebody able to
+      reach the machine physically.
+  when: ansible_kernel != kernel_intended_version
