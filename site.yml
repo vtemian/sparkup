@@ -25,6 +25,20 @@
       become: false
       tags: [always]
 
+    - name: Refuse to run against the shipped host_vars placeholder
+      ansible.builtin.assert:
+        that:
+          - "'you' not in (spark_users | map(attribute='name') | list)"
+        fail_msg: >-
+          host_vars/spark.yml still names the example account `you`, copied
+          from host_vars/spark.yml.example. Edit it to the accounts you want:
+          this play creates every account it is given, with the groups it is
+          given, and `you` is listed there with sudo.
+      run_once: true
+      delegate_to: localhost
+      become: false
+      tags: [always]
+
     # Before reading the state with it: on a box where shim never pulled it in,
     # `mokutil --sb-state` would fail and read as "Secure Boot is off".
     - name: Install the Secure Boot query tool
