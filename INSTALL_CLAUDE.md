@@ -1,12 +1,8 @@
 # Operating sparkup
 
-Documentation for an AI agent working in this repository. Humans want
-[README.md](README.md); this file assumes you are the one running the commands.
-
-This repo is Ansible that provisions a DGX Spark. It runs **as root on real hardware that somebody
-owns**. The machine it targets is typically headless and on WiFi with no wired fallback, so a
-firewall or boot mistake is recovered by physically walking to it. Optimise for not breaking the
-box, not for finishing quickly.
+This repo's facts, commands and traps, for an AI agent running them. Humans want
+[README.md](README.md). The rules — invariants, what to ask before doing, engineering standards —
+are in [CLAUDE.md](CLAUDE.md), which loads automatically; read it first and do not restate it here.
 
 **Scope.** sparkup gets the box into a known state and gets metrics into Prometheus. It does not own
 training runs. The wrapper that emits per-run metrics and correlates them against these series is a
@@ -14,58 +10,6 @@ separate project, specified in [`docs/training-observability.md`](docs/training-
 What sparkup guarantees it: Prometheus with the remote-write receiver enabled, a provisioned Grafana
 datasource, and live `node` and `gpu` scrape jobs — power arrives on `node`, from the firmware. Do
 not break those.
-
----
-
-## Hard rules
-
-These are invariants of the repository, not preferences. Breaking one is a defect even if the
-playbook still converges.
-
-1. **Never flash firmware unattended.** Nothing may write firmware as a side effect of a converge.
-   The `firmware` role stages capsules and stops; staging is off unless a box opts in, and it never
-   reboots, so the flash only happens when a human restarts the machine. Its other half reads the EC
-   version and asserts it has not drifted, and never writes. **Rollback is not universally
-   available**: on this
-   hardware fwupd advertises no `self-recovery` and no `dual-image` on any updatable device, and at
-   least one device's current version sits below its own downgrade floor, making its update
-   one-way. See `roles/firmware/README.md` before enabling it.
-2. **Never reset a firewall or set a default policy implicitly.** `base` only *adds* allow rules.
-   Enabling ufw is opt-in via `spark_firewall_enable` and asserts SSH is allowed first.
-3. **Never create accounts that were not asked for.** `spark_users` defaults to `[]`.
-   `host_vars/*.yml` is gitignored precisely so a clone cannot provision somebody else's users.
-4. **Never reboot from a role.** `kernel` reports that a reboot is required and stops. Rebooting is
-   a separate, explicit act (`ansible spark -m ansible.builtin.reboot`) taken with the operator's
-   agreement.
-5. **Never commit a secret.** Not in `group_vars`, not in a role, not in a test fixture. The become
-   password lives outside the repo entirely.
-6. **Never disable a service the repo did not create.** `base` lists surprising ones and leaves
-   them alone.
-7. **Idempotence is the acceptance test.** A task that reports `changed` on every run is unfinished.
-8. **Never query a metric nobody emits.** Enforced by `make dashboard`.
-9. **Pin versions, and never below what the box already runs.** Grafana migrates its database schema
-   forward only. Check `docker exec <container> grafana server -v` before changing a pin.
-10. **Never make `users` authoritative.** `ansible.builtin.user` carries `append: true` and
-    `ansible.posix.authorized_key` carries `exclusive: false`. Both read like sloppiness and are the
-    opposite. Without `append`, `groups:` becomes the complete set and the first run strips `sudo`,
-    `adm`, `audio` and everything else the account already had. With `exclusive: true`, every key
-    absent from `https://github.com/<user>.keys` is deleted — and GitHub answers an account with no
-    public keys with an empty body, so it would truthfully install nothing over a working
-    `authorized_keys` on a headless WiFi-only box. This role only ever grants. Revocation is manual
-    and deliberate, and naming an account in `github_keys` is a standing delegation: whoever
-    controls it can log in as that user at the next converge, with whatever key they add.
-
-## Stop and ask the human
-
-Do not decide these alone, even when you have working sudo:
-
-- Enabling or altering the firewall policy on a box you cannot physically reach.
-- Running the `kernel` role, or rebooting.
-- Anything touching firmware.
-- Making the repository public, or anything else that publishes outward.
-- Removing kernels, or any package removal that is not trivially reversible.
-
-Everything else, execute. Do not ask a human to run a command you can run yourself.
 
 ---
 
@@ -319,19 +263,10 @@ stubbed. A fake that reported success would be worse than no test.
 
 ---
 
-## Contributing changes
+## Claims in this repo that were measured wrong once
 
-`make offline` must pass, and `ansible-lint` runs the **production** profile: FQCNs everywhere, every
-task named and capitalised as the first key, explicit `mode` on file tasks, handlers rather than
-`when: x.changed`, deliberate `changed_when` on `command`/`shell`.
-
-If you change what a role does, update that role's README in the same commit. A README describing
-different behaviour from its tasks is worse than none.
-
-Conventional commit messages. Never mention AI assistance in commits, code or PR descriptions.
-
-**If reality contradicts a document, reality wins and the document changes.** Several claims in this
-repo were measured on one box on one day and later proved wrong: the firewall was inactive rather
-than enabled with unknown rules, a pinned exporter version did not exist, and editing
-`/etc/default/grub` did not make the boot menu appear. Correcting those is the most valuable work,
-not a digression from it.
+Kept because they are the reason [CLAUDE.md](CLAUDE.md) says reality wins over a document. The
+firewall was inactive rather than enabled with unknown rules. A pinned exporter version did not
+exist on the registry. Editing `/etc/default/grub` did not make the boot menu appear; a drop-in
+under `/etc/default/grub.d/` was overriding it. Assume the same of anything here you have not
+checked.
