@@ -50,6 +50,32 @@ HWMON_SENSORS = (
     ("mt7925_phy0", "temp1", 44.0, 3.0),
 )
 
+# The spbm driver's power channels, as node_exporter's hwmon collector renders
+# them. `chip` is derived from the sysfs device path rather than the driver
+# name, so the value here is a plausible stand-in — every dashboard query joins
+# node_hwmon_sensor_label instead of naming a chip, and that is the point being
+# tested. Watts are (idle, span) and roughly match the real box: a GPU rail near
+# 87 W under load against a system total that is comfortably more than double it.
+SPBM_CHIP = "platform_spbm"
+SPBM_POWER = (
+    ("power1", "sys_total", 28.0, 120.0),
+    ("power2", "soc_pkg", 12.0, 95.0),
+    ("power3", "cpu_gpu", 8.0, 85.0),
+    ("power4", "cpu_p", 3.0, 18.0),
+    ("power5", "cpu_e", 1.0, 4.0),
+    ("power6", "vcore", 2.0, 9.0),
+    ("power7", "dc_input", 32.0, 128.0),
+    ("power8", "gpu", 5.0, 82.0),
+)
+# Cumulative counters, in joules. Only these four exist in the firmware — there
+# is no sys_total accumulator, which is why whole-box energy is a gauge integral.
+SPBM_ENERGY = (
+    ("energy1", "pkg", "power2"),
+    ("energy2", "cpu_e", "power5"),
+    ("energy3", "cpu_p", "power4"),
+    ("energy4", "gpu", "power8"),
+)
+
 
 class Box:
     """The synthetic box. Counters advance in real time so rate() has slope."""
@@ -62,6 +88,7 @@ class Box:
             (cpu, mode): 0.0 for cpu in range(CORES) for mode in CPU_MODES
         }
         self.power_cap_seconds = POWER_CAP_SECONDS_AT_START
+        self.energy_joules = {label: 0.0 for _, label, _ in SPBM_ENERGY}
         self.network_bytes = {"wlP9s9": [0.0, 0.0]}
         self.lock = threading.Lock()
 
@@ -74,6 +101,11 @@ class Box:
         """GPU occupancy, on a slower cycle than the CPU and offset from it."""
         phase = (now - self.started) / 300.0 * 2 * math.pi
         return max(0.02, min(0.98, 0.55 + 0.42 * math.sin(phase - 0.9)))
+
+    @staticmethod
+    def power_watts(busy: float) -> list[tuple[str, float]]:
+        """Watts per power channel at a given load, keyed by sensor."""
+        return [(sensor, idle + span * busy) for sensor, _, idle, span in SPBM_POWER]
 
     def advance(self, now: float) -> float:
         """Move the counters forward to `now`. Returns the elapsed seconds."""
@@ -93,6 +125,9 @@ class Box:
                 self.cpu_seconds[(cpu, "iowait")] += elapsed * weight * 0.05
             if self.gpu_utilisation(now) > 0.75:
                 self.power_cap_seconds += elapsed
+            watts = dict(self.power_watts(busy))
+            for _, label, source in SPBM_ENERGY:
+                self.energy_joules[label] += elapsed * watts[source]
             rx, tx = self.network_bytes["wlP9s9"]
             self.network_bytes["wlP9s9"] = [
                 rx + elapsed * 4_000_000 * busy,
@@ -144,6 +179,38 @@ def node_metrics(box: Box) -> str:
         lines.append(
             f"node_hwmon_temp_celsius{labels({'chip': chip, 'sensor': sensor})} "
             f"{temperature:.2f}"
+        )
+
+    # The spbm channels. Without the label metric the dashboard's power queries
+    # match nothing: they join on it rather than naming a chip.
+    watts = dict(box.power_watts(busy))
+    render(lines, "node_hwmon_power_input_watt", "gauge", "Hardware monitor power.")
+    for sensor, _, _, _ in SPBM_POWER:
+        lines.append(
+            f"node_hwmon_power_input_watt{labels({'chip': SPBM_CHIP, 'sensor': sensor})} "
+            f"{watts[sensor]:.3f}"
+        )
+    render(
+        lines,
+        "node_hwmon_energy_joule_total",
+        "counter",
+        "Hardware monitor for joules used so far.",
+    )
+    for sensor, label, _ in SPBM_ENERGY:
+        lines.append(
+            f"node_hwmon_energy_joule_total{labels({'chip': SPBM_CHIP, 'sensor': sensor})} "
+            f"{box.energy_joules[label]:.3f}"
+        )
+    render(lines, "node_hwmon_sensor_label", "gauge", "Label for given chip and sensor.")
+    for sensor, label, _, _ in SPBM_POWER:
+        lines.append(
+            f"node_hwmon_sensor_label"
+            f"{labels({'chip': SPBM_CHIP, 'label': label, 'sensor': sensor})} 1"
+        )
+    for sensor, label, _ in SPBM_ENERGY:
+        lines.append(
+            f"node_hwmon_sensor_label"
+            f"{labels({'chip': SPBM_CHIP, 'label': label, 'sensor': sensor})} 1"
         )
 
     root_avail = FS_ROOT_SIZE - FS_ROOT_USED - int(20_000_000_000 * busy)

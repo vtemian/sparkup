@@ -1,8 +1,12 @@
 {
   "uid": "spark-overview",
   "title": "Spark overview",
-  "description": "System, GPU and exporter health for the DGX Spark. Provisioned from roles/monitoring/files/dashboards/spark-overview.json — edit in the UI to experiment, then export the JSON and commit it, or the next converge overwrites the change.",
-  "tags": ["spark", "system", "gpu"],
+  "description": "System, GPU and exporter health for the DGX Spark. Provisioned from roles/monitoring/files/dashboards/spark-overview.json \u2014 edit in the UI to experiment, then export the JSON and commit it, or the next converge overwrites the change.",
+  "tags": [
+    "spark",
+    "system",
+    "gpu"
+  ],
   "timezone": "browser",
   "editable": true,
   "graphTooltip": 1,
@@ -25,7 +29,12 @@
       "type": "row",
       "title": "GPU",
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "panels": []
     },
     {
@@ -33,25 +42,51 @@
       "type": "timeseries",
       "title": "GPU utilisation",
       "description": "Fraction of the sampling window in which at least one kernel was resident. It is an occupancy signal, not an efficiency one: a memory-bound kernel can read 100% while the SMs mostly wait.",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 1
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
           "min": 0,
           "max": 1,
-          "custom": { "fillOpacity": 10, "lineWidth": 1, "showPoints": "never" }
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "nvidia_smi_utilization_gpu_ratio{job=\"gpu\"}",
           "legendFormat": "utilisation"
         }
@@ -61,33 +96,68 @@
       "id": 3,
       "type": "timeseries",
       "title": "GPU temperature",
-      "description": "temperature.gpu from nvidia-smi. The shutdown and slowdown limit registers read N/A on GB10, so there is no headroom line to draw here — judge it against the hwmon sensors below and against the throttle counters, not against a limit the hardware refuses to report.",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 },
+      "description": "temperature.gpu from nvidia-smi. The shutdown and slowdown limit registers read N/A on GB10, so there is no headroom line to draw here \u2014 judge it against the hwmon sensors below and against the throttle counters, not against a limit the hardware refuses to report.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 1
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "celsius",
           "min": 20,
-          "custom": { "fillOpacity": 10, "lineWidth": 1, "showPoints": "never" },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "orange", "value": 75 },
-              { "color": "red", "value": 85 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
             ]
           }
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "nvidia_smi_temperature_gpu{job=\"gpu\"}",
           "legendFormat": "GPU"
         }
@@ -97,25 +167,51 @@
       "id": 4,
       "type": "timeseries",
       "title": "GPU power draw",
-      "description": "The GPU rail only — roughly half of what the box actually pulls (87 W measured here against 180 W at the socket). It cannot see CPU, memory, NVMe, fans or PSU conversion loss, so never cost a run from this number. Wall power is the `power` job, from the smart plug.",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
+      "description": "The GPU rail only \u2014 roughly half of what the box actually pulls. It cannot see CPU, memory, NVMe, fans or PSU conversion loss, so never cost a run from this number. Whole-system power is the Power row below.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "watt",
           "min": 0,
-          "custom": { "fillOpacity": 10, "lineWidth": 1, "showPoints": "never" }
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "nvidia_smi_power_draw_watts{job=\"gpu\"}",
           "legendFormat": "GPU rail"
         }
@@ -126,30 +222,59 @@
       "type": "timeseries",
       "title": "GPU clocks",
       "description": "Current graphics and SM clocks. Idle sits near 200 MHz and clocks.max.sm is 3003 MHz on this unit. A clock that sags while utilisation stays high is the visible half of throttling; the throttle counters are the other half.",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "hertz",
           "min": 0,
-          "custom": { "fillOpacity": 0, "lineWidth": 1, "showPoints": "never" }
+          "custom": {
+            "fillOpacity": 0,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "nvidia_smi_clocks_current_graphics_clock_hz{job=\"gpu\"}",
           "legendFormat": "graphics"
         },
         {
           "refId": "B",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "nvidia_smi_clocks_current_sm_clock_hz{job=\"gpu\"}",
           "legendFormat": "sm"
         }
@@ -159,47 +284,271 @@
       "id": 6,
       "type": "timeseries",
       "title": "Unified memory (GPU + CPU)",
-      "description": "This is the GPU memory panel. GB10 has unified memory: CPU and GPU share one 121 GiB pool and there is no discrete framebuffer, so nvidia-smi reports memory.used and memory.total as [N/A] and the exporter drops unavailable fields — nvidia_smi_memory_used_bytes does not exist on this box, by design. That absence is correct, not a broken panel, and node_memory_* IS the GPU memory signal. Do not 'fix' it with DCGM's DCGM_FI_DEV_FB_* family: NVIDIA states DCGM does not support Spark, and nvmlDeviceGetMemoryInfo returns NVML_ERROR_NOT_SUPPORTED here.",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+      "description": "This is the GPU memory panel. GB10 has unified memory: CPU and GPU share one 121 GiB pool and there is no discrete framebuffer, so nvidia-smi reports memory.used and memory.total as [N/A] and the exporter drops unavailable fields \u2014 nvidia_smi_memory_used_bytes does not exist on this box, by design. That absence is correct, not a broken panel, and node_memory_* IS the GPU memory signal. Do not 'fix' it with DCGM's DCGM_FI_DEV_FB_* family: NVIDIA states DCGM does not support Spark, and nvmlDeviceGetMemoryInfo returns NVML_ERROR_NOT_SUPPORTED here.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "bytes",
           "min": 0,
-          "custom": { "fillOpacity": 10, "lineWidth": 1, "showPoints": "never" }
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "total" },
+            "matcher": {
+              "id": "byName",
+              "options": "total"
+            },
             "properties": [
-              { "id": "custom.fillOpacity", "value": 0 },
-              { "id": "color", "value": { "mode": "fixed", "fixedColor": "text" } }
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
             ]
           }
         ]
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "node_memory_MemTotal_bytes{job=\"node\"} - node_memory_MemAvailable_bytes{job=\"node\"}",
           "legendFormat": "used"
         },
         {
           "refId": "B",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "node_memory_MemAvailable_bytes{job=\"node\"}",
           "legendFormat": "available"
         },
         {
           "refId": "C",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "node_memory_MemTotal_bytes{job=\"node\"}",
           "legendFormat": "total"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "type": "row",
+      "title": "Power",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      }
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "System power",
+      "description": "Whole-system power from the firmware's SPBM region, via the spbm driver. `sys_total` is the box; `dc_input` is what arrives from the PSU. Both are DC-side and exclude PSU conversion loss, so a wall meter reads a little higher. Empty means the spbm module is built but not loaded, which means its Secure Boot key has not been enrolled yet.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "node_hwmon_power_input_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"sys_total|dc_input|cpu_gpu|soc_pkg|gpu\"}",
+          "legendFormat": "{{label}}"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "type": "stat",
+      "title": "Drawing now",
+      "description": "`sys_total` at the last scrape. The GPU rail alone is roughly half of this, which is why costing a run from nvidia-smi understates it.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 18
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "node_hwmon_power_input_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=\"sys_total\"}",
+          "legendFormat": "sys_total",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "stat",
+      "title": "Energy over this range",
+      "description": "The sys_total gauge integrated over the selected range. There is no whole-system energy counter in the firmware \u2014 only pkg, cpu_e, cpu_p and gpu have one \u2014 so this is an integral whose error scales with the scrape interval. At 15s over a run measured in hours that is well under a percent.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 18
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watth",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "avg_over_time((node_hwmon_power_input_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=\"sys_total\"})[$__range:]) * $__range_s / 3600",
+          "legendFormat": "energy",
+          "instant": true
         }
       ]
     },
@@ -208,7 +557,12 @@
       "type": "row",
       "title": "Host",
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
       "panels": []
     },
     {
@@ -216,25 +570,51 @@
       "type": "timeseries",
       "title": "CPU busy",
       "description": "Share of all 20 cores not idle. Ten Cortex-X925 and ten Cortex-A725 are averaged together, so a saturated big-core cluster reads about 50%.",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 18 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 27
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
           "min": 0,
           "max": 100,
-          "custom": { "fillOpacity": 10, "lineWidth": 1, "showPoints": "never" }
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{job=\"node\",mode=\"idle\"}[$__rate_interval])))",
           "legendFormat": "busy"
         }
@@ -245,50 +625,103 @@
       "type": "timeseries",
       "title": "Load average",
       "description": "Runnable plus uninterruptible tasks. Read it against the core count drawn alongside: sustained load above it means work is queueing, not just running.",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 18 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 27
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
           "min": 0,
-          "custom": { "fillOpacity": 0, "lineWidth": 1, "showPoints": "never" }
+          "custom": {
+            "fillOpacity": 0,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "cores" },
+            "matcher": {
+              "id": "byName",
+              "options": "cores"
+            },
             "properties": [
-              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [8, 6] } },
-              { "id": "color", "value": { "mode": "fixed", "fixedColor": "text" } }
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    8,
+                    6
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "text"
+                }
+              }
             ]
           }
         ]
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "node_load1{job=\"node\"}",
           "legendFormat": "1m"
         },
         {
           "refId": "B",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "node_load5{job=\"node\"}",
           "legendFormat": "5m"
         },
         {
           "refId": "C",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "node_load15{job=\"node\"}",
           "legendFormat": "15m"
         },
         {
           "refId": "D",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "count(count by (cpu) (node_cpu_seconds_total{job=\"node\"}))",
           "legendFormat": "cores"
         }
@@ -299,14 +732,27 @@
       "type": "stat",
       "title": "Uptime",
       "description": "Since the last boot. A reboot is the one operation this box does not survive unattended mid-run, so an unexpectedly small number here is worth explaining.",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 18 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 27
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "dtdurations",
           "thresholds": {
             "mode": "absolute",
-            "steps": [{ "color": "text", "value": null }]
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
           }
         },
         "overrides": []
@@ -316,12 +762,21 @@
         "graphMode": "none",
         "textMode": "value",
         "justifyMode": "center",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
       },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "time() - node_boot_time_seconds{job=\"node\"}",
           "legendFormat": "uptime",
           "instant": true
@@ -331,26 +786,52 @@
     {
       "id": 11,
       "type": "timeseries",
-      "title": "Temperatures — every hwmon sensor",
-      "description": "Every temperature the kernel exposes under hwmon: the SoC thermal zone, the NVMe sensors, and the eight thermal zones the spbm driver adds. spbm also registers power and energy channels under hwmon; those are whole-system watts and joules, and they belong on their own panels rather than mixed into a temperature graph.",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 26 },
+      "title": "Temperatures \u2014 every hwmon sensor",
+      "description": "Every temperature the kernel exposes under hwmon: the SoC thermal zone, the NVMe sensors, and the eight zones the spbm driver adds. spbm's power and energy channels are on the Power row, not here.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "celsius",
           "min": 20,
-          "custom": { "fillOpacity": 0, "lineWidth": 1, "showPoints": "never" }
+          "custom": {
+            "fillOpacity": 0,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "node_hwmon_temp_celsius{job=\"node\"}",
           "legendFormat": "{{chip}} / {{sensor}}"
         }
@@ -361,7 +842,12 @@
       "type": "row",
       "title": "Disk",
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 34 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 43
+      },
       "panels": []
     },
     {
@@ -369,8 +855,16 @@
       "type": "bargauge",
       "title": "Filesystem usage",
       "description": "Per mounted filesystem. Docker overlays, snap loops and the pseudo-filesystems are excluded at the exporter, which is deliberate: mounting the host root into a containerised node-exporter made the filesystem collector recurse them and hang, and that is why this box had no disk metrics at all until the exporter moved to the host.",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 35 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 44
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
@@ -379,9 +873,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "orange", "value": 80 },
-              { "color": "red", "value": 90 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
             ]
           }
         },
@@ -391,12 +894,21 @@
         "displayMode": "gradient",
         "orientation": "horizontal",
         "showUnfilled": true,
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
       },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "100 - (node_filesystem_avail_bytes{job=\"node\"} * 100 / node_filesystem_size_bytes{job=\"node\"})",
           "legendFormat": "{{mountpoint}}",
           "instant": true
@@ -406,26 +918,52 @@
     {
       "id": 14,
       "type": "timeseries",
-      "title": "Root filesystem — free space",
+      "title": "Root filesystem \u2014 free space",
       "description": "The single 3.7 TB NVMe. There is no separate /home on this box, so datasets, checkpoints, container images and logs all consume the same 3.5 TB of headroom.",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 35 },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 44
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "bytes",
           "min": 0,
-          "custom": { "fillOpacity": 10, "lineWidth": 1, "showPoints": "never" }
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true, "calcs": ["min", "lastNotNull"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "min",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "node_filesystem_avail_bytes{job=\"node\",mountpoint=\"/\"}",
           "legendFormat": "free on /"
         }
@@ -435,15 +973,28 @@
       "id": 15,
       "type": "stat",
       "title": "Root filesystem (holds the shared artifact directory)",
-      "description": "Datasets, checkpoints and run metadata live in /srv/bbm, outside ~/bbm, because the laptop rsyncs ~/bbm with --delete and would erase anything written there. /srv/bbm is a directory on the root filesystem, not a mount of its own, so node_exporter emits no series for it — a query for mountpoint=\"/srv/bbm\" would match nothing, and these figures are the root filesystem's, which is the pool /srv/bbm actually draws from. Repoint this panel if it ever gets its own filesystem.",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 35 },
+      "description": "Datasets, checkpoints and run metadata live in /srv/bbm, outside ~/bbm, because the laptop rsyncs ~/bbm with --delete and would erase anything written there. /srv/bbm is a directory on the root filesystem, not a mount of its own, so node_exporter emits no series for it \u2014 a query for mountpoint=\"/srv/bbm\" would match nothing, and these figures are the root filesystem's, which is the pool /srv/bbm actually draws from. Repoint this panel if it ever gets its own filesystem.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 44
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "bytes",
           "thresholds": {
             "mode": "absolute",
-            "steps": [{ "color": "text", "value": null }]
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
           }
         },
         "overrides": []
@@ -453,18 +1004,30 @@
         "graphMode": "area",
         "textMode": "value_and_name",
         "justifyMode": "center",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
       },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "node_filesystem_avail_bytes{job=\"node\",mountpoint=\"/\"}",
           "legendFormat": "free"
         },
         {
           "refId": "B",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "node_filesystem_size_bytes{job=\"node\",mountpoint=\"/\"}",
           "legendFormat": "capacity"
         }
@@ -475,43 +1038,81 @@
       "type": "row",
       "title": "Exporter health",
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 43 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
       "panels": []
     },
     {
       "id": 17,
       "type": "timeseries",
       "title": "Targets up",
-      "description": "When telemetry lies, this is the first question: is the exporter alive? 1 is up, 0 is a failed scrape. A flat line at 0 for the gpu job usually means the systemd unit died; a gap means Prometheus itself was down. Never diagnose this by curling the exporter — curl 127.0.0.1:9100 hangs on this box even when node-exporter is healthy.",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
+      "description": "When telemetry lies, this is the first question: is the exporter alive? 1 is up, 0 is a failed scrape. A flat line at 0 for the gpu job usually means the systemd unit died; a gap means Prometheus itself was down. Never diagnose this by curling the exporter \u2014 curl 127.0.0.1:9100 hangs on this box even when node-exporter is healthy.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 53
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
           "min": 0,
           "max": 1,
           "decimals": 0,
-          "custom": { "fillOpacity": 20, "lineWidth": 2, "showPoints": "never", "lineInterpolation": "stepAfter" },
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "showPoints": "never",
+            "lineInterpolation": "stepAfter"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "green", "value": 1 }
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
             ]
           }
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "calcs": ["min", "lastNotNull"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "min",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "up",
-          "legendFormat": "{{job}} — {{instance}}"
+          "legendFormat": "{{job}} \u2014 {{instance}}"
         }
       ]
     },
@@ -519,25 +1120,51 @@
       "id": 18,
       "type": "timeseries",
       "title": "Scrape duration",
-      "description": "How long each target takes to answer. A duration climbing toward the scrape interval is an exporter about to start failing — the containerised node-exporter's filesystem hang showed up here before it showed up as a down target.",
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+      "description": "How long each target takes to answer. A duration climbing toward the scrape interval is an exporter about to start failing \u2014 the containerised node-exporter's filesystem hang showed up here before it showed up as a down target.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 53
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "s",
           "min": 0,
-          "custom": { "fillOpacity": 0, "lineWidth": 1, "showPoints": "never" }
+          "custom": {
+            "fillOpacity": 0,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
         },
         "overrides": []
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "right", "showLegend": true, "calcs": ["mean", "max"] },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "targets": [
         {
           "refId": "A",
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "scrape_duration_seconds",
           "legendFormat": "{{job}}"
         }

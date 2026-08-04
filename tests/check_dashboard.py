@@ -62,6 +62,10 @@ GRAFANA_MACROS = {
     "$__rate_interval": "5m",
     "$__interval": "1m",
     "$__range": "1h",
+    # Bare seconds, not a duration: it is used as a multiplier when integrating a
+    # gauge into an energy figure, so it must stay numerically consistent with
+    # $__range above or the substituted expression checks arithmetic nobody runs.
+    "$__range_s": "3600",
 }
 
 # node_exporter collector -> what it emits. `names` where the collector has a
@@ -292,8 +296,10 @@ def walk_targets(node: object, panel: str = "dashboard") -> list[tuple[str, str,
 
 
 def substitute_macros(expr: str) -> str:
-    for macro, value in GRAFANA_MACROS.items():
-        expr = expr.replace(macro, value)
+    # Longest first: `$__range_s` starts with `$__range`, and substituting the
+    # shorter one first would leave the literal `1h_s` behind for promtool.
+    for macro in sorted(GRAFANA_MACROS, key=len, reverse=True):
+        expr = expr.replace(macro, GRAFANA_MACROS[macro])
     if "$" in expr:
         raise CheckFailed(
             f"expression uses a Grafana variable this check cannot interpolate: {expr!r}"
