@@ -16,7 +16,7 @@ datasource and dashboard.
 | `prometheus_bind_address` | `127.0.0.1` | published address on the host |
 | `prometheus_port` | `9090` | the container always listens on 9090 |
 | `grafana_port` | `80` | so `http://spark.local` needs no suffix |
-| `prometheus_retention` | `30d` | |
+| `prometheus_retention` | `1y` | roughly 10 GB at 1527 active series |
 | `prometheus_scrape_interval` | `15s` | also the datasource's `timeInterval` |
 | `spark_shared_dir` | `/srv/spark` | `group_vars`; its `dashboards/` is mounted into Grafana |
 

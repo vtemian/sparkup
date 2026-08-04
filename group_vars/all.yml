@@ -38,7 +38,11 @@ grafana_port: 80
 # authority, and a value valid for one is not always valid for the other.
 prometheus_bind_address: "127.0.0.1"
 prometheus_port: 9090
-prometheus_retention: 30d
+# A year, because a rolling window turns a long-running experiment into one that
+# cannot be compared with the run before it. Cheap here: at the current 1527
+# active series this is on the order of 10 GB. Recheck
+# `prometheus_tsdb_head_series` against free space before growing the exporter set.
+prometheus_retention: 1y
 prometheus_scrape_interval: 15s
 
 # The one switch in this repo, and the reason it exists: `spbm` installs a
