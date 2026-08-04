@@ -17,8 +17,9 @@ in to a kernel module.
 
 ## What it looks like
 
-One dashboard, provisioned from a file in this repo: GPU load, temperature, power and clocks;
-CPU, unified memory and disk; and a row saying whether the exporters themselves are still alive.
+One dashboard, provisioned from a file in this repo: GPU load, temperature, power and clocks; CPU,
+unified memory and disk; and a row saying whether the exporters themselves are still alive. The
+Power row shown here is the part you opt into; everything else arrives by default.
 
 <p align="center">
   <img src=".github/dashboard.png" alt="The spark-overview dashboard" />
