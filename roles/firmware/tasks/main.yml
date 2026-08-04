@@ -1,46 +1,49 @@
 ---
 # THIS ROLE STAGES FIRMWARE AND NEVER REBOOTS. `--no-reboot-check` is what
 # enforces it: without the flag `fwupdmgr update` offers to reboot and can act.
+#
+# Two halves with different gates. Staging is opt-in through
+# firmware_update_enabled; reading the EC version and asserting it has not
+# drifted always runs, because drift is worth knowing about on a box that has
+# opted out of being flashed by this repo.
+
+- name: Look for the firmware update client
+  ansible.builtin.stat:
+    path: "{{ firmware_fwupdmgr }}"
+  register: firmware_client
 
 - name: Stage firmware updates
-  when: firmware_update_enabled | bool
+  when:
+    - firmware_update_enabled | bool
+    - firmware_client.stat.exists
   block:
 
-    - name: Look for the firmware update client
-      ansible.builtin.stat:
-        path: "{{ firmware_fwupdmgr }}"
-      register: firmware_client
+    # rc 2 is fresh cache, rc 101 is LVFS unreachable. Both leave the check
+    # below reading the cache — degraded but safe, so nothing fails here.
+    - name: Refresh the firmware metadata
+      ansible.builtin.command:
+        cmd: "{{ firmware_fwupdmgr }} refresh"
+      changed_when: false
+      failed_when: false
+      check_mode: false
 
-    - name: Manage firmware through fwupd
-      when: firmware_client.stat.exists
-      block:
+    # rc 0 means the vendor is offering something; rc 2 is a converged box.
+    - name: Read whether the vendor is offering firmware
+      ansible.builtin.command:
+        cmd: "{{ firmware_fwupdmgr }} get-updates --no-unreported-check"
+      register: firmware_updates
+      changed_when: false
+      failed_when: firmware_updates.rc not in [0, 2]
+      check_mode: false
 
-        # rc 2 is fresh cache, rc 101 is LVFS unreachable. Both leave the check
-        # below reading the cache — degraded but safe, so nothing fails here.
-        - name: Refresh the firmware metadata
-          ansible.builtin.command:
-            cmd: "{{ firmware_fwupdmgr }} refresh"
-          changed_when: false
-          failed_when: false
-          check_mode: false
-
-        # rc 0 means the vendor is offering something; rc 2 is a converged box.
-        - name: Read whether the vendor is offering firmware
-          ansible.builtin.command:
-            cmd: "{{ firmware_fwupdmgr }} get-updates --no-unreported-check"
-          register: firmware_updates
-          changed_when: false
-          failed_when: firmware_updates.rc not in [0, 2]
-          check_mode: false
-
-        # Only reached when something is on offer, so it always changes something.
-        - name: Stage the firmware capsules
-          ansible.builtin.command:
-            cmd: >-
-              {{ firmware_fwupdmgr }} update --assume-yes --no-reboot-check
-              --no-unreported-check
-          changed_when: true
-          when: firmware_updates.rc == 0
+    # Only reached when something is on offer, so it always changes something.
+    - name: Stage the firmware capsules
+      ansible.builtin.command:
+        cmd: >-
+          {{ firmware_fwupdmgr }} update --assume-yes --no-reboot-check
+          --no-unreported-check
+      changed_when: true
+      when: firmware_updates.rc == 0
 
 # Outside the block and unconditional: once a capsule is staged `get-updates`
 # stops offering it, so "armed and waiting for a reboot" reads as "current".
@@ -62,6 +65,52 @@
       throughout; an interrupted write is not recoverable on this hardware.
       To cancel instead, delete them — fwupd has no command that will:
       rm {{ firmware_capsule_dir }}/*.cap
-      Once they are applied, move thermal_expected_ec_firmware to the new
-      version or the thermal role will correctly report drift.
+      Once they are applied, move firmware_expected_ec_firmware to the new
+      version or the assert below will correctly report drift.
   when: firmware_capsules.matched | int > 0
+
+# Drift detection, and it runs whether or not staging is enabled: the point is
+# to notice a version that moved without anybody here asking for it.
+- name: Detect embedded controller firmware drift
+  when:
+    - firmware_client.stat.exists
+    - firmware_ec_device_id | default('', true) | trim | length > 0
+  block:
+
+    - name: Read the firmware inventory
+      ansible.builtin.command:
+        cmd: "{{ firmware_fwupdmgr }} get-devices --json"
+      register: firmware_devices
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    # Empty covers all three "no version to assert" cases, so the assert skips.
+    - name: Record the embedded controller firmware version
+      ansible.builtin.set_fact:
+        firmware_ec_version: >-
+          {{ (firmware_devices.stdout | from_json).get('Devices', [])
+             | selectattr('DeviceId', 'defined')
+             | selectattr('DeviceId', 'equalto', firmware_ec_device_id)
+             | map(attribute='Version')
+             | first | default('', true) }}
+      when:
+        - firmware_devices.rc | default(1) == 0
+        - firmware_devices.stdout | default('') is search('Devices')
+
+    - name: Assert that the embedded controller firmware has not drifted
+      ansible.builtin.assert:
+        that:
+          - firmware_ec_version == firmware_expected_ec_firmware
+        fail_msg: >-
+          EC firmware is {{ firmware_ec_version }}, expected
+          {{ firmware_expected_ec_firmware }}. Something flashed this box, and
+          this role will not put the old version back:
+          `fwupdmgr downgrade {{ firmware_ec_device_id }}` is the manual route,
+          and it reboots. If the new version is intended, update
+          firmware_expected_ec_firmware.
+        success_msg: >-
+          EC firmware is {{ firmware_expected_ec_firmware }}, as expected.
+      when:
+        - firmware_ec_version | default('', true) | length > 0
+        - firmware_expected_ec_firmware | default('', true) | trim | length > 0

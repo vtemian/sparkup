@@ -12,7 +12,8 @@ box, not for finishing quickly.
 training runs. The wrapper that emits per-run metrics and correlates them against these series is a
 separate project, specified in [`docs/training-observability.md`](docs/training-observability.md).
 What sparkup guarantees it: Prometheus with the remote-write receiver enabled, a provisioned Grafana
-datasource, and live `node`, `gpu` and `power` scrape jobs. Do not break those.
+datasource, and live `node` and `gpu` scrape jobs — power arrives on `node`, from the firmware. Do
+not break those.
 
 ---
 
@@ -22,9 +23,10 @@ These are invariants of the repository, not preferences. Breaking one is a defec
 playbook still converges.
 
 1. **Never flash firmware unattended.** Nothing may write firmware as a side effect of a converge.
-   The `firmware` role stages capsules and stops; it is off unless a box opts in, and it never
-   reboots, so the flash only happens when a human restarts the machine. `thermal` reads the EC
-   version and asserts it, and never writes. **Rollback is not universally available**: on this
+   The `firmware` role stages capsules and stops; staging is off unless a box opts in, and it never
+   reboots, so the flash only happens when a human restarts the machine. Its other half reads the EC
+   version and asserts it has not drifted, and never writes. **Rollback is not universally
+   available**: on this
    hardware fwupd advertises no `self-recovery` and no `dual-image` on any updatable device, and at
    least one device's current version sits below its own downgrade floor, making its update
    one-way. See `roles/firmware/README.md` before enabling it.
@@ -105,7 +107,7 @@ Three tiers. Putting a value in the wrong one is the most common mistake.
 | Tier | Holds | Example |
 |---|---|---|
 | `group_vars/all.yml` | defaults suiting **any** Spark, and anything several roles share | `prometheus_image`, `spark_firewall_allow_ports` |
-| `host_vars/<host>.yml` | one box's identity. **Untracked** | `spark_users`, `thermal_expected_ec_firmware`, `base_timezone` |
+| `host_vars/<host>.yml` | one box's identity. **Untracked** | `spark_users`, `firmware_expected_ec_firmware`, `base_timezone` |
 | `roles/<r>/defaults/main.yml` | tunables only that role reads, prefixed with the role name | `kernel_grub_timeout`, `spbm_mok_cert` |
 
 `var-naming[no-role-prefix]` is enabled and **not** skipped. A role must prefix what it declares.
@@ -180,7 +182,7 @@ make apply BECOME="--become-password-file ~/.sparkup-become"   # must report cha
 Play order, and it is load-bearing:
 
 ```
-base → docker → gpu → users → spbm → exporters → monitoring → thermal → firmware → kernel
+base → docker → gpu → users → spbm → exporters → monitoring → firmware → kernel
 ```
 
 - `docker` precedes `users` because `ansible.builtin.user` fails hard if a group in `groups:` does

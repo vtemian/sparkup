@@ -42,7 +42,7 @@ site.yml              the playbook
 inventory/hosts.yml   which box
 group_vars/all.yml    defaults for any Spark
 host_vars/spark.yml   your box (untracked)
-roles/                base, docker, gpu, users, spbm, exporters, monitoring, thermal, firmware, kernel
+roles/                base, docker, gpu, users, spbm, exporters, monitoring, firmware, kernel
 tests/                everything that runs without a Spark
 ```
 

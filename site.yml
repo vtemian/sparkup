@@ -44,8 +44,6 @@
       tags: [exporters]
     - role: monitoring
       tags: [monitoring]
-    - role: thermal
-      tags: [thermal]
     - role: firmware
       tags: [firmware]
     # LAST and alone: the only role that can leave a headless WiFi-only box

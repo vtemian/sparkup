@@ -53,10 +53,10 @@
         enabled: true
         state: started
 
+# Unconditional: a verification with an off switch is a verification that gets
+# switched off. Skipped in --check only because it runs a container.
 - name: Prove that GPU containers work
-  when:
-    - gpu_smoke_test | bool
-    - not ansible_check_mode
+  when: not ansible_check_mode
   block:
     - name: Run nvidia-smi inside a CUDA container
       ansible.builtin.command:

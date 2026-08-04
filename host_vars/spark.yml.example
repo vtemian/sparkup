@@ -21,10 +21,11 @@ spark_shared_group: spark
 # Empty leaves the clock alone.
 # base_timezone: Europe/Bucharest
 
-# From `fwupdmgr get-devices --json`, not the CLI table: the thermal role compares
-# strings exactly and asserts on every converge. Leave empty until you know yours.
-# thermal_ec_device_id: "<your box's EC device id>"
-# thermal_expected_ec_firmware: "0x03000302"
+# From `fwupdmgr get-devices --json`, not the CLI table: the firmware role
+# compares strings exactly and asserts on every converge. Leave empty until you
+# know yours.
+# firmware_ec_device_id: "<your box's EC device id>"
+# firmware_expected_ec_firmware: "0x03000302"
 
 # Stages firmware on converge; UEFI applies it at the next boot, which nothing
 # here performs for you.
