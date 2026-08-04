@@ -1,8 +1,0 @@
----
-# Gated: a restart *starts* a stopped oneshot, so without this a template edit
-# would silently cap the GPU on a box whose owner left the flag off.
-- name: Restart the GPU clock cap
-  ansible.builtin.systemd_service:
-    name: "{{ thermal_gpu_clock_cap_unit }}"
-    state: restarted
-  when: thermal_gpu_clock_cap_enabled | bool

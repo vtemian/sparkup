@@ -35,7 +35,6 @@
       tags: [docker]
     - role: gpu
       tags: [gpu]
-      when: gpu_enabled | bool
     - role: users
       tags: [users]
     # Before exporters: the hwmon sensors must exist before the exporters start.

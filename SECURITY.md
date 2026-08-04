@@ -29,8 +29,8 @@ model does not apply. What does matter:
 
 - The exporters and Prometheus having no authentication. The boundary is the network, and
   `prometheus_bind_address` defaults to `127.0.0.1` in `group_vars/all.yml`.
-- Grafana allowing anonymous read access on port 80. Also deliberate:
-  `monitoring_grafana_anonymous_enabled` in `roles/monitoring/defaults/main.yml`.
+- Grafana allowing anonymous read access on port 80. Also deliberate, and unconditional:
+  `GF_AUTH_ANONYMOUS_ENABLED` in `roles/monitoring/templates/compose.yml.j2`.
 - Naming a GitHub account in `github_keys`. That is a standing delegation you chose to make: whoever
   controls that account can log in as that user. See `roles/users/README.md`.
 - Needing sudo. The playbook provisions a machine.

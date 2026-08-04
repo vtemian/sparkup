@@ -106,30 +106,38 @@ Three tiers. Putting a value in the wrong one is the most common mistake.
 |---|---|---|
 | `group_vars/all.yml` | defaults suiting **any** Spark, and anything several roles share | `prometheus_image`, `spark_firewall_allow_ports` |
 | `host_vars/<host>.yml` | one box's identity. **Untracked** | `spark_users`, `thermal_expected_ec_firmware`, `base_timezone` |
-| `roles/<r>/defaults/main.yml` | tunables only that role reads, prefixed with the role name | `kernel_grub_timeout`, `thermal_pin_fwupd` |
+| `roles/<r>/defaults/main.yml` | tunables only that role reads, prefixed with the role name | `kernel_grub_timeout`, `spbm_mok_cert` |
 
 `var-naming[no-role-prefix]` is enabled and **not** skipped. A role must prefix what it declares.
 Registry variables are read unprefixed and declared only in `group_vars`; do not redeclare them in a
 role's defaults, or the same tunable exists in two files.
 
-### Roles that are inert by default
+### There are three gates, and they all guard irreversible actions
 
-| Role | Off because | Enable with |
+Everything else runs on every converge. A toggle that merely says "maybe do the thing this repo
+exists to do" does not earn its place. The bar for a new one is that flipping it wrong costs
+somebody hardware, a boot, or their way into the box.
+
+| Gate | Default | Guards |
 |---|---|---|
-| `thermal` EC assertion | your firmware version is not this box's | `thermal_expected_ec_firmware` |
-| `firmware` | it is the only role that can permanently destroy hardware | `firmware_update_enabled: true` |
-| `kernel` | can leave a headless box unbootable | `kernel_enabled: true` |
+| `kernel_enabled` | `false` | the boot path. Can leave a headless WiFi-only box unbootable |
+| `firmware_update_enabled` | `false` | a flash UEFI applies at next boot, outside this repo's control |
+| `spark_firewall_enable` | `false` | default-deny incoming. A mistake means walking to the box |
+
+The firewall role otherwise runs unconditionally, because adding allow rules cannot lock anyone out.
+Only the `state: enabled` step is gated, and it asserts SSH is allowed before it fires.
 
 **`--tags kernel` alone does nothing.** The tag selects the role, `when: kernel_enabled` discards it,
 and the run reports success having done nothing. Both are required:
 `--tags kernel -e kernel_enabled=true`.
 
-**The clock cap ships off because of a measurement, not caution.** Over 20 h of uptime including
-training this box logged 0 µs of SW and HW thermal slowdown against 23 224 s of SW power capping, at
-79–80 °C with clocks at 2405 of 3003 MHz. The limiter here is the power cap, not heat, so the
-fan-curve advice circulating for this hardware is a hypothesis about our box rather than a finding
-on it. `nvidia-smi` also reports `N/A` for every thermal-limit register, so there is no headroom
-figure to check it against. Measure before mitigating.
+**There is no GPU clock cap, and adding one needs a measurement first.** Over 20 h of uptime
+including training this box logged 0 µs of SW and HW thermal slowdown against 23 224 s of SW power
+capping, at 79–80 °C with clocks at 2405 of 3003 MHz. The limiter here is the power cap, not heat,
+so the fan-curve advice circulating for this hardware is a hypothesis about our box rather than a
+finding on it. `nvidia-smi` also reports `N/A` for every thermal-limit register, so there is no
+headroom figure to check it against. Once `spbm` is live, the power channels are how you would take
+that measurement.
 
 ### Where power comes from
 
@@ -152,11 +160,12 @@ somewhat under a wall-socket meter. It is still the whole box, unlike `nvidia_sm
 which is the GPU rail alone and roughly half the truth (87 W rail against 180 W at the socket,
 measured here).
 
-A Shelly smart-plug role lived here until 2026-08-04 and was deleted. It was a second, optional
-answer to a question the firmware already answers on every Spark, and it carried a role, 8
-variables, its own scrape job and a `power_scrape_target` indirection to stay optional. If a true
-wall-socket number is ever wanted back, `git show` it — but the reason it went is that nothing
-should need a smart plug to know what the box draws.
+**Do not add a smart-plug exporter back.** One was tried and removed: a second, optional answer to a
+question the firmware already answers on every Spark, costing a role, 8 variables, its own scrape
+job and a `power_scrape_target` indirection whose only purpose was letting it stay optional. The
+wall-socket number it produced is the one thing `sys_total` cannot give you, and that was not worth
+the surface. If you genuinely need PSU conversion loss measured, that is a different conversation
+from "sparkup should report power".
 
 ---
 

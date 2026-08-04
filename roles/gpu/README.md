@@ -5,7 +5,6 @@ container works.
 
 | Variable | Default | |
 |---|---|---|
-| `gpu_enabled` | `true` | `group_vars`; `site.yml` skips the role when false |
 | `gpu_toolkit_packages` | `[nvidia-container-toolkit]` | `state: present`, unpinned |
 | `gpu_cdi_spec_path` | `/etc/cdi/nvidia.yaml` | the single CDI spec; `/var/run` is tmpfs |
 | `gpu_cdi_refresh_env_file` | `/etc/nvidia-container-toolkit/nvidia-cdi-refresh.env` | redirected to the path above |

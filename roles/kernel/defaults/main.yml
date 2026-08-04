@@ -13,7 +13,4 @@ kernel_grub_dropin_name: zz-sparkup-menu.cfg
 kernel_grub_default_file: /etc/default/grub
 kernel_grub_config: /boot/grub/grub.cfg
 
-# false lands the menu timeout only, so a reboot can be proved safe first.
-kernel_manage_grub_default: true
-
 kernel_apt_preferences_file: /etc/apt/preferences.d/no-unsigned-kernels

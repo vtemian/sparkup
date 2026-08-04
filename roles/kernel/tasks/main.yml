@@ -69,7 +69,6 @@
     group: root
     mode: "0644"
   notify: Update GRUB
-  when: kernel_manage_grub_default | bool
 
 # grub.cfg only honours ${saved_entry} once regenerated with GRUB_DEFAULT=saved.
 - name: Regenerate the GRUB menu before reading it
@@ -112,7 +111,6 @@
   when: not ansible_check_mode
 
 - name: Point GRUB at the signed kernel
-  when: kernel_manage_grub_default | bool
   block:
     # A nested entry is only selectable as "<submenu id>>><entry id>"; with no
     # submenu the join collapses to the entry id alone.

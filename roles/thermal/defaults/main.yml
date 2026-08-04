@@ -1,20 +1,6 @@
 ---
-# OFF: measured 0 us of thermal slowdown on this box, so the fan-curve advice is
-# a hypothesis. The unit installs anyway — `systemctl start gpu-clock-cap`.
-thermal_gpu_clock_cap_enabled: false
-thermal_gpu_clock_cap_min_mhz: 300
-thermal_gpu_clock_cap_max_mhz: 2200
-thermal_gpu_clock_cap_unit: gpu-clock-cap.service
-
-# Absolute path: also the file the role stats to decide whether there is a GPU.
-thermal_nvidia_smi_command: /usr/bin/nvidia-smi
-
-# OFF: the timer refreshes LVFS metadata, it does not flash anything.
-thermal_pin_fwupd: false
+# Absolute path: also the file the role stats to decide whether fwupd exists.
 thermal_fwupdmgr_command: /usr/bin/fwupdmgr
-thermal_fwupd_refresh_timer: fwupd-refresh.timer
-
-thermal_systemd_unit_dir: /etc/systemd/system
 
 # A per-box hash. On another Spark the lookup finds nothing and the assert skips
 # — run `fwupdmgr get-devices` there. Empty disables the firmware read.

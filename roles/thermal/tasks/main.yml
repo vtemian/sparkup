@@ -1,6 +1,7 @@
 ---
-# This role never flashes firmware and never removes a guard: it masks the fwupd
-# timer but never unmasks, starts the clock cap but never stops a running one.
+# Reads and asserts; never flashes. Drift detection only: if the EC firmware
+# moved without somebody here changing thermal_expected_ec_firmware, say so and
+# stop, because the alternative is finding out from a sensor reading badly.
 
 - name: Look for the firmware update client
   ansible.builtin.stat:
@@ -10,15 +11,6 @@
 - name: Manage the firmware update path
   when: thermal_fwupdmgr.stat.exists
   block:
-    # Masking, not disabling: disable only removes the boot symlink, which the
-    # next fwupd upgrade puts back. No unmask task on purpose — reverse by hand.
-    - name: Mask the fwupd metadata refresh timer
-      ansible.builtin.systemd_service:
-        name: "{{ thermal_fwupd_refresh_timer }}"
-        state: stopped
-        masked: true
-      when: thermal_pin_fwupd | bool
-
     - name: Read the firmware inventory
       ansible.builtin.command:
         cmd: "{{ thermal_fwupdmgr_command }} get-devices --json"
@@ -57,48 +49,3 @@
       when:
         - thermal_ec_version | default('', true) | length > 0
         - thermal_expected_ec_firmware | default('', true) | trim | length > 0
-
-- name: Look for the NVIDIA driver CLI
-  ansible.builtin.stat:
-    path: "{{ thermal_nvidia_smi_command }}"
-  register: thermal_nvidia_smi
-
-- name: Manage the GPU clock cap
-  when: thermal_nvidia_smi.stat.exists
-  block:
-    # A typo here is accepted by the template and rejected by the driver at boot.
-    - name: Assert that the GPU clock cap range is usable
-      ansible.builtin.assert:
-        that:
-          - thermal_gpu_clock_cap_min_mhz | int > 0
-          - thermal_gpu_clock_cap_max_mhz | int >= thermal_gpu_clock_cap_min_mhz | int
-        fail_msg: >-
-          thermal_gpu_clock_cap_min_mhz={{ thermal_gpu_clock_cap_min_mhz }} and
-          thermal_gpu_clock_cap_max_mhz={{ thermal_gpu_clock_cap_max_mhz }} are
-          not a usable range. `nvidia-smi -lgc min,max` needs a positive
-          minimum and a maximum at least as large.
-
-    # Installed whether or not enabled: on disk is what makes turning it on for
-    # one night a single systemctl command.
-    - name: Install the GPU clock cap unit
-      ansible.builtin.template:
-        src: gpu-clock-cap.service.j2
-        dest: "{{ thermal_systemd_unit_dir }}/{{ thermal_gpu_clock_cap_unit }}"
-        owner: root
-        group: root
-        mode: "0644"
-      notify: Restart the GPU clock cap
-
-    - name: Set whether the GPU clock cap applies at boot
-      ansible.builtin.systemd_service:
-        name: "{{ thermal_gpu_clock_cap_unit }}"
-        enabled: "{{ thermal_gpu_clock_cap_enabled | bool }}"
-        daemon_reload: true
-
-    # Started when on, never stopped when off: `state: stopped` runs
-    # `nvidia-smi -rgc` and would release a cap an operator started by hand.
-    - name: Apply the GPU clock cap now
-      ansible.builtin.systemd_service:
-        name: "{{ thermal_gpu_clock_cap_unit }}"
-        state: started
-      when: thermal_gpu_clock_cap_enabled | bool

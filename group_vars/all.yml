@@ -14,7 +14,6 @@ spark_shared_group: spark
 spark_shared_subdirs: [data, checkpoints, runs]
 
 # The role only ADDS allow rules; it never resets ufw or sets a default policy.
-spark_firewall_manage: true
 spark_firewall_allow_ports: [22, 80]
 spark_firewall_ssh_port: 22
 
@@ -26,10 +25,6 @@ spark_firewall_enable: false
 # that traffic hits the host INPUT chain and default-deny drops it without these.
 spark_firewall_docker_subnets: ["172.16.0.0/12"]
 spark_firewall_container_ports: [9100, 9835]
-
-# nvidia-container-toolkit comes from NVIDIA's repo, which DGX OS configures.
-# Turn off on a box without it rather than dying partway through the play.
-gpu_enabled: true
 
 # Off by default: the only role that can leave a headless box unbootable.
 kernel_enabled: false
@@ -46,15 +41,9 @@ prometheus_bind_address: "127.0.0.1"
 prometheus_port: 9090
 prometheus_retention: 30d
 prometheus_scrape_interval: 15s
-# The training-observability project pushes per-step samples with true
-# timestamps. Turning this off breaks that contract.
-prometheus_enable_remote_write_receiver: true
 
 # Check linux-arm64 assets before bumping; several exporters are amd64-only.
 node_exporter_version: "1.12.1"
 node_exporter_port: 9100
 nvidia_gpu_exporter_version: "1.13.1"
 nvidia_gpu_exporter_port: 9835
-
-# False refuses disruptive work while a GPU process is running.
-spark_allow_docker_restart: true

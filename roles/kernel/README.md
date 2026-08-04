@@ -13,7 +13,6 @@ kernel, and pins unsigned images out of apt. It never reboots.
 | `kernel_grub_dropin_name` | `zz-sparkup-menu.cfg` | `zz-` sorts last, so it wins |
 | `kernel_grub_default_file` | `/etc/default/grub` | only `GRUB_DEFAULT=saved` is written here |
 | `kernel_grub_config` | `/boot/grub/grub.cfg` | read, never written |
-| `kernel_manage_grub_default` | `true` | `false` lands the menu alone, so a reboot can be proved safe first |
 | `kernel_apt_preferences_file` | `/etc/apt/preferences.d/no-unsigned-kernels` | `Pin-Priority: -1` |
 
 Both the tag and the flag are required — the tag alone silently no-ops:

@@ -207,8 +207,8 @@ Cost computed from it is a slight underestimate — state that in the panel desc
 letting a reader assume it is the number on their electricity bill.
 
 **Tariff is a Grafana variable, not a hardcoded number** — it changes, and a variable means no
-dashboard rebuild. Romania is roughly 1.3 RON/kWh at time of writing, so a continuous 200 W box is
-on the order of €0.06/hour. **The interesting number is probably watt-hours per run, for comparing
+dashboard rebuild. At a Romanian tariff around 1.3 RON/kWh a continuous 200 W box is on the order
+of €0.06/hour. **The interesting number is probably watt-hours per run, for comparing
 efficiency between configs, more than the euros.**
 
 **Clock discipline** is free now: the sensors are read on the host and scraped by a Prometheus on
