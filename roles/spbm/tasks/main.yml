@@ -88,6 +88,12 @@
       changed_when: true
       no_log: true
 
+    # Before the import, so a request never exists under the 10s default.
+    - name: Give MokManager long enough for a display to wake up
+      ansible.builtin.command:
+        cmd: mokutil --timeout {{ spbm_mok_timeout }}
+      changed_when: true
+
     - name: Queue the key for enrolment at the next boot
       ansible.builtin.command:
         cmd: mokutil --import {{ spbm_mok_cert }} --hash-file /root/.spbm-mok-hash
@@ -108,7 +114,9 @@
       but Secure Boot will not load it until its key is trusted. Reboot, and
       before the OS loads shim shows a blue MokManager screen: Enroll MOK,
       Continue, Yes, then type "{{ spbm_mok_password }}". It needs a keyboard
-      attached; there is no network and no SSH at that point. Miss the prompt
-      and it cancels harmlessly — re-run this role. Until then
-      node_hwmon_power_input_watt returns nothing.
+      and a monitor attached; there is no network and no SSH at that point. The
+      screen waits {{ spbm_mok_timeout }}s — if your display has not woken by
+      then it cancels and the key is discarded, so re-run this role and try
+      again. Until the key is enrolled node_hwmon_power_input_watt returns
+      nothing.
   when: "'is already enrolled' not in (spbm_mok_test.stdout | default(''))"

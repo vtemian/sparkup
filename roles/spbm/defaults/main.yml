@@ -10,6 +10,14 @@ spbm_headers_package: linux-headers-nvidia-hwe-24.04
 # DKMS signs with this key; a human enrols it once at the console.
 spbm_mok_cert: /var/lib/shim-signed/mok/MOK.der
 
+# Seconds MokManager waits for a keypress before cancelling the enrolment.
+# shim's built-in default is 10, which this box loses to: HDMI has not finished
+# syncing by then, so the prompt appears and expires behind a blank screen and
+# the request is silently discarded. Not -1 (wait forever): a headless box that
+# reboots unattended would hang at a blue screen instead of coming back, and a
+# cancelled enrolment costs only a re-run.
+spbm_mok_timeout: 120
+
 # NOT A SECRET, and do not put one here. It is typed once at the MokManager
 # screen to prove somebody is physically at the box, then discarded — anyone who
 # can reach that screen is already at the keyboard. The converge prints it,
