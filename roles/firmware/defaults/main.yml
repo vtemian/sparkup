@@ -4,10 +4,3 @@ firmware_fwupdmgr: /usr/bin/fwupdmgr
 
 # Where fwupd leaves capsules for UEFI. Their presence IS a pending flash.
 firmware_capsule_dir: /boot/efi/EFI/UpdateCapsule
-
-# A per-box hash. On another Spark the lookup finds nothing and the assert skips
-# — run `fwupdmgr get-devices` there. Empty disables the read.
-firmware_ec_device_id: ""
-# Empty asserts nothing. Per-box fact, not a project constant — a stranger's
-# Spark on newer EC firmware is a different machine, not drift.
-firmware_expected_ec_firmware: ""

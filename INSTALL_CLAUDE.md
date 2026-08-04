@@ -51,7 +51,7 @@ Three tiers. Putting a value in the wrong one is the most common mistake.
 | Tier | Holds | Example |
 |---|---|---|
 | `group_vars/all.yml` | defaults suiting **any** Spark, and anything several roles share | `prometheus_image`, `spark_firewall_allow_ports` |
-| `host_vars/<host>.yml` | one box's identity. **Untracked** | `spark_users`, `firmware_expected_ec_firmware`, `base_timezone` |
+| `host_vars/<host>.yml` | one box's identity. **Untracked** | `spark_users`, `spark_hostname`, `base_timezone` |
 | `roles/<r>/defaults/main.yml` | tunables only that role reads, prefixed with the role name | `kernel_grub_timeout`, `spbm_mok_cert` |
 
 `var-naming[no-role-prefix]` is enabled and **not** skipped. A role must prefix what it declares.

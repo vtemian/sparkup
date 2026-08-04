@@ -26,9 +26,3 @@ spark_shared_group: spark
 
 # Empty leaves the clock alone.
 # base_timezone: Europe/Bucharest
-
-# From `fwupdmgr get-devices --json`, not the CLI table: the firmware role
-# compares strings exactly and asserts on every converge. Leave empty until you
-# know yours.
-# firmware_ec_device_id: "<your box's EC device id>"
-# firmware_expected_ec_firmware: "0x03000302"
