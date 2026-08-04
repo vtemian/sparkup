@@ -7,8 +7,14 @@
 {% set hwmon = report_hwmon.stdout | default('', true) | trim %}
 {% set power_channels = report_power_channels.stdout | default('', true) | trim %}
 {% set firmware = report_firmware.stdout | default('', true) | trim %}
+{# /etc/dgx-release carries DGX_SERIAL_NUMBER, so pull the versions out rather
+   than printing the file: this report is written to be pasted in public. #}
+{% set dgx = report_dgx_release.content | default('', true) | b64decode %}
+{% set dgx_build = (dgx | regex_search('DGX_SWBUILD_VERSION="([^"]+)"', '\\1') or [''])[0] %}
+{% set dgx_ota = (dgx | regex_search('DGX_OTA_VERSION="([^"]+)"', '\\1') or [''])[0] %}
 ================================================================================
- sparkup report for {{ inventory_hostname }}. Nothing on this box was changed.
+ sparkup report for {{ inventory_hostname }}. Nothing on this box was changed,
+ and no serial numbers are printed, so this is safe to paste into an issue.
 ================================================================================
 
 WILL THIS REPO RUN HERE
@@ -34,7 +40,7 @@ MACHINE
   Product              {{ ansible_product_name | default('?', true) }} / {{ ansible_board_name | default('?', true) }}
   BIOS                 {{ ansible_bios_version | default('?', true) }} ({{ ansible_bios_date | default('?', true) }})
   OS                   {{ ansible_distribution | default('?', true) }} {{ ansible_distribution_version | default('', true) }}
-  DGX release          {{ (report_dgx_release.content | default('', true) | b64decode | trim) or 'no /etc/dgx-release' }}
+  DGX release          {{ (dgx_build ~ (' (OTA ' ~ dgx_ota ~ ')' if dgx_ota else '')) or 'no /etc/dgx-release' }}
   Kernel               {{ ansible_kernel | default('?', true) }} ({{ ansible_architecture | default('?', true) }})
   Memory               {{ ansible_memtotal_mb | default(0, true) }} MB
 {% if root_fs.size_total | default(0) > 0 %}
@@ -59,7 +65,8 @@ WHOLE-SYSTEM POWER
     none
 {% endif %}
 {% if power_channels %}
-  power channels
+  power channels, live. sys_total is the whole box, DC side of the PSU; the
+  GPU rail alone is what nvidia-smi reports above.
 {{ power_channels | indent(4, true) }}
 {% endif %}
 
@@ -74,11 +81,14 @@ reality wins and the docs are wrong: please open a "Hardware finding" issue.
   unified GPU memory   see memory.total above   (claimed: [N/A], the field is dropped)
 
 FIRMWARE
-Older EC firmware reports incorrect CPU power. The converge stages what fwupd
-offers and never reboots; the versions below are what this box runs today.
+Older EC firmware reports incorrect CPU power, so the Embedded Controller line
+is the one that matters. The converge stages what fwupd offers and never
+reboots; these are the versions this box runs today.
 
-{% if firmware %}
-{{ firmware | indent(2, true) }}
+{% if firmware.startswith('{') %}
+{% for device in (firmware | from_json).get('Devices', []) %}
+  {{ "%-26s"|format(device.get('Name', '?')) }} {{ device.get('Version', '?') }}
+{% endfor %}
 {% else %}
   fwupdmgr did not answer: {{ (report_firmware.stderr | default('', true)) | trim or (report_firmware.msg | default('unknown error', true)) }}
 {% endif %}

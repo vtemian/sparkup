@@ -31,27 +31,41 @@
   failed_when: false
   check_mode: false
 
+# --json, not the default tree: this output is meant to be pasted into a public
+# issue, and the prose form prints the NVMe serial number.
 - name: Read the firmware versions the vendor reports
-  ansible.builtin.command: fwupdmgr get-devices --no-unreported-check
+  ansible.builtin.command: fwupdmgr get-devices --json --no-unreported-check
   register: report_firmware
   changed_when: false
   failed_when: false
   check_mode: false
 
+# No pipe and no `set -o pipefail`: /bin/sh is dash here, which has no pipefail
+# and exits 2 on the attempt, so a pipeline silently reports no sensors at all.
 - name: Read which hwmon devices the kernel exposes
   ansible.builtin.shell:
-    cmd: set -o pipefail && grep -H . /sys/class/hwmon/hwmon*/name | sort
+    cmd: grep -H . /sys/class/hwmon/hwmon*/name
   register: report_hwmon
   changed_when: false
   failed_when: false
   check_mode: false
 
-# Present only where the spbm module is loaded. Their values alongside the EC
+# Present only where the spbm module is loaded. These values alongside the EC
 # version above are the correlation behind "older EC firmware reports incorrect
-# CPU power": one box cannot establish it.
+# CPU power": one box cannot establish it, which is the point of printing them.
+#
+# The join is done here rather than in the template because sysfs splits it: the
+# reading is in power7_input and its name is in power7_label, and a report that
+# prints raw microwatt paths is one nobody can quote.
 - name: Read the hwmon power channels
   ansible.builtin.shell:
-    cmd: set -o pipefail && grep -H . /sys/class/hwmon/hwmon*/power*_label /sys/class/hwmon/hwmon*/power*_input | sort
+    cmd: |
+      for input in /sys/class/hwmon/hwmon*/power*_input; do
+          [ -e "${input}" ] || continue
+          label="$(cat "${input%_input}_label" 2>/dev/null)" || label="${input}"
+          awk -v name="${label}" -v reading="$(cat "${input}")" \
+              'BEGIN { printf "%-12s %8.2f W\n", name, reading / 1000000 }'
+      done
   register: report_power_channels
   changed_when: false
   failed_when: false
