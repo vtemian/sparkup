@@ -21,7 +21,7 @@ Until the key is trusted the module is built but cannot load, and every converge
 node_exporter's `hwmon` collector picks the channels up with no further configuration:
 
 ```sh
-curl -s localhost:9100/metrics | grep node_hwmon_power_input_watt
+curl -s localhost:9100/metrics | grep node_hwmon_power_watt
 ```
 
 14 power channels (`sys_total`, `dc_input`, `cpu_gpu`, `soc_pkg`, `gpu`, the PL1/PL2 limits), 4

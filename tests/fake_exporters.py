@@ -51,12 +51,12 @@ HWMON_SENSORS = (
 )
 
 # The spbm driver's power channels, as node_exporter's hwmon collector renders
-# them. `chip` is derived from the sysfs device path rather than the driver
-# name, so the value here is a plausible stand-in — every dashboard query joins
-# node_hwmon_sensor_label instead of naming a chip, and that is the point being
-# tested. Watts are (idle, span) and roughly match the real box: a GPU rail near
-# 87 W under load against a system total that is comfortably more than double it.
-SPBM_CHIP = "platform_spbm"
+# them. `chip` is derived from the sysfs device path, not the driver name, and
+# this is the value a real Spark produces — unguessable, which is why every
+# dashboard query joins node_hwmon_sensor_label rather than naming a chip.
+# Watts are (idle, span) and roughly match the real box: a GPU rail near 87 W
+# under load against a system total comfortably more than double it.
+SPBM_CHIP = "lnxsybus:00_nvda8800:00"
 SPBM_POWER = (
     ("power1", "sys_total", 28.0, 120.0),
     ("power2", "soc_pkg", 12.0, 95.0),
@@ -184,10 +184,10 @@ def node_metrics(box: Box) -> str:
     # The spbm channels. Without the label metric the dashboard's power queries
     # match nothing: they join on it rather than naming a chip.
     watts = dict(box.power_watts(busy))
-    render(lines, "node_hwmon_power_input_watt", "gauge", "Hardware monitor power.")
+    render(lines, "node_hwmon_power_watt", "gauge", "Hardware monitor power.")
     for sensor, _, _, _ in SPBM_POWER:
         lines.append(
-            f"node_hwmon_power_input_watt{labels({'chip': SPBM_CHIP, 'sensor': sensor})} "
+            f"node_hwmon_power_watt{labels({'chip': SPBM_CHIP, 'sensor': sensor})} "
             f"{watts[sensor]:.3f}"
         )
     render(

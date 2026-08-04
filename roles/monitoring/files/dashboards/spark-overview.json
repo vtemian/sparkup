@@ -434,7 +434,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_hwmon_power_input_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"sys_total|dc_input|cpu_gpu|soc_pkg|gpu\"}",
+          "expr": "node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"sys_total|dc_input|cpu_gpu|soc_pkg|gpu\"}",
           "legendFormat": "{{label}}"
         }
       ]
@@ -489,7 +489,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_hwmon_power_input_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=\"sys_total\"}",
+          "expr": "node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=\"sys_total\"}",
           "legendFormat": "sys_total",
           "instant": true
         }
@@ -546,7 +546,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "avg_over_time((node_hwmon_power_input_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=\"sys_total\"})[$__range:]) * $__range_s / 3600",
+          "expr": "avg_over_time((node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=\"sys_total\"})[$__range:]) * $__range_s / 3600",
           "legendFormat": "energy",
           "instant": true
         }

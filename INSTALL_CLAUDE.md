@@ -90,13 +90,13 @@ The firmware, through `spbm`, and nowhere else. The driver registers 14 power ch
 `cpu_e`, `cpu_p`, `gpu`) as hwmon sensors, which node_exporter's already-enabled `hwmon` collector
 picks up for free. No extra exporter, no extra scrape job, no hardware.
 
-`node_hwmon_power_input_watt` is a gauge; `node_hwmon_energy_input_joule_total` is a **counter**,
+`node_hwmon_power_watt` is a gauge; `node_hwmon_energy_input_joule_total` is a **counter**,
 which is the right shape for energy over a window. Both are labelled `chip` and `sensor`, where
 `sensor` is `power1`/`energy1`, not the human name — join `node_hwmon_sensor_label` to get
 `sys_total`:
 
 ```promql
-node_hwmon_power_input_watt * on(chip, sensor) group_left(label) node_hwmon_sensor_label
+node_hwmon_power_watt * on(chip, sensor) group_left(label) node_hwmon_sensor_label
 ```
 
 `sys_total` is the firmware's DC-side figure. It does not include PSU conversion loss, so it reads
@@ -152,7 +152,7 @@ means the signing key is not enrolled:
 
 ```bash
 curl -s --get http://127.0.0.1:9090/api/v1/query \
-  --data-urlencode 'query=node_hwmon_power_input_watt'
+  --data-urlencode 'query=node_hwmon_power_watt'
 ```
 
 Other checks worth running after a converge: `docker info --format '{{json .Runtimes}}'` lists

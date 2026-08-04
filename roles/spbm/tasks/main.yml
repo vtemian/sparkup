@@ -117,6 +117,6 @@
       and a monitor attached; there is no network and no SSH at that point. The
       screen waits {{ spbm_mok_timeout }}s — if your display has not woken by
       then it cancels and the key is discarded, so re-run this role and try
-      again. Until the key is enrolled node_hwmon_power_input_watt returns
+      again. Until the key is enrolled node_hwmon_power_watt returns
       nothing.
   when: "'is already enrolled' not in (spbm_mok_test.stdout | default(''))"

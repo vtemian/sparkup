@@ -19,7 +19,7 @@ A small wrapper around a training/fine-tuning round that exposes, per run:
 
 What `sparkup` guarantees it can rely on: a Prometheus at `127.0.0.1:9090` with the remote-write
 receiver enabled, a Grafana at `http://spark.local` with a provisioned Prometheus datasource, and
-live `node` and `gpu` scrape jobs. Power arrives on `node`, as `node_hwmon_power_input_watt` and
+live `node` and `gpu` scrape jobs. Power arrives on `node`, as `node_hwmon_power_watt` and
 `node_hwmon_energy_input_joule_total`; there is no separate power job.
 
 ## Phase C — training observability (the k6 part)
@@ -180,7 +180,7 @@ counter. So:
 ```promql
 # whole-box Wh over the run window — integrate the sys_total gauge
 avg_over_time(
-  (node_hwmon_power_input_watt * on(chip, sensor) group_left(label)
+  (node_hwmon_power_watt * on(chip, sensor) group_left(label)
    node_hwmon_sensor_label{label="sys_total"})[$__range:]
 ) * $__range_s / 3600
 
