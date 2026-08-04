@@ -973,7 +973,7 @@
       "id": 15,
       "type": "stat",
       "title": "Root filesystem (holds the shared artifact directory)",
-      "description": "Datasets, checkpoints and run metadata live in /srv/bbm, outside ~/bbm, because the laptop rsyncs ~/bbm with --delete and would erase anything written there. /srv/bbm is a directory on the root filesystem, not a mount of its own, so node_exporter emits no series for it, and a query for mountpoint=\"/srv/bbm\" would match nothing, and these figures are the root filesystem's, which is the pool /srv/bbm actually draws from. Repoint this panel if it ever gets its own filesystem.",
+      "description": "Datasets, checkpoints and run metadata live in the shared artifact directory, spark_shared_dir, which defaults to /srv/spark. It sits outside any home directory on purpose, because a laptop rsyncing a home directory with --delete would erase whatever was written there. It is a directory on the root filesystem rather than a mount of its own, so node_exporter emits no series for it and a query for its mountpoint would match nothing; these figures are the root filesystem's, which is the pool it actually draws from. Repoint this panel if it ever gets its own filesystem.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

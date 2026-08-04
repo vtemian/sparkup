@@ -187,8 +187,9 @@ signing key is not enrolled and somebody still has to walk to the box.
 Other checks worth running after a converge: `docker info --format '{{json .Runtimes}}'` lists
 `nvidia`; `docker run --rm --gpus all nvidia/cuda:13.0.3-base-ubuntu24.04 nvidia-smi`;
 `curl -o /dev/null -w '%{http_code}' http://<host>/` returns 200 anonymously; `ufw status verbose`;
-`mokutil --sb-state`; and `cd ../bbm && make spark-parity`, which is the canary that provisioning has
-not perturbed Pillow/freetype resolution.
+and `mokutil --sb-state`. If the box also carries a project with its own environment check, run that
+too: provisioning touches apt and Docker, and a native-library resolution it silently changed is the
+failure this catches.
 
 ---
 
