@@ -16,7 +16,6 @@ datasource and dashboard.
 | `grafana_port` | `80` | so `http://spark.local` needs no suffix |
 | `prometheus_retention` | `30d` | |
 | `prometheus_scrape_interval` | `15s` | also the datasource's `timeInterval` |
-| `power_scrape_target` | derived from `shelly_*` | empty emits no `power` job |
 
 Dashboards edited in the Grafana UI are kept in the `grafana-data` volume; the provisioned file in
 this repo wins on the next converge.

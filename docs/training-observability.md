@@ -14,12 +14,13 @@ A small wrapper around a training/fine-tuning round that exposes, per run:
 - **training metrics** — epoch, step, loss, learning rate, grad-norm, tokens/sec, steps/sec
 - **system metrics** — already provided by `sparkup` (CPU, load, unified memory, temperatures, GPU
   utilisation/power/clocks). The wrapper does not re-collect these; it correlates against them.
-- **energy** — already provided by `sparkup` as a wall-socket series from the Shelly plug. The
-  wrapper turns it into per-run energy and cost.
+- **energy** — already provided by `sparkup` as firmware power and energy channels on the `node`
+  job, via the `spbm` driver. The wrapper turns them into per-run energy and cost.
 
 What `sparkup` guarantees it can rely on: a Prometheus at `127.0.0.1:9090` with the remote-write
 receiver enabled, a Grafana at `http://spark.local` with a provisioned Prometheus datasource, and
-live `node`, `gpu` and `power` scrape jobs.
+live `node` and `gpu` scrape jobs. Power arrives on `node`, as `node_hwmon_power_input_watt` and
+`node_hwmon_energy_input_joule_total`; there is no separate power job.
 
 ## Phase C — training observability (the k6 part)
 
@@ -170,34 +171,49 @@ experiment worth it" — the box draws power whether or not you train. Measure t
 immediately before each run rather than assuming a global constant; it drifts with ambient
 temperature and whatever else is running.
 
-The PromQL, using the counter:
+**Whole-box energy is a gauge integral; only package energy has a counter.** This is the one place
+the firmware source is weaker than a smart plug, and it is worth knowing before you write the panel.
+`spbm` exposes 14 power channels — including `sys_total`, the whole box — but only **4** energy
+accumulators, and they are `pkg`, `cpu_e`, `cpu_p` and `gpu`. There is no `sys_total` energy
+counter. So:
 
 ```promql
-# exact Wh over the run window (dashboard: $__range == the pinned run window)
-increase(shelly_meter_power_watthours_total[$__range])
+# whole-box Wh over the run window — integrate the sys_total gauge
+avg_over_time(
+  (node_hwmon_power_input_watt * on(chip, sensor) group_left(label)
+   node_hwmon_sensor_label{label="sys_total"})[$__range:]
+) * $__range_s / 3600
 
 # marginal: subtract the idle baseline over the same duration
-increase(shelly_meter_power_watthours_total[$__range])
-  - (avg_over_time(training_run_idle_baseline_watts[$__range]) * $__range_s / 3600)
+# (the above) - (avg_over_time(training_run_idle_baseline_watts[$__range]) * $__range_s / 3600)
 
 # cost, tariff as a Grafana constant variable in currency per kWh
-increase(shelly_meter_power_watthours_total[$__range]) / 1000 * $tariff
+# (the above) / 1000 * $tariff
 ```
 
-Gauge fallback if the exporter lacks a counter — an approximation whose error scales with the
-scrape interval, so say so in the panel description:
+The integral's error scales with the scrape interval, but at 15 s over a run measured in hours it is
+well under a percent — adequate, and not worth owning a smart plug to improve. Where an exact figure
+matters and package scope is acceptable, the counter is there and is exact:
 
 ```promql
-avg_over_time(shelly_meter_power_current_watts[$__range]) * $__range_s / 3600   # Wh
+increase(node_hwmon_energy_input_joule_total{...label="pkg"}[$__range]) / 3600   # Wh, not J
 ```
+
+Note the units: hwmon energy is **joules**, so divide by 3600 for watt-hours. The old Shelly series
+was already in watt-hours; anything ported from it needs this conversion.
+
+`sys_total` is DC-side and excludes PSU conversion loss, so it reads under a wall-socket meter.
+Cost computed from it is a slight underestimate — state that in the panel description rather than
+letting a reader assume it is the number on their electricity bill.
 
 **Tariff is a Grafana variable, not a hardcoded number** — it changes, and a variable means no
 dashboard rebuild. Romania is roughly 1.3 RON/kWh at time of writing, so a continuous 200 W box is
 on the order of €0.06/hour. **The interesting number is probably watt-hours per run, for comparing
 efficiency between configs, more than the euros.**
 
-**Clock discipline:** let Prometheus scrape the plug so all timestamps come from one clock. Never
-trust the plug's own.
+**Clock discipline** is free now: the sensors are read on the host and scraped by a Prometheus on
+the same host, so there is only one clock. The plug this replaced had its own, and it was not to be
+trusted.
 
 ### D3: cost panels
 Add energy, duration and cost columns to the runs index (C4), and a per-run stat row. The

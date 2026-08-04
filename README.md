@@ -11,8 +11,8 @@
 ---
 
 Takes a box from a fresh DGX OS install to a working training machine: user accounts, Docker with
-the NVIDIA runtime, supervised GPU and system telemetry, and Grafana on `http://spark.local` with no
-login to look at it. Optionally, what a training run costs in electricity (requires a smart plug).
+the NVIDIA runtime, supervised GPU and system telemetry, whole-system power and energy read from
+the firmware, and Grafana on `http://spark.local` with no login to look at it.
 
 ## What it looks like
 
@@ -42,7 +42,7 @@ site.yml              the playbook
 inventory/hosts.yml   which box
 group_vars/all.yml    defaults for any Spark
 host_vars/spark.yml   your box (untracked)
-roles/                base, docker, gpu, users, spbm, exporters, shelly, monitoring, thermal, firmware, kernel
+roles/                base, docker, gpu, users, spbm, exporters, monitoring, thermal, firmware, kernel
 tests/                everything that runs without a Spark
 ```
 

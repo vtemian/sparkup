@@ -1,9 +1,0 @@
----
-# daemon_reload before restart: without it the container keeps the old image
-# digest or the old plug address while the restart reports success.
-
-- name: Restart shelly_exporter
-  ansible.builtin.systemd_service:
-    name: "{{ shelly_unit_name }}"
-    state: restarted
-    daemon_reload: true

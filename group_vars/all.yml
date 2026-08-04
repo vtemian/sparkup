@@ -56,27 +56,5 @@ node_exporter_port: 9100
 nvidia_gpu_exporter_version: "1.13.1"
 nvidia_gpu_exporter_port: 9835
 
-# The `power` scrape job is the contract with the training-observability project:
-# any Prometheus-format exporter fills it. Empty means no power job is emitted.
-power_scrape_target: "{{ shelly_scrape_host ~ ':' ~ shelly_exporter_port if shelly_enabled | bool else '' }}"
-power_scrape_metrics_path: "{{ shelly_exporter_metrics_path if shelly_enabled | bool else '/metrics' }}"
-
-# False makes roles/shelly a complete no-op and emits no power scrape job.
-shelly_enabled: false
-
-# The PLUG, polled over JSON-RPC — never a scrape target. Use its reserved IP:
-# the exporter runs in a container with no mDNS resolver.
-shelly_host: ""
-# Where PROMETHEUS looks: the Spark, through the host-gateway alias.
-shelly_scrape_host: host.docker.internal
-shelly_exporter_port: 9924
-# Spring Boot's actuator serves the exposition format here, not at /metrics.
-shelly_exporter_metrics_path: /prometheus
-
-# easimon/shelly-exporter 3.0.0, the only maintained candidate exporting
-# cumulative watt-hours as a counter and carrying linux/arm64. The digest is the
-# pin: a tag is mutable, a digest names immutable content.
-shelly_exporter_image_digest: "sha256:3032562bcff4415a39de32a169ac2c2e200ae27c9bed551cded3831d31437ac9"
-
 # False refuses disruptive work while a GPU process is running.
 spark_allow_docker_restart: true

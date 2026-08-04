@@ -31,7 +31,3 @@ nvidia_gpu_exporter_port: 19835
 # Five seconds rather than fifteen: panels fill in while you are still looking
 # at them, and rate() over $__rate_interval has samples within half a minute.
 prometheus_scrape_interval: 5s
-
-# There is no smart plug on a laptop, and a permanently-red target teaches
-# people to ignore red targets.
-shelly_enabled: false

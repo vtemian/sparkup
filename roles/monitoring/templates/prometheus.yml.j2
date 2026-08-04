@@ -22,12 +22,3 @@ scrape_configs:
   - job_name: gpu
     static_configs:
       - targets: ["host.docker.internal:{{ nvidia_gpu_exporter_port }}"]
-{% if power_scrape_target %}
-
-  # The target is never the meter itself — a smart plug speaks its own RPC — but
-  # always some exporter. Emitted only when configured; a red target teaches neglect.
-  - job_name: power
-    metrics_path: {{ power_scrape_metrics_path }}
-    static_configs:
-      - targets: ["{{ power_scrape_target }}"]
-{% endif %}

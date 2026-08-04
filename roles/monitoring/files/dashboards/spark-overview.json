@@ -332,7 +332,7 @@
       "id": 11,
       "type": "timeseries",
       "title": "Temperatures — every hwmon sensor",
-      "description": "Everything the kernel exposes under hwmon: the SoC thermal zone and the NVMe sensors. There are no power or energy rails in hwmon on this box, only temperatures — wall power comes from the plug, not from here.",
+      "description": "Every temperature the kernel exposes under hwmon: the SoC thermal zone, the NVMe sensors, and the eight thermal zones the spbm driver adds. spbm also registers power and energy channels under hwmon; those are whole-system watts and joules, and they belong on their own panels rather than mixed into a temperature graph.",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 26 },
       "fieldConfig": {

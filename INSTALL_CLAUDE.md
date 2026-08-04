@@ -116,9 +116,6 @@ role's defaults, or the same tunable exists in two files.
 
 | Role | Off because | Enable with |
 |---|---|---|
-| `spbm` | out-of-tree kernel module, and a key a human must enrol at the console | `spbm_enabled: true` + `-e spbm_mok_password=…` |
-| `shelly` | not everyone owns a smart plug | `shelly_enabled: true` + `shelly_host` |
-| `thermal` clock cap | trades compute for thermal headroom | `thermal_gpu_clock_cap_enabled` |
 | `thermal` EC assertion | your firmware version is not this box's | `thermal_expected_ec_firmware` |
 | `firmware` | it is the only role that can permanently destroy hardware | `firmware_update_enabled: true` |
 | `kernel` | can leave a headless box unbootable | `kernel_enabled: true` |
@@ -134,11 +131,32 @@ fan-curve advice circulating for this hardware is a hypothesis about our box rat
 on it. `nvidia-smi` also reports `N/A` for every thermal-limit register, so there is no headroom
 figure to check it against. Measure before mitigating.
 
-### Power is not tied to Shelly
+### Where power comes from
 
-`power_scrape_target` is the contract. Any exporter speaking the Prometheus exposition format fills
-it. The bundled `shelly` role is one way and sets that target when enabled. Set neither and no
-`power` job is emitted.
+The firmware, through `spbm`, and nowhere else. The driver registers 14 power channels (`sys_total`,
+`dc_input`, `cpu_gpu`, `soc_pkg`, `gpu`, the PL1/PL2 limits) and **4 energy accumulators** (`pkg`,
+`cpu_e`, `cpu_p`, `gpu`) as hwmon sensors, which node_exporter's already-enabled `hwmon` collector
+picks up for free. No extra exporter, no extra scrape job, no hardware.
+
+`node_hwmon_power_input_watt` is a gauge; `node_hwmon_energy_input_joule_total` is a **counter**,
+which is the right shape for energy over a window. Both are labelled `chip` and `sensor`, where
+`sensor` is `power1`/`energy1`, not the human name — join `node_hwmon_sensor_label` to get
+`sys_total`:
+
+```promql
+node_hwmon_power_input_watt * on(chip, sensor) group_left(label) node_hwmon_sensor_label
+```
+
+`sys_total` is the firmware's DC-side figure. It does not include PSU conversion loss, so it reads
+somewhat under a wall-socket meter. It is still the whole box, unlike `nvidia_smi_power_draw_watts`,
+which is the GPU rail alone and roughly half the truth (87 W rail against 180 W at the socket,
+measured here).
+
+A Shelly smart-plug role lived here until 2026-08-04 and was deleted. It was a second, optional
+answer to a question the firmware already answers on every Spark, and it carried a role, 8
+variables, its own scrape job and a `power_scrape_target` indirection to stay optional. If a true
+wall-socket number is ever wanted back, `git show` it — but the reason it went is that nothing
+should need a smart plug to know what the box draws.
 
 ---
 
@@ -153,7 +171,7 @@ make apply BECOME="--become-password-file ~/.sparkup-become"   # must report cha
 Play order, and it is load-bearing:
 
 ```
-base → docker → gpu → users → spbm → exporters → shelly → monitoring → thermal → firmware → kernel
+base → docker → gpu → users → spbm → exporters → monitoring → thermal → firmware → kernel
 ```
 
 - `docker` precedes `users` because `ansible.builtin.user` fails hard if a group in `groups:` does
@@ -161,7 +179,6 @@ base → docker → gpu → users → spbm → exporters → shelly → monitori
 - `exporters` precedes `monitoring` because `monitoring` uses `remove_orphans: true`, which deletes
   a containerised node-exporter. Running `--tags monitoring` alone on an unmigrated box removes host
   metrics and gives nothing back.
-- `shelly` precedes `monitoring` so the exporter exists before Prometheus is told to scrape it.
 - `spbm` precedes `exporters` so its hwmon channels exist before node_exporter starts reading them.
 
 ---
@@ -176,8 +193,14 @@ curl -s --get http://127.0.0.1:9090/api/v1/query --data-urlencode 'query=up'
 curl -s --get http://127.0.0.1:9090/api/v1/query --data-urlencode 'query=time() - timestamp(up == 1)'
 ```
 
-`up == 1` alone is weak for the `power` job: that exporter answers whether or not it ever reached
-the plug. Check for `shelly_meter_power_watthours_total` instead.
+`up == 1` says nothing about power: node_exporter answers whether or not the `spbm` module loaded.
+Check that the channels exist — an empty result means the module is built but not loaded, which
+means the signing key is not enrolled:
+
+```bash
+curl -s --get http://127.0.0.1:9090/api/v1/query \
+  --data-urlencode 'query=node_hwmon_power_input_watt'
+```
 
 Other checks worth running after a converge: `docker info --format '{{json .Runtimes}}'` lists
 `nvidia`; `docker run --rm --gpus all nvidia/cuda:13.0.3-base-ubuntu24.04 nvidia-smi`;
@@ -263,17 +286,6 @@ stubbed. A fake that reported success would be worse than no test.
   abandoned, full and unreferenced, and the new stack collides with the running one on port 80.
 - **Dashboards are installed with `copy`, never `template`.** Grafana's own legend syntax is
   `{{label}}` and Jinja would eat it. That applies to any JSON this repo hands to Grafana.
-- **The Shelly exporter serves `/prometheus`, not `/metrics`.** It is a Spring Boot actuator. Left
-  at Prometheus's default path the target reads down with a 404, which looks exactly like a dead
-  exporter.
-- **`shelly_host` is the plug; the scrape target is the Spark.** The plug speaks Shelly JSON-RPC and
-  serves no metrics on any port, so it is the exporter's *configuration* and never a target.
-  `shelly_scrape_host` is where Prometheus looks, through the same host-gateway alias as `node` and
-  `gpu`.
-- **The Shelly exporter runs on the host network on purpose.** `--publish` would put port 9924
-  beyond ufw, and it serves unauthenticated device inventory alongside the power series. Loopback
-  publishing is not the alternative either: Prometheus is containerised and arrives over the bridge
-  gateway, not loopback.
 - **`firmware` gates on `get-updates` exiting 2, and stages with `--no-reboot-check`.** `update`
   exits 0 on a converged box, so gating on its own result would report a change forever; only
   `get-updates` distinguishes "nothing to do", with exit 2. Without `--no-reboot-check`, `fwupdmgr
