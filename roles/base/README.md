@@ -4,7 +4,7 @@ Hostname, mDNS, timezone, base packages and ufw.
 
 ufw ends up enabled with a default-deny incoming policy, so `spark_firewall_allow_ports` is the
 complete list of what stays reachable from the LAN. Before enabling, the role asserts that the port
-**this connection arrived on** is in that list — not a configured guess, so reaching the box on a
+**this connection arrived on** is in that list, not a configured guess, so reaching the box on a
 non-standard port cannot lock you out of it.
 
 | Variable | Default | |

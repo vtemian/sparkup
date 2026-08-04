@@ -1,7 +1,7 @@
 # {{ ansible_managed }}
 #
 # DGX OS ships /etc/default/grub.d/no-grubmenu.cfg, which forces the menu off;
-# `zz-` sorts this after it. GRUB_TIMEOUT alone is not enough — hidden counts down.
+# `zz-` sorts this after it. GRUB_TIMEOUT alone is not enough; hidden counts down.
 
 GRUB_TIMEOUT={{ kernel_grub_timeout }}
 GRUB_TIMEOUT_STYLE=menu

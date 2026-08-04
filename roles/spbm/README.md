@@ -23,7 +23,7 @@ make apply     # builds and signs the module, queues the key, stays green
 Then reboot **with a keyboard and a monitor attached**. Before the OS loads, shim shows a blue
 MokManager screen: Enroll MOK, Continue, Yes, then type the password (`sparkup` unless you changed
 it). There is no network and no SSH at that point, so this step cannot be done remotely and cannot
-be done by the playbook. The screen waits `spbm_mok_timeout` seconds — miss it and it cancels
+be done by the playbook. The screen waits `spbm_mok_timeout` seconds. Miss it and it cancels
 harmlessly, and the next converge queues the key again.
 
 Check it afterwards through Prometheus, never by curling the exporter:
@@ -64,4 +64,4 @@ curl -s localhost:9100/metrics | grep node_hwmon_power_watt
 
 14 power channels (`sys_total`, `dc_input`, `cpu_gpu`, `soc_pkg`, `gpu`, the PL1/PL2 limits), 4
 energy counters (`pkg`, `cpu_e`, `cpu_p`, `gpu`) and 8 temperatures. The `sensor` label is `power1`,
-not the name — join `node_hwmon_sensor_label` for that.
+not the name, so join `node_hwmon_sensor_label` for that.

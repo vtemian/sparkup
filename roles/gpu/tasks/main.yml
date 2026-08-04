@@ -76,5 +76,5 @@
           GPU. Check that the nvidia runtime is registered
           (`docker info --format '{{ '{{' }}json .Runtimes{{ '}}' }}'`), that
           {{ gpu_cdi_spec_path }} exists, and that the image is a CUDA 13 arm64
-          build — this GPU is sm_121 and CUDA 12 images cannot address it.
+          build: this GPU is sm_121 and CUDA 12 images cannot address it.
         success_msg: GPU containers work; nvidia-smi ran inside the container.

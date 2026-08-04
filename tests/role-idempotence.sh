@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Converge a role in a container, then converge it again and require the second
-# run to report changed=0 — the project's stated acceptance test, run against
+# run to report changed=0, the project's stated acceptance test, run against
 # the only substrate available without a DGX Spark.
 #
 # Two roles are covered and four are not. The uncovered ones are named on
@@ -85,7 +85,7 @@ for container in "${CONTAINERS[@]}"; do
 
     # Docker bind-mounts /etc/hosts, /etc/hostname and /etc/resolv.conf from
     # outside the container, so any write that renames a temp file over them
-    # fails with EBUSY — which is what ansible's lineinfile and hostnamectl
+    # fails with EBUSY, which is what ansible's lineinfile and hostnamectl
     # both do. Replacing the mounts with ordinary files of the same content
     # removes a container artifact; it does not change what the role does.
     docker exec "${container}" bash -c '

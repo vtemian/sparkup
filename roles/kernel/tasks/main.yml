@@ -168,6 +168,6 @@
       A REBOOT IS REQUIRED to finish. Running {{ ansible_kernel }}; intended
       {{ kernel_intended_version }}. Everything this role can do is done: the
       signed kernel is installed, GRUB points at it and the menu is visible.
-      Nothing here will reboot for you — do it by hand, with somebody able to
+      Nothing here will reboot for you. Do it by hand, with somebody able to
       reach the machine physically.
   when: ansible_kernel != kernel_intended_version

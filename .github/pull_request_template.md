@@ -3,7 +3,7 @@
 ## How it was verified
 
 - [ ] `make offline` passes locally
-- [ ] `shellcheck tests/*.sh` passes — a CI gate `make offline` does not run
+- [ ] `shellcheck tests/*.sh` passes, a CI gate `make offline` does not run
 - [ ] Ran against a real DGX Spark
 - [ ] `make idempotence` passes (paste the second-run recap below)
 

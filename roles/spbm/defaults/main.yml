@@ -19,7 +19,7 @@ spbm_mok_cert: /var/lib/shim-signed/mok/MOK.der
 spbm_mok_timeout: 120
 
 # NOT A SECRET, and do not put one here. It is typed once at the MokManager
-# screen to prove somebody is physically at the box, then discarded — anyone who
+# screen to prove somebody is physically at the box, then discarded, and anyone who
 # can reach that screen is already at the keyboard. The converge prints it,
 # because whoever has to type it is usually not whoever ran the playbook.
 spbm_mok_password: sparkup

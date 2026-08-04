@@ -18,7 +18,7 @@
         fail_msg: >-
           inventory/hosts.yml still has the placeholder `ansible_user: youruser`.
           Edit it to the account you SSH in as, and set ansible_host to your
-          box's address — `spark.local` only resolves after this playbook has
+          box's address. `spark.local` only resolves after this playbook has
           installed avahi and renamed the machine, so on a fresh box use its IP.
       run_once: true
       delegate_to: localhost
@@ -122,7 +122,7 @@
                 ~ ' no power or energy metrics.']
                if spark_mok_pending else [])
             + (['  * WRITE FIRMWARE. ' ~ spark_capsules_pending ~ ' capsule(s) are'
-                ~ ' staged. Keep the machine powered throughout — an interrupted'
+                ~ ' staged. Keep the machine powered throughout; an interrupted'
                 ~ ' write is not recoverable on this hardware. To cancel instead:'
                 ~ ' rm ' ~ firmware_capsule_dir ~ '/*.cap']
                if spark_capsules_pending | int > 0 else [])
@@ -136,7 +136,7 @@
           }}
       vars:
         # `spbm_mok_test` is undefined when the role was skipped, which reads the
-        # same as "not enrolled" — so the flag, not the default, decides here.
+        # same as "not enrolled", so the flag, not the default, decides here.
         spark_mok_pending: >-
           {{ (spbm_enabled | bool)
              and 'is already enrolled' not in (spbm_mok_test.stdout | default('', true)) }}

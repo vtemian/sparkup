@@ -27,7 +27,7 @@ CPU, unified memory and disk; and a row saying whether the exporters themselves 
 ## Before you run it
 
 This is root-level automation aimed at one specific machine. It assumes a DGX Spark running DGX OS,
-with Secure Boot **enabled** — the playbook refuses to start otherwise, before changing anything.
+with Secure Boot **enabled**. The playbook refuses to start otherwise, before changing anything.
 
 Read this list. On a converged box it will:
 
@@ -87,7 +87,7 @@ Then `make apply` again. It must report `changed=0`.
 ## The first reboot
 
 The converge ends by printing what your next reboot will do, because it is usually two things at
-once: a firmware write and a boot into the signed kernel. Do it on mains power — an interrupted
+once: a firmware write and a boot into the signed kernel. Do it on mains power. An interrupted
 firmware write is not recoverable on this hardware.
 
 With `spbm_enabled: true` there is a third: a blue MokManager screen asking for the Secure Boot key
@@ -108,8 +108,8 @@ Each role has its own README. Running the playbook produces the machine describe
 identity lives in `host_vars`. The one thing you can switch on or off is `spbm_enabled`, because it
 is the one thing that needs your consent to run third-party code in kernel space.
 
-No Spark? `make offline` runs lint, every dashboard query against a real Prometheus, and two
-roles converged twice in containers.
+`make offline` runs lint, every dashboard query against a real Prometheus, and two roles converged
+twice in containers. None of it needs a Spark.
 
 ## License
 

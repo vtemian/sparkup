@@ -1,12 +1,12 @@
 ---
-# cp host_vars/spark.yml.example host_vars/spark.yml — untracked, because it
+# cp host_vars/spark.yml.example host_vars/spark.yml. Untracked, because it
 # names the accounts that get sudo and whose GitHub keys can log in.
 #
 # The inventory host stays named `spark` whatever your machine is called, so
 # this filename is correct either way. Put ansible_user here too if the account
 # you SSH in as is not the placeholder in inventory/hosts.yml.
 
-# What the machine is renamed to, and the name it publishes over mDNS — so
+# What the machine is renamed to, and the name it publishes over mDNS, so
 # http://<this>.local reaches Grafana. Defaults to `spark`; change it here if you
 # want something else, and put the same value in inventory/hosts.yml's
 # ansible_host once the first converge has made it resolve.

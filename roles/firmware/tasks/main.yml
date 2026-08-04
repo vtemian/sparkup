@@ -15,7 +15,7 @@
   block:
 
     # rc 2 is fresh cache, rc 101 is LVFS unreachable. Both leave the check
-    # below reading the cache — degraded but safe, so nothing fails here.
+    # below reading the cache: degraded but safe, so nothing fails here.
     - name: Refresh the firmware metadata
       ansible.builtin.command:
         cmd: "{{ firmware_fwupdmgr }} refresh"
@@ -59,6 +59,6 @@
       {{ firmware_capsule_dir }}. THE NEXT REBOOT WILL WRITE THEM, whoever
       performs it and for whatever reason. Keep the machine powered
       throughout; an interrupted write is not recoverable on this hardware.
-      To cancel instead, delete them — fwupd has no command that will:
+      To cancel instead, delete them, because fwupd has no command that will:
       rm {{ firmware_capsule_dir }}/*.cap
   when: firmware_capsules.matched | int > 0

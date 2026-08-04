@@ -1,14 +1,14 @@
 # Operating sparkup
 
 This repo's facts, commands and traps, for an AI agent running them. Humans want
-[README.md](README.md). The rules — invariants, what to ask before doing, engineering standards —
-are in [CLAUDE.md](CLAUDE.md), which loads automatically; read it first and do not restate it here.
+[README.md](README.md). The rules (invariants, what to ask before doing, engineering standards) are
+in [CLAUDE.md](CLAUDE.md), which loads automatically; read it first and do not restate it here.
 
 **Scope.** sparkup gets the box into a known state and gets metrics into Prometheus. It does not own
 training runs. The wrapper that emits per-run metrics and correlates them against these series is a
 separate project, specified in [`docs/training-observability.md`](docs/training-observability.md).
 What sparkup guarantees it: Prometheus with the remote-write receiver enabled, a provisioned Grafana
-datasource, and live `node` and `gpu` scrape jobs. Do not break those. Power is **not** guaranteed —
+datasource, and live `node` and `gpu` scrape jobs. Do not break those. Power is **not** guaranteed:
 it arrives on `node` from the firmware only where `spbm_enabled` is true, so the wrapper's energy and
 cost figures have to degrade rather than fail when the series is absent.
 
@@ -63,13 +63,13 @@ role's defaults, or the same tunable exists in two files.
 
 `spbm_enabled`, declared in `group_vars/all.yml`, defaulting to **false**, read in exactly one place:
 the `when:` on the `spbm` role in `site.yml`. Every other role runs on every converge, and no other
-variable in this repo decides whether a feature happens — see [CLAUDE.md](CLAUDE.md) for the test
+variable in this repo decides whether a feature happens; see [CLAUDE.md](CLAUDE.md) for the test
 `spbm_enabled` passes and a second flag would not, and do not add one.
 
 Grep for it before assuming it is read anywhere else. It is not passed into a template, not consulted
 by `exporters`, and not consulted by `monitoring`: the dashboard ships the Power row either way, and
 those panels explain their own emptiness rather than being generated conditionally. Templating the
-dashboard is not an option anyway — see the `copy`, never `template` trap below.
+dashboard is not an option anyway; see the `copy`, never `template` trap below.
 
 The two things that could once *also* be switched off are guarded by asserts instead, which is the
 shape to copy if you are tempted to add a toggle for safety:
@@ -93,7 +93,7 @@ that measurement.
 
 ### Where power comes from
 
-The firmware, through `spbm`, and nowhere else — **and only if somebody asked for it.** On a default
+The firmware, through `spbm`, and nowhere else, **and only if somebody asked for it.** On a default
 box there is no power and no energy at all, and the three panels on the dashboard's Power row read
 "No data". That is the expected state, not a fault to chase.
 
@@ -116,7 +116,7 @@ extra scrape job, no hardware.
 
 `node_hwmon_power_watt` is a gauge; `node_hwmon_energy_input_joule_total` is a **counter**,
 which is the right shape for energy over a window. Both are labelled `chip` and `sensor`, where
-`sensor` is `power1`/`energy1`, not the human name — join `node_hwmon_sensor_label` to get
+`sensor` is `power1`/`energy1`, not the human name, so join `node_hwmon_sensor_label` to get
 `sys_total`:
 
 ```promql
@@ -157,7 +157,7 @@ base → docker → gpu → users → spbm → exporters → monitoring → firm
   a containerised node-exporter. Running `--tags monitoring` alone on an unmigrated box removes host
   metrics and gives nothing back.
 - `spbm` precedes `exporters` so its hwmon channels exist before node_exporter starts reading them.
-  It is skipped entirely unless `spbm_enabled` is true, which is the default — `skipping: [spark]`
+  It is skipped entirely unless `spbm_enabled` is true, which is the default. `skipping: [spark]`
   under the `spbm` tasks is correct output, not a failure.
 
 ---
@@ -173,7 +173,7 @@ curl -s --get http://127.0.0.1:9090/api/v1/query --data-urlencode 'query=time() 
 ```
 
 `up == 1` says nothing about power: node_exporter answers whether or not the `spbm` module loaded.
-Only run this check on a box where `spbm_enabled` is true — anywhere else the empty result is the
+Only run this check on a box where `spbm_enabled` is true. Anywhere else the empty result is the
 design, and reporting it as a fault wastes somebody's afternoon:
 
 ```bash
@@ -218,7 +218,7 @@ stubbed. A fake that reported success would be worse than no test.
 
 - **This hardware has no readable RTC, and it breaks `community.general.timezone`.** The kernel logs
   `rtc-efi rtc-efi.0: hctosys: unable to read the hardware clock` at boot, and every read fails with
-  EIO — so bare `timedatectl` exits 1. The module treats a non-zero `timedatectl` as "not systemd",
+  EIO, so bare `timedatectl` exits 1. The module treats a non-zero `timedatectl` as "not systemd",
   falls back to a path requiring `hwclock`, and arm64 Ubuntu's `util-linux` ships that binary's
   documentation and not the binary. The converge dies on a box whose clock is perfectly correct.
   `timedatectl set-timezone` writes fine; only reading the clock fails, so `base` compares
@@ -260,7 +260,7 @@ stubbed. A fake that reported success would be worse than no test.
   list rather than guessed; changing that tag means checking both properties again.
 - **The two filesystem-collector excludes are what stop node_exporter hanging.** Without
   `exporters_node_filesystem_mount_points_exclude` and `exporters_node_filesystem_fs_types_exclude`
-  the collector walks the snap loop devices and every Docker overlay and hangs, flapping `up` to 0 —
+  the collector walks the snap loop devices and every Docker overlay and hangs, flapping `up` to 0:
   telemetry reporting its own absence as an outage. They are not tidiness.
 - **`$` is written `$$` in the rendered exporter unit.** systemd expands `$` in `ExecStart` and `$$`
   is its documented literal dollar, so the template applies the substitution and the defaults stay
@@ -285,7 +285,7 @@ stubbed. A fake that reported success would be worse than no test.
   will ever exist, including ones NVIDIA has not built.
 - **`kernel` resolves the image with `dpkg-query`, deliberately not `apt-cache depends`.** apt-cache
   answers for the *candidate* version, so a newer meta package in NVIDIA's archive would become "the
-  intended kernel" and `state: present` would install it — an unrequested kernel upgrade on a box
+  intended kernel" and `state: present` would install it, an unrequested kernel upgrade on a box
   with a boot-failure history.
 - **GRUB is pinned by menu entry id, never by title.** A title carries the distributor string and
   the kernel version in prose, and when it stops matching GRUB does not complain, it boots something
@@ -293,15 +293,15 @@ stubbed. A fake that reported success would be worse than no test.
   the saved value is `<submenu id>><entry id>`.
 - **`spbm_headers_package` is what makes the module survive a kernel upgrade.** DKMS can only
   rebuild against headers that arrive with the new kernel. Remove that meta package and there is no
-  error — just a missing module, and a metric that stopped, after the next kernel.
+  error, just a missing module, and a metric that stopped, after the next kernel.
 - **A skipped role leaves its registers undefined, and `default('')` then lies.** `site.yml`'s
   reboot summary asks whether the MOK key is enrolled by reading `spbm_mok_test.stdout`. With `spbm`
   skipped that variable does not exist, `default('')` yields no match, and the box is told to expect
   a MokManager screen that will never appear. Anything reading a `spbm_*` register must test
   `spbm_enabled` first.
 - **Neither dashboard check can tell you the Power row is dead.** `make dashboard` allows
-  `node_hwmon_` by prefix because the `hwmon` collector is enabled regardless — NVMe and SoC
-  temperatures come through it — and `make dashboard-live` passes because
+  `node_hwmon_` by prefix because the `hwmon` collector is enabled regardless (NVMe
+  and SoC temperatures come through it), and `make dashboard-live` passes because
   `tests/fake_exporters.py` synthesises the spbm power, energy and label series. Both are correct:
   they check the panels against a box where `spbm_enabled` is true. Do not "fix" the harness by
   removing those synthetic channels; that would only stop the row being checked at all.

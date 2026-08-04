@@ -1,5 +1,5 @@
 ---
-# Managed by Ansible — roles/monitoring/templates/datasource.yml.j2.
+# Managed by Ansible: roles/monitoring/templates/datasource.yml.j2.
 # Edit the template and re-run the playbook; local edits are overwritten.
 
 apiVersion: 1
@@ -12,7 +12,7 @@ datasources:
     uid: prometheus
     access: proxy
     # Container-to-container on the compose network, so the service name
-    # resolves. This one does NOT need host.docker.internal — that alias is
+    # resolves. This one does NOT need host.docker.internal; that alias is
     # only for reaching exporters that run on the host.
     url: http://prometheus:9090
     isDefault: true

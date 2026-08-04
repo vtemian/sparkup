@@ -1,7 +1,7 @@
 ---
 # Render the monitoring role's templates onto this machine, so the Prometheus
 # and Grafana that come up locally are configured by the same .j2 files the
-# Spark gets — not by a hand-maintained copy that drifts.
+# Spark gets, not by a hand-maintained copy that drifts.
 #
 # The role's tasks are not reused: they install into /opt/monitoring as root
 # and end by bringing the stack up with community.docker. Here the same

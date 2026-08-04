@@ -1,6 +1,6 @@
 # `firmware`
 
-Stages whatever `fwupd` offers and stops — it never reboots, and the reboot that applies a staged
+Stages whatever `fwupd` offers and stops. It never reboots, and the reboot that applies a staged
 capsule is the only unrecoverable operation in this repo.
 
 Firmware is staged on every converge because the SPBM power channels report incorrect CPU values on
@@ -9,7 +9,7 @@ that staged something writes it, whoever performs that reboot and for whatever r
 says so loudly, on every run, for as long as a capsule sits in the capsule directory.
 
 There is no pinned firmware version to assert against. Converging toward what the vendor currently
-offers *is* how this repo keeps boxes alike, so a pin would fight it — and break the moment NVIDIA
+offers *is* how this repo keeps boxes alike, so a pin would fight it, and break the moment NVIDIA
 ships an update. `fwupdmgr get-devices` tells you what a box is running.
 
 | Variable | Default | |

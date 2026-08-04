@@ -1,6 +1,6 @@
 ---
 # DGX OS packaging; exists nowhere else. On a non-DGX box the install dies with
-# "No package matching ..." — set it to "" there and discovery falls back.
+# "No package matching ...", so set it to "" there and discovery falls back.
 kernel_meta_package: linux-image-nvidia-hwe-24.04
 
 # The only thing between a bad kernel and a drive to wherever the box lives.

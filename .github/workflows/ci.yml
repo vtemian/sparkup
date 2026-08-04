@@ -28,8 +28,8 @@ jobs:
           cache: pip
           cache-dependency-path: tests/ci-requirements.txt
 
-      # host_vars/spark.yml is gitignored on purpose — it names the accounts
-      # that get sudo — so this checkout has no host_vars at all, only the
+      # host_vars/spark.yml is gitignored on purpose: it names the accounts
+      # that get sudo, so this checkout has no host_vars at all, only the
       # .example. Both commands below were confirmed to pass in exactly that
       # state: --syntax-check does not resolve variables, and every variable
       # the roles read has a default in group_vars/all.yml or in the role.

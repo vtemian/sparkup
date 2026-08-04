@@ -5,7 +5,7 @@ The dashboard is the part of this repo people most want to iterate on, and it
 is the part that most needs a running box. This stands in for the box: two
 HTTP endpoints in the Prometheus exposition format, shaped like the two host
 exporters the `exporters` role installs, carrying values that plausibly
-resemble a DGX Spark — 20 cores, 121 GiB of unified memory, one 3.7 TB NVMe,
+resemble a DGX Spark: 20 cores, 121 GiB of unified memory, one 3.7 TB NVMe,
 a GPU rail that peaks near 83 W, and clocks between 200 MHz idle and 3003 MHz.
 
 It is deliberately not a simulator. The numbers move on a slow cycle so panels
@@ -55,7 +55,7 @@ HWMON_SENSORS = (
 # the harness exists to prove the dashboard's Power row works on a box that
 # opted in, and dropping these would stop that row being checked at all.
 # `chip` is derived from the sysfs device path, not the driver name, and
-# this is the value a real Spark produces — unguessable, which is why every
+# this is the value a real Spark produces, and unguessable, which is why every
 # dashboard query joins node_hwmon_sensor_label rather than naming a chip.
 # Watts are (idle, span) and roughly match the real box: a GPU rail near 87 W
 # under load against a system total comfortably more than double it.
@@ -70,7 +70,7 @@ SPBM_POWER = (
     ("power7", "dc_input", 32.0, 128.0),
     ("power8", "gpu", 5.0, 82.0),
 )
-# Cumulative counters, in joules. Only these four exist in the firmware — there
+# Cumulative counters, in joules. Only these four exist in the firmware, and there
 # is no sys_total accumulator, which is why whole-box energy is a gauge integral.
 SPBM_ENERGY = (
     ("energy1", "pkg", "power2"),

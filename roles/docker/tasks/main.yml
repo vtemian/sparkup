@@ -49,7 +49,7 @@
                                'max-file': docker_log_max_file | string})}) }}
   # Compared as parsed JSON, not as bytes: a file that already says the right
   # thing in a different key order or indentation is converged, and rewriting it
-  # would restart dockerd — killing every container — to change whitespace.
+  # would restart dockerd, killing every container, to change whitespace.
   when: docker_merged_config != docker_current_config
   notify: Docker configuration changed
 

@@ -1,7 +1,7 @@
 {
   "uid": "spark-overview",
   "title": "Spark overview",
-  "description": "System, GPU and exporter health for the DGX Spark. Provisioned from roles/monitoring/files/dashboards/spark-overview.json \u2014 edit in the UI to experiment, then export the JSON and commit it, or the next converge overwrites the change.",
+  "description": "System, GPU and exporter health for the DGX Spark. Provisioned from roles/monitoring/files/dashboards/spark-overview.json. Edit in the UI to experiment, then export the JSON and commit it, or the next converge overwrites the change.",
   "tags": [
     "spark",
     "system",
@@ -96,7 +96,7 @@
       "id": 3,
       "type": "timeseries",
       "title": "GPU temperature",
-      "description": "temperature.gpu from nvidia-smi. The shutdown and slowdown limit registers read N/A on GB10, so there is no headroom line to draw here \u2014 judge it against the hwmon sensors below and against the throttle counters, not against a limit the hardware refuses to report.",
+      "description": "temperature.gpu from nvidia-smi. The shutdown and slowdown limit registers read N/A on GB10, so there is no headroom line to draw here, so judge it against the hwmon sensors below and against the throttle counters, not against a limit the hardware refuses to report.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -167,7 +167,7 @@
       "id": 4,
       "type": "timeseries",
       "title": "GPU power draw",
-      "description": "The GPU rail only \u2014 roughly half of what the box actually pulls. It cannot see CPU, memory, NVMe, fans or PSU conversion loss, so never cost a run from this number. Whole-system power is the Power row below, which is empty unless spbm is switched on.",
+      "description": "The GPU rail only, roughly half of what the box actually pulls. It cannot see CPU, memory, NVMe, fans or PSU conversion loss, so never cost a run from this number. Whole-system power is the Power row below, which is empty unless spbm is switched on.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -284,7 +284,7 @@
       "id": 6,
       "type": "timeseries",
       "title": "Unified memory (GPU + CPU)",
-      "description": "This is the GPU memory panel. GB10 has unified memory: CPU and GPU share one 121 GiB pool and there is no discrete framebuffer, so nvidia-smi reports memory.used and memory.total as [N/A] and the exporter drops unavailable fields \u2014 nvidia_smi_memory_used_bytes does not exist on this box, by design. That absence is correct, not a broken panel, and node_memory_* IS the GPU memory signal. Do not 'fix' it with DCGM's DCGM_FI_DEV_FB_* family: NVIDIA states DCGM does not support Spark, and nvmlDeviceGetMemoryInfo returns NVML_ERROR_NOT_SUPPORTED here.",
+      "description": "This is the GPU memory panel. GB10 has unified memory: CPU and GPU share one 121 GiB pool and there is no discrete framebuffer, so nvidia-smi reports memory.used and memory.total as [N/A] and the exporter drops unavailable fields, so nvidia_smi_memory_used_bytes does not exist on this box, by design. That absence is correct, not a broken panel, and node_memory_* IS the GPU memory signal. Do not 'fix' it with DCGM's DCGM_FI_DEV_FB_* family: NVIDIA states DCGM does not support Spark, and nvmlDeviceGetMemoryInfo returns NVML_ERROR_NOT_SUPPORTED here.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -499,7 +499,7 @@
       "id": 22,
       "type": "stat",
       "title": "Energy over this range",
-      "description": "The sys_total gauge integrated over the selected range. There is no whole-system energy counter in the firmware \u2014 only pkg, cpu_e, cpu_p and gpu have one \u2014 so this is an integral whose error scales with the scrape interval. At 15s over a run measured in hours that is well under a percent. Needs spbm; see the System power panel.",
+      "description": "The sys_total gauge integrated over the selected range. There is no whole-system energy counter in the firmware (only pkg, cpu_e, cpu_p and gpu have one), so this is an integral whose error scales with the scrape interval. At 15s over a run measured in hours that is well under a percent. Needs spbm; see the System power panel.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -786,8 +786,8 @@
     {
       "id": 11,
       "type": "timeseries",
-      "title": "Temperatures \u2014 every hwmon sensor",
-      "description": "Every temperature the kernel exposes under hwmon: the SoC thermal zone, the NVMe sensors, and — with spbm switched on — the eight zones its driver adds. spbm's power and energy channels are on the Power row, not here.",
+      "title": "Temperatures: every hwmon sensor",
+      "description": "Every temperature the kernel exposes under hwmon: the SoC thermal zone, the NVMe sensors, and, with spbm switched on, the eight zones its driver adds. spbm's power and energy channels are on the Power row, not here.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -918,7 +918,7 @@
     {
       "id": 14,
       "type": "timeseries",
-      "title": "Root filesystem \u2014 free space",
+      "title": "Root filesystem: free space",
       "description": "The single 3.7 TB NVMe. There is no separate /home on this box, so datasets, checkpoints, container images and logs all consume the same 3.5 TB of headroom.",
       "datasource": {
         "type": "prometheus",
@@ -973,7 +973,7 @@
       "id": 15,
       "type": "stat",
       "title": "Root filesystem (holds the shared artifact directory)",
-      "description": "Datasets, checkpoints and run metadata live in /srv/bbm, outside ~/bbm, because the laptop rsyncs ~/bbm with --delete and would erase anything written there. /srv/bbm is a directory on the root filesystem, not a mount of its own, so node_exporter emits no series for it \u2014 a query for mountpoint=\"/srv/bbm\" would match nothing, and these figures are the root filesystem's, which is the pool /srv/bbm actually draws from. Repoint this panel if it ever gets its own filesystem.",
+      "description": "Datasets, checkpoints and run metadata live in /srv/bbm, outside ~/bbm, because the laptop rsyncs ~/bbm with --delete and would erase anything written there. /srv/bbm is a directory on the root filesystem, not a mount of its own, so node_exporter emits no series for it, and a query for mountpoint=\"/srv/bbm\" would match nothing, and these figures are the root filesystem's, which is the pool /srv/bbm actually draws from. Repoint this panel if it ever gets its own filesystem.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1050,7 +1050,7 @@
       "id": 17,
       "type": "timeseries",
       "title": "Targets up",
-      "description": "When telemetry lies, this is the first question: is the exporter alive? 1 is up, 0 is a failed scrape. A flat line at 0 for the gpu job usually means the systemd unit died; a gap means Prometheus itself was down. Never diagnose this by curling the exporter \u2014 curl 127.0.0.1:9100 hangs on this box even when node-exporter is healthy.",
+      "description": "When telemetry lies, this is the first question: is the exporter alive? 1 is up, 0 is a failed scrape. A flat line at 0 for the gpu job usually means the systemd unit died; a gap means Prometheus itself was down. Never diagnose this by curling the exporter: curl 127.0.0.1:9100 hangs on this box even when node-exporter is healthy.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1112,7 +1112,7 @@
             "uid": "prometheus"
           },
           "expr": "up",
-          "legendFormat": "{{job}} \u2014 {{instance}}"
+          "legendFormat": "{{job}} / {{instance}}"
         }
       ]
     },
@@ -1120,7 +1120,7 @@
       "id": 18,
       "type": "timeseries",
       "title": "Scrape duration",
-      "description": "How long each target takes to answer. A duration climbing toward the scrape interval is an exporter about to start failing \u2014 the containerised node-exporter's filesystem hang showed up here before it showed up as a down target.",
+      "description": "How long each target takes to answer. A duration climbing toward the scrape interval is an exporter about to start failing: the containerised node-exporter's filesystem hang showed up here before it showed up as a down target.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

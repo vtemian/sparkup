@@ -13,7 +13,7 @@ Invariants, not preferences. Breaking one is a defect even if the playbook conve
 
 1. **Never flash firmware from a converge.** `firmware` stages capsules and stops; `--no-reboot-check`
    is what stops `fwupdmgr` acting on a reboot prompt. It stages on every run, because the SPBM
-   power channels report incorrect CPU values on older EC firmware — so the write happens at the
+   power channels report incorrect CPU values on older EC firmware, so the write happens at the
    next reboot, performed by a human, possibly one who did not run the playbook. The role says so on
    every converge while a capsule is pending. Rollback is not universally available on this
    hardware; at least one device's update is one-way, and an interrupted write is unrecoverable.
@@ -54,7 +54,7 @@ Everything else, execute. Never ask a human to run a command you can run yoursel
 
 **Running this playbook produces the reference box. That is the whole product.** Somebody clones
 this because they want the machine it describes, so a default that gives them less than that is a
-bug. Identity goes in `host_vars` — accounts, hostname, timezone, this box's EC device id, and
+bug. Identity goes in `host_vars`: accounts, hostname, timezone, this box's EC device id, and
 whether its owner consented to `spbm`. Anything else that differs between a fresh clone and the
 reference box is a defect, not a preference.
 
@@ -78,7 +78,7 @@ than its name, rename it or fold it into the role that owns that job.
 
 **Never write history into a file someone reopens.** No dates, no "this used to", no "as of", no
 justification of your own decision process. Git holds all of it. The exception is a decision an
-agent would otherwise undo — record the *evidence* in `INSTALL_CLAUDE.md`, not the chronology.
+agent would otherwise undo; record the *evidence* in `INSTALL_CLAUDE.md`, not the chronology.
 
 **Comments earn their place by preventing a specific mistake.** A comment survives if a competent
 engineer would otherwise reintroduce a known failure or undo something load-bearing. Delete

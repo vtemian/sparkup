@@ -78,8 +78,8 @@ if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
     echo "    already running as pid $(cat "${PID_FILE}")"
 else
     # Refuse before starting rather than after. A process that loses the bind
-    # dies on EADDRINUSE in milliseconds, but the port keeps answering —
-    # whatever already held it is still there — so a check that only asks
+    # dies on EADDRINUSE in milliseconds, but the port keeps answering,
+    # because whatever already held it is still there, so a check that only asks
     # "does :19100 respond" passes while Prometheus scrapes a stranger. That
     # is not a hypothetical: it happened while this harness was being written,
     # and every panel went green off someone else's process.

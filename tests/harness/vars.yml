@@ -23,8 +23,8 @@ prometheus_port: 19090
 
 # The synthetic exporters run as a plain host process on these ports, and the
 # rendered prometheus.yml reaches them through host.docker.internal exactly as
-# it reaches the real host exporters on the box. That path — the one the
-# compose template calls THE TRAP — is therefore exercised, not bypassed.
+# it reaches the real host exporters on the box. That path, the one the
+# compose template calls THE TRAP, is therefore exercised, not bypassed.
 node_exporter_port: 19100
 nvidia_gpu_exporter_port: 19835
 

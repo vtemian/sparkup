@@ -5,7 +5,7 @@
 - name: Refuse to restart Docker while a training run owns the box
   ansible.builtin.fail:
     msg: >-
-      {{ docker_config_dir }}/daemon.json changed, so dockerd has to restart —
+      {{ docker_config_dir }}/daemon.json changed, so dockerd has to restart;
       but nvidia-smi reports an active GPU compute process. A restart stops
       every running container, that run included. The new daemon.json is
       already on disk and takes effect at the next restart, so wait for the run

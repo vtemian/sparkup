@@ -8,14 +8,14 @@ enforced by derivation, which is what this does:
 1. the JSON parses, and its `uid` is the one the monitoring role tells Grafana
    to land on (`monitoring_grafana_home_dashboard`), so a renamed uid breaks
    the check rather than the home page;
-2. every PromQL expression in every panel **parses** — checked by the real
+2. every PromQL expression in every panel **parses**, checked by the real
    parser, `promtool`, inside the same `prom/prometheus` image the box runs.
    A hand-rolled Python parser would only be a second opinion about syntax we
    do not own;
 3. every metric name a query references is one the project's exporters
    actually emit. The expected set is derived from
-   `roles/exporters/defaults/main.yml` — the enabled node_exporter collector
-   list and the nvidia-smi query-field list — so disabling a collector makes
+   `roles/exporters/defaults/main.yml` (the enabled node_exporter collector
+   list and the nvidia-smi query-field list), so disabling a collector makes
    the panels that depend on it fail here.
 
 Metric names mentioned in panel *descriptions* are deliberately not examined.
@@ -29,7 +29,7 @@ data. That is what the local harness uses, and it catches the class of typo
 that a family-prefix allowlist cannot (`node_memory_MemAvailble_bytes` is still
 a `node_memory_` name).
 
-Requires PyYAML — the one dependency, and one every machine that can run this
+Requires PyYAML, the one dependency, and one every machine that can run this
 repo already has, because ansible depends on it.
 """
 
@@ -372,7 +372,7 @@ def promtool_parse(image: str, exprs: list[tuple[str, str, str]]) -> None:
 
     # Piped in rather than bind-mounted. A mount would need the Docker daemon
     # to see this filesystem, which it does not when the check itself runs in a
-    # container against a mounted socket — a normal CI shape, and one where the
+    # container against a mounted socket, a normal CI shape, and one where the
     # mount silently resolves to an empty directory.
     result = subprocess.run(
         [

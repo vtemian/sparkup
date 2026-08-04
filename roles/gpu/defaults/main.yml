@@ -8,6 +8,6 @@ gpu_toolkit_packages:
 gpu_cdi_spec_path: /etc/cdi/nvidia.yaml
 gpu_cdi_refresh_env_file: /etc/nvidia-container-toolkit/nvidia-cdi-refresh.env
 
-# GB10 is sm_121, which exists only from CUDA 13.0 — most cu12x images cannot run
-# on it — and the tag must publish a linux/arm64 manifest.
+# GB10 is sm_121, which exists only from CUDA 13.0, so most cu12x images cannot
+# run on it, and the tag must publish a linux/arm64 manifest.
 gpu_smoke_test_image: nvidia/cuda:13.0.3-base-ubuntu24.04

@@ -28,7 +28,7 @@ and the second run must report `changed=0`. Paste the recap in your pull request
   disable no service you did not create, never reboot, never flash firmware during a converge.
 - Box-specific values go in `host_vars`; `group_vars/all.yml` holds defaults that suit any Spark. A
   role's own tunables live in its `defaults/main.yml`, prefixed with the role name.
-- No secrets, ever — not in `group_vars`, not in a role, not in a test fixture.
+- No secrets, ever: not in `group_vars`, not in a role, not in a test fixture.
   `host_vars/spark.yml` is gitignored because it names who gets sudo.
 
 ## Style

@@ -49,8 +49,8 @@
   failed_when: false
   check_mode: false
 
-# Queuing is not idempotent on its own — `mokutil --import` reports a change
-# every run — so the request already sitting in MokNew is what makes a second
+# Queuing is not idempotent on its own: `mokutil --import` reports a change
+# every run, so the request already sitting in MokNew is what makes a second
 # converge quiet.
 - name: Read the keys already queued for enrolment
   ansible.builtin.command:
@@ -115,7 +115,7 @@
       before the OS loads shim shows a blue MokManager screen: Enroll MOK,
       Continue, Yes, then type "{{ spbm_mok_password }}". It needs a keyboard
       and a monitor attached; there is no network and no SSH at that point. The
-      screen waits {{ spbm_mok_timeout }}s — if your display has not woken by
+      screen waits {{ spbm_mok_timeout }}s, and if your display has not woken by
       then it cancels and the key is discarded, so re-run this role and try
       again. Until the key is enrolled node_hwmon_power_watt returns
       nothing.
