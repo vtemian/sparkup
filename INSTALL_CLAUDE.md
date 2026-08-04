@@ -1,47 +1,75 @@
 # Operating sparkup
 
-This repo's facts, commands and traps, for an AI agent running them. Humans want
+This repo's procedure, facts and traps, for an agent running them. Humans want
 [README.md](README.md). The rules (invariants, what to ask before doing, engineering standards) are
 in [CLAUDE.md](CLAUDE.md), which loads automatically; read it first and do not restate it here.
 
-**Scope.** sparkup gets the box into a known state and gets metrics into Prometheus. It does not own
-training runs, and a wrapper that emits per-run metrics belongs in the project that owns the
-training, not here. What sparkup offers such a project: Prometheus with the remote-write receiver
-enabled, a provisioned Grafana datasource, and live `node` and `gpu` scrape jobs. Do not break
-those. Power is **not** among them: it arrives on `node` from the firmware only where
-`spbm_enabled` is true, so anything costing a run in watt-hours has to degrade rather than fail
-when the series is absent.
+Trust the machine over this file. Several claims in it were measured wrong once: the firewall turned
+out to be inactive rather than enabled with unknown rules, a pinned exporter version did not exist
+on the registry, and editing `/etc/default/grub` did not make the boot menu appear because a drop-in
+under `/etc/default/grub.d/` was overriding it. Assume the same of anything here you have not
+checked.
 
 ---
 
-## Setup
+## First run, in order
+
+Every step is a command. Step 4 exists because an agent cannot answer an interactive prompt.
+
+**1. Collections.**
 
 ```bash
-make deps                                            # pinned collections
-cp host_vars/spark.yml.example host_vars/spark.yml   # untracked, holds identity
-$EDITOR host_vars/spark.yml
-$EDITOR inventory/hosts.yml                          # ansible_host + ansible_user
+make deps
 ```
 
-Keep the inventory host **named** `spark` whatever the machine is called. `ansible_host` carries the
-address. Renaming the host orphans its `host_vars` file silently.
+**2. Identity.** `host_vars/<host>.yml` is gitignored, so a fresh clone has none, and the playbook
+refuses to run against the tracked placeholder.
 
-### Become
+```bash
+cp host_vars/spark.yml.example host_vars/spark.yml
+$EDITOR host_vars/spark.yml     # accounts, hostname, timezone, spbm_enabled
+```
 
-`-K` prompts interactively and an agent cannot type into a prompt. Use a password file:
+**3. Address.**
+
+```bash
+$EDITOR inventory/hosts.yml     # ansible_host + ansible_user
+```
+
+Keep the inventory host **named** `spark` whatever the machine is called; `ansible_host` carries the
+address, and renaming the host orphans its `host_vars` file silently. On a box that has never
+converged use its IP, because `spark.local` only resolves once this playbook has installed avahi.
+
+**4. Become.** `-K` prompts interactively, and an agent cannot type into a prompt.
 
 ```bash
 install -m 600 /dev/null ~/.sparkup-become
 # the human types the password in; never ask them to paste it into a transcript
-make apply BECOME="--become-password-file ~/.sparkup-become"
-```
-
-Verify it works before relying on it:
-
-```bash
 ansible spark -m ansible.builtin.command -a 'id -u' --become --become-password-file ~/.sparkup-become
 # expect: 0
 ```
+
+Every command below assumes `BECOME="--become-password-file ~/.sparkup-become"`.
+
+**5. Converge.**
+
+```bash
+make apply BECOME="--become-password-file ~/.sparkup-become"
+```
+
+**6. Prove it converged.** The second run must report `changed=0`. That is the acceptance test;
+`--check` is not, and `make check` is only useful against a box that has converged once. See Traps
+for why it cannot survive a fresh one.
+
+```bash
+make apply BECOME="--become-password-file ~/.sparkup-become"   # changed=0
+```
+
+**7. Verify against the machine**, never against your own recap. The commands are under
+[Verification](#verification).
+
+Then stop. **Nothing here reboots.** The converge prints what the next reboot will do and leaves it
+to a human.
 
 ---
 
@@ -83,71 +111,23 @@ shape to copy if you are tempted to add a toggle for safety:
 
 A guard that fails loudly beats a default that does nothing.
 
-**There is no GPU clock cap, and adding one needs a measurement first.** Over 20 h of uptime
-including training this box logged 0 µs of SW and HW thermal slowdown against 23 224 s of SW power
-capping, at 79–80 °C with clocks at 2405 of 3003 MHz. The limiter here is the power cap, not heat,
-so the fan-curve advice circulating for this hardware is a hypothesis about our box rather than a
-finding on it. `nvidia-smi` also reports `N/A` for every thermal-limit register, so there is no
-headroom figure to check it against. Once `spbm` is live, the power channels are how you would take
-that measurement.
-
 ### Where power comes from
 
-The firmware, through `spbm`, and nowhere else, **and only if somebody asked for it.** On a default
-box there is no power and no energy at all, and the three panels on the dashboard's Power row read
-"No data". That is the expected state, not a fault to chase.
+The firmware, through `spbm`, and only where somebody asked for it. On a default box there is no
+power and no energy at all, and the three panels on the dashboard's Power row read "No data". That
+is the expected state, not a fault to chase.
 
-Enabling it is two steps and the second one is not yours:
-
-```yaml
-# host_vars/spark.yml
-spbm_enabled: true
-```
-
-`make apply` builds and signs the module and queues its key; then a **human at the machine** reboots
-with a keyboard and monitor attached and answers MokManager. Secure Boot will not load the module
-until that key is trusted, there is no SSH at that screen, and no converge can complete it. Never
-flip this variable for a box you cannot reach, and never flip it on someone's behalf.
-
-The driver registers 14 power channels (`sys_total`, `dc_input`, `cpu_gpu`, `soc_pkg`, `gpu`, the
-PL1/PL2 limits) and **4 energy accumulators** (`pkg`, `cpu_e`, `cpu_p`, `gpu`) as hwmon sensors,
-which node_exporter's already-enabled `hwmon` collector picks up for free. No extra exporter, no
-extra scrape job, no hardware.
-
-`node_hwmon_power_watt` is a gauge; `node_hwmon_energy_input_joule_total` is a **counter**,
-which is the right shape for energy over a window. Both are labelled `chip` and `sensor`, where
-`sensor` is `power1`/`energy1`, not the human name, so join `node_hwmon_sensor_label` to get
-`sys_total`:
-
-```promql
-node_hwmon_power_watt * on(chip, sensor) group_left(label) node_hwmon_sensor_label
-```
-
-`sys_total` is the firmware's DC-side figure. It does not include PSU conversion loss, so it reads
-somewhat under a wall-socket meter. It is still the whole box, unlike `nvidia_smi_power_draw_watts`,
-which is the GPU rail alone and roughly half the truth (87 W rail against 180 W at the socket,
-measured here).
-
-**Do not add a smart-plug exporter back.** One was tried and removed: a second, optional answer to a
-question the firmware already answers on every Spark, costing a role, 8 variables, its own scrape
-job and a `power_scrape_target` indirection whose only purpose was letting it stay optional. The
-wall-socket number it produced is the one thing `sys_total` cannot give you, and that was not worth
-the surface. If you genuinely need PSU conversion loss measured, that is a different conversation
-from "sparkup should report power".
+`spbm_enabled: true` in `host_vars` installs the driver and queues its signing key. A **human at the
+machine** then reboots with a keyboard and monitor attached and answers MokManager, because Secure
+Boot will not load the module until that key is trusted and there is no SSH at that screen. Never
+flip this variable for a box you cannot reach, and never on someone else's behalf.
+[roles/spbm/README.md](roles/spbm/README.md) holds the procedure and the metric reference.
 
 ---
 
-## Running
+## Tags and play order
 
-```bash
-make apply BECOME="--become-password-file ~/.sparkup-become"
-make apply BECOME="--become-password-file ~/.sparkup-become"   # must report changed=0
-```
-
-`make check` is only useful against a box that has converged once; see the trap below for why it
-cannot survive a fresh one.
-
-Play order, and it is load-bearing:
+Play order is load-bearing:
 
 ```
 base → docker → gpu → users → spbm → exporters → monitoring → firmware → kernel
@@ -161,6 +141,9 @@ base → docker → gpu → users → spbm → exporters → monitoring → firm
 - `spbm` precedes `exporters` so its hwmon channels exist before node_exporter starts reading them.
   It is skipped entirely unless `spbm_enabled` is true, which is the default. `skipping: [spark]`
   under the `spbm` tasks is correct output, not a failure.
+
+`pre_tasks` are tagged `always`, so `--tags <anything>` still runs every precondition. `post_tasks`
+are **not** tagged, so `--tags` skips the reboot summary. A tagged run tells you less than it looks.
 
 ---
 
@@ -311,10 +294,20 @@ stubbed. A fake that reported success would be worse than no test.
 
 ---
 
-## Claims in this repo that were measured wrong once
+## Decisions not to revisit
 
-Kept because they are the reason [CLAUDE.md](CLAUDE.md) says reality wins over a document. The
-firewall was inactive rather than enabled with unknown rules. A pinned exporter version did not
-exist on the registry. Editing `/etc/default/grub` did not make the boot menu appear; a drop-in
-under `/etc/default/grub.d/` was overriding it. Assume the same of anything here you have not
-checked.
+Rejected on evidence. Re-proposing one costs the same argument again.
+
+- **Do not add a smart-plug exporter back.** One was tried and removed: a second, optional answer to
+  a question the firmware already answers on every Spark, costing a role, 8 variables, its own
+  scrape job and a `power_scrape_target` indirection whose only purpose was letting it stay
+  optional. The wall-socket number it produced is the one thing `sys_total` cannot give you, and
+  that was not worth the surface. If you genuinely need PSU conversion loss measured, that is a
+  different conversation from "sparkup should report power".
+- **Do not add a GPU clock cap or a fan curve without measuring first.** Over 20 h of uptime
+  including training this box logged 0 µs of SW and HW thermal slowdown against 23 224 s of SW
+  power capping, at 79–80 °C with clocks at 2405 of 3003 MHz. The limiter here is the power cap,
+  not heat, so the fan-curve advice circulating for this hardware is a hypothesis about our box
+  rather than a finding on it. `nvidia-smi` also reports `N/A` for every thermal-limit register, so there is no
+  headroom figure to check against. Where `spbm` is live, its power channels are how you would take
+  that measurement.

@@ -63,5 +63,21 @@ curl -s localhost:9100/metrics | grep node_hwmon_power_watt
 ```
 
 14 power channels (`sys_total`, `dc_input`, `cpu_gpu`, `soc_pkg`, `gpu`, the PL1/PL2 limits), 4
-energy counters (`pkg`, `cpu_e`, `cpu_p`, `gpu`) and 8 temperatures. The `sensor` label is `power1`,
-not the name, so join `node_hwmon_sensor_label` for that.
+energy accumulators (`pkg`, `cpu_e`, `cpu_p`, `gpu`) and 8 temperatures, all as hwmon sensors. No
+extra exporter, no extra scrape job, no hardware.
+
+`node_hwmon_power_watt` is a gauge; `node_hwmon_energy_input_joule_total` is a **counter** in
+**joules**, not watt-hours. Both are labelled `chip` and `sensor`, where `sensor` is
+`power1`/`energy1` rather than the human name, so join `node_hwmon_sensor_label` to get `sys_total`:
+
+```promql
+node_hwmon_power_watt * on(chip, sensor) group_left(label) node_hwmon_sensor_label
+```
+
+There are 14 power channels but only 4 energy accumulators, and **none of them is `sys_total`**, so
+whole-box energy is a gauge integral rather than an `increase()`.
+
+`sys_total` is the firmware's DC-side figure. It excludes PSU conversion loss, so it reads somewhat
+under a wall-socket meter. It is still the whole box, unlike `nvidia_smi_power_draw_watts`, which is
+the GPU rail alone and roughly half the truth: 87 W at the rail against 180 W at the socket,
+measured here.

@@ -4,8 +4,8 @@ Ansible that provisions a DGX Spark. It runs **as root on real hardware that som
 target is typically headless and on WiFi with no wired fallback, so a firewall or boot mistake is
 recovered by physically walking to the machine. Optimise for not breaking the box.
 
-Repo facts, commands and traps: [INSTALL_CLAUDE.md](INSTALL_CLAUDE.md). Read it before changing
-anything. This file is only the rules.
+How to run it, and every trap in it: [INSTALL_CLAUDE.md](INSTALL_CLAUDE.md). It opens with the
+first-run procedure; read it before changing anything. This file is only the rules.
 
 ## Hard rules
 
