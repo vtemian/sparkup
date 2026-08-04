@@ -1,14 +1,16 @@
 # `firmware`
 
-Two halves. Staging offers whatever `fwupd` has and stops — it never reboots, and the reboot that
-applies a staged capsule is the only unrecoverable operation in this repo. Drift detection reads the
-embedded controller version and asserts it has not moved; that half runs whether or not staging is
-enabled, because a box that opted out of being flashed is exactly where an unexplained version
-change matters.
+Stages whatever `fwupd` offers and stops — it never reboots, and the reboot that applies a staged
+capsule is the only unrecoverable operation in this repo. It also reads the embedded controller
+version and asserts it has not moved.
+
+Firmware is staged on every converge because the SPBM power channels report incorrect CPU values on
+older EC firmware: a box behind on firmware reports bad numbers. **The next reboot after a converge
+that staged something writes it, whoever performs that reboot and for whatever reason.** The role
+says so loudly, on every run, for as long as a capsule sits in the capsule directory.
 
 | Variable | Default | |
 |---|---|---|
-| `firmware_update_enabled` | `false` | gates staging only, never the drift assert |
 | `firmware_fwupdmgr` | `/usr/bin/fwupdmgr` | absolute; also the file the role stats |
 | `firmware_capsule_dir` | `/boot/efi/EFI/UpdateCapsule` | searched for `*.cap` on every converge, opted in or not |
 | `firmware_ec_device_id` | `""` | your box's EC; empty disables the read |

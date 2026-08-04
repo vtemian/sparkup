@@ -46,8 +46,8 @@
     name: ufw
     state: present
 
-# ADD allow rules only. No reset, no delete, no default policy except through
-# the opt-in below: this box's only link is WiFi, so a mistake means walking to it.
+# ADD allow rules only. No reset, no delete: this box's only link is WiFi, so a
+# mistake means walking to it.
 - name: Allow inbound service ports through ufw
   community.general.ufw:
     rule: allow
@@ -67,23 +67,30 @@
   loop_control:
     label: "{{ item.0 }} -> {{ item.1 }}"
 
+# The port sshd actually answered on, read off this connection rather than
+# assumed: a box reached on a non-default port would otherwise pass the assert
+# below on the strength of 22 being allowed, and lose its own session.
+- name: Record the port this connection arrived on
+  ansible.builtin.set_fact:
+    base_firewall_live_ssh_port: >-
+      {{ ansible_env.SSH_CONNECTION | default('', true)
+         | regex_search('(\d+)$') | default(spark_firewall_ssh_port, true) }}
+
 # Ordering matters: the allow rules above must already be applied when ufw
 # switches to default-deny.
 - name: Refuse to enable the firewall without an SSH allow rule
   ansible.builtin.assert:
     that:
-      - spark_firewall_ssh_port | int in (spark_firewall_allow_ports | map('int') | list)
+      - base_firewall_live_ssh_port | int in (spark_firewall_allow_ports | map('int') | list)
     fail_msg: >-
-      spark_firewall_enable is on but port {{ spark_firewall_ssh_port }} is not in
-      spark_firewall_allow_ports. Enabling ufw would set a default-deny policy
-      and drop your own SSH session on a box whose only link is WiFi. Add the
-      port, or leave the firewall off.
+      This connection arrived on port {{ base_firewall_live_ssh_port }}, which is
+      not in spark_firewall_allow_ports. Enabling ufw sets a default-deny policy
+      and would drop your own session on a box whose only link is WiFi. Add the
+      port to spark_firewall_allow_ports.
     success_msg: >-
-      SSH on {{ spark_firewall_ssh_port }} is allowed, so enabling ufw cannot
-      close the way in.
-  when: spark_firewall_enable
+      This connection arrived on port {{ base_firewall_live_ssh_port }}, which is
+      allowed, so enabling ufw cannot close the way in.
 
 - name: Enable the firewall
   community.general.ufw:
     state: enabled
-  when: spark_firewall_enable

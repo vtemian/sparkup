@@ -46,8 +46,7 @@
       tags: [monitoring]
     - role: firmware
       tags: [firmware]
-    # LAST and alone: the only role that can leave a headless WiFi-only box
-    # unbootable. Run it deliberately with someone able to reach the machine.
+    # LAST: it repoints the boot path, so everything else is already converged
+    # if a reboot is needed to finish.
     - role: kernel
       tags: [kernel]
-      when: kernel_enabled | bool

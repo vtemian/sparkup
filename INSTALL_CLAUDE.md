@@ -58,24 +58,22 @@ Three tiers. Putting a value in the wrong one is the most common mistake.
 Registry variables are read unprefixed and declared only in `group_vars`; do not redeclare them in a
 role's defaults, or the same tunable exists in two files.
 
-### There are three gates, and they all guard irreversible actions
+### There are no gates
 
-Everything else runs on every converge. A toggle that merely says "maybe do the thing this repo
-exists to do" does not earn its place. The bar for a new one is that flipping it wrong costs
-somebody hardware, a boot, or their way into the box.
+Every role runs on every converge. There is no variable anywhere in this repo whose job is to
+decide whether a feature happens — see [CLAUDE.md](CLAUDE.md) for why, and do not add one.
 
-| Gate | Default | Guards |
-|---|---|---|
-| `kernel_enabled` | `false` | the boot path. Can leave a headless WiFi-only box unbootable |
-| `firmware_update_enabled` | `false` | a flash UEFI applies at next boot, outside this repo's control |
-| `spark_firewall_enable` | `false` | default-deny incoming. A mistake means walking to the box |
+The two things that could once be switched off are now guarded by asserts instead, which is the
+shape to copy if you are ever tempted to add a toggle for safety:
 
-The firewall role otherwise runs unconditionally, because adding allow rules cannot lock anyone out.
-Only the `state: enabled` step is gated, and it asserts SSH is allowed before it fires.
+- **ufw** ends default-deny, and `base` refuses to enable it unless the port **this connection
+  arrived on** is in `spark_firewall_allow_ports`. It reads that port off
+  `ansible_env.SSH_CONNECTION` rather than trusting `spark_firewall_ssh_port`, so a box reached on a
+  non-standard port cannot be locked out by a config that only mentions 22.
+- **`kernel`** asserts the GRUB menu resolves to something visible *before* it moves the boot
+  target, so a box whose menu is hidden fails the converge rather than becoming unreachable.
 
-**`--tags kernel` alone does nothing.** The tag selects the role, `when: kernel_enabled` discards it,
-and the run reports success having done nothing. Both are required:
-`--tags kernel -e kernel_enabled=true`.
+A guard that fails loudly beats a default that does nothing.
 
 **There is no GPU clock cap, and adding one needs a measurement first.** Over 20 h of uptime
 including training this box logged 0 µs of SW and HW thermal slowdown against 23 224 s of SW power

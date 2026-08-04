@@ -24,7 +24,7 @@ and the second run must report `changed=0`. Paste the recap in your pull request
 
 - A task that reports `changed` on every run is not finished.
 - Never query a metric nobody emits: a new dashboard panel must still pass `make dashboard`.
-- Nothing is destructive by default: only ever *add* firewall rules, create no account unless asked,
+- Nothing is destructive by default: never *remove* a firewall rule, create no account unless asked,
   disable no service you did not create, never reboot, never flash firmware during a converge.
 - Box-specific values go in `host_vars`; `group_vars/all.yml` holds defaults that suit any Spark. A
   role's own tunables live in its `defaults/main.yml`, prefixed with the role name.

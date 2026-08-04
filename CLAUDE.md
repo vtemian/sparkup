@@ -11,11 +11,15 @@ anything. This file is only the rules.
 
 Invariants, not preferences. Breaking one is a defect even if the playbook converges.
 
-1. **Never flash firmware unattended.** `firmware` stages capsules and stops. Staging is opt-in and
-   never reboots, so a flash happens only when a human restarts the machine. Rollback is not
-   universally available on this hardware; at least one device's update is one-way.
-2. **Never reset a firewall or set a default policy implicitly.** `base` only *adds* allow rules.
-   Enabling ufw is opt-in and asserts SSH is allowed first.
+1. **Never flash firmware from a converge.** `firmware` stages capsules and stops; `--no-reboot-check`
+   is what stops `fwupdmgr` acting on a reboot prompt. It stages on every run, because the SPBM
+   power channels report incorrect CPU values on older EC firmware — so the write happens at the
+   next reboot, performed by a human, possibly one who did not run the playbook. The role says so on
+   every converge while a capsule is pending. Rollback is not universally available on this
+   hardware; at least one device's update is one-way, and an interrupted write is unrecoverable.
+2. **Never reset a firewall or remove a rule.** `base` only *adds*. It does enable ufw, which means
+   default-deny incoming, but only after asserting the port the current connection arrived on is
+   allowed. Never weaken that assert.
 3. **Never create accounts that were not asked for.** `spark_users` defaults to `[]`, and
    `host_vars/*.yml` is gitignored so a clone cannot provision somebody else's users.
 4. **Never reboot from a role.** Report that a reboot is needed and stop.
@@ -34,7 +38,7 @@ Invariants, not preferences. Breaking one is a defect even if the playbook conve
 
 Do not decide these alone, even with working sudo:
 
-- Enabling or altering firewall policy on a box you cannot physically reach.
+- Widening or weakening firewall policy on a box you cannot physically reach.
 - Running the `kernel` role, or rebooting.
 - Anything touching firmware.
 - Publishing outward, including making the repository public.
@@ -44,11 +48,20 @@ Everything else, execute. Never ask a human to run a command you can run yoursel
 
 ## Standards
 
-**A toggle must guard an irreversible action, or it does not exist.** There are three:
-`kernel_enabled`, `firmware_update_enabled`, `spark_firewall_enable`. Each one, set wrong, costs
-somebody hardware, a boot, or their way into the box. "Maybe do the thing this repo exists to do" is
-not a reason for a variable — it is how a repo ends up with nineteen booleans and no power readings.
-A verification with an off switch is a verification that gets switched off.
+**Running this playbook produces the reference box. That is the whole product.** Somebody clones
+this because they want the machine it describes, so a default that gives them less than that is a
+bug. Identity goes in `host_vars` — accounts, hostname, timezone, this box's EC device id. Anything
+else that differs between a fresh clone and the reference box is a defect, not a preference.
+
+**There are no feature flags. Do not add one.** Not to make a role optional, not to make a
+verification skippable, not to be careful. This repo had nineteen booleans and produced no power
+readings, because `spbm_enabled: false` is indistinguishable from the feature not existing. A
+verification with an off switch is a verification that gets switched off.
+
+When something is genuinely dangerous, **guard it with an assert that fails loudly**, not a default
+that silently does nothing. `base` refuses to enable ufw unless the port the current connection
+arrived on is allowed; `kernel` refuses to move the boot target unless the GRUB menu resolves to
+something visible. Both run every time, and both stop the converge rather than skipping quietly.
 
 **Name a role for what it does now.** A role whose name describes what it used to do is worse than a
 badly named one, because the name is believed. If a deletion leaves a role doing something other

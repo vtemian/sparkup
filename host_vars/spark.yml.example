@@ -26,7 +26,3 @@ spark_shared_group: spark
 # know yours.
 # firmware_ec_device_id: "<your box's EC device id>"
 # firmware_expected_ec_firmware: "0x03000302"
-
-# Stages firmware on converge; UEFI applies it at the next boot, which nothing
-# here performs for you.
-# firmware_update_enabled: true

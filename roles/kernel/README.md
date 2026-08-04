@@ -5,7 +5,6 @@ kernel, and pins unsigned images out of apt. It never reboots.
 
 | Variable | Default | |
 |---|---|---|
-| `kernel_enabled` | `false` | `group_vars`; `site.yml` skips the role when false |
 | `kernel_meta_package` | `linux-image-nvidia-hwe-24.04` | the concrete image is discovered from it; `""` on a non-DGX box |
 | `kernel_grub_timeout` | `5` | seconds the menu stays up |
 | `kernel_grub_recordfail_timeout` | `5` | menu timeout on the retry after a failed boot |
@@ -15,10 +14,8 @@ kernel, and pins unsigned images out of apt. It never reboots.
 | `kernel_grub_config` | `/boot/grub/grub.cfg` | read, never written |
 | `kernel_apt_preferences_file` | `/etc/apt/preferences.d/no-unsigned-kernels` | `Pin-Priority: -1` |
 
-Both the tag and the flag are required — the tag alone silently no-ops:
-
 ```sh
-ansible-playbook site.yml -K --tags kernel -e kernel_enabled=true
+ansible-playbook site.yml -K --tags kernel
 ```
 
 If the box will not boot: tap Esc at power-on and pick a previous signed kernel from the menu.

@@ -2,10 +2,8 @@
 # THIS ROLE STAGES FIRMWARE AND NEVER REBOOTS. `--no-reboot-check` is what
 # enforces it: without the flag `fwupdmgr update` offers to reboot and can act.
 #
-# Two halves with different gates. Staging is opt-in through
-# firmware_update_enabled; reading the EC version and asserting it has not
-# drifted always runs, because drift is worth knowing about on a box that has
-# opted out of being flashed by this repo.
+# Staging runs on every converge: the SPBM power channels report incorrect CPU
+# values on older EC firmware, so a box behind on firmware reports bad numbers.
 
 - name: Look for the firmware update client
   ansible.builtin.stat:
@@ -13,9 +11,7 @@
   register: firmware_client
 
 - name: Stage firmware updates
-  when:
-    - firmware_update_enabled | bool
-    - firmware_client.stat.exists
+  when: firmware_client.stat.exists
   block:
 
     # rc 2 is fresh cache, rc 101 is LVFS unreachable. Both leave the check
@@ -69,8 +65,7 @@
       version or the assert below will correctly report drift.
   when: firmware_capsules.matched | int > 0
 
-# Drift detection, and it runs whether or not staging is enabled: the point is
-# to notice a version that moved without anybody here asking for it.
+# Drift detection: notice a version that moved without anybody here asking.
 - name: Detect embedded controller firmware drift
   when:
     - firmware_client.stat.exists

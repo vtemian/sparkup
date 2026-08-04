@@ -13,21 +13,16 @@ spark_shared_dir: /srv/spark
 spark_shared_group: spark
 spark_shared_subdirs: [data, checkpoints, runs]
 
-# The role only ADDS allow rules; it never resets ufw or sets a default policy.
+# ufw ends up default-deny, so this is the complete list of what stays
+# reachable. The role asserts the port you are connected on is in it.
 spark_firewall_allow_ports: [22, 80]
+# Only a fallback: the real check reads the port off the live connection.
 spark_firewall_ssh_port: 22
-
-# Enabling ufw sets default-deny incoming — the one operation that can lock you
-# out. The role asserts SSH is allowed first and refuses otherwise.
-spark_firewall_enable: false
 
 # Prometheus scrapes host exporters from a container via the docker bridge, so
 # that traffic hits the host INPUT chain and default-deny drops it without these.
 spark_firewall_docker_subnets: ["172.16.0.0/12"]
 spark_firewall_container_ports: [9100, 9835]
-
-# Off by default: the only role that can leave a headless box unbootable.
-kernel_enabled: false
 
 monitoring_dir: /opt/monitoring
 # Never pin BELOW the running version: Grafana migrates its schema forward only,
