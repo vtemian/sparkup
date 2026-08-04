@@ -11,6 +11,11 @@
 # root and must never collide with a real stack on the same machine.
 monitoring_dir: "{{ playbook_dir }}/rendered"
 
+# The compose file bind-mounts this into Grafana, so it has to exist and has to
+# be somewhere a laptop can mount from: /srv/spark is neither. render.yml
+# creates it.
+spark_shared_dir: "{{ playbook_dir }}/rendered/shared"
+
 # Compose namespaces its volumes by project name. A distinct one means
 # `down --volumes` cannot reach a real spark-monitoring stack's history.
 monitoring_project_name: sparkup-harness
