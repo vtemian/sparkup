@@ -47,6 +47,9 @@ Read this list. On a converged box it will:
   wrong CPU power values, which is why this is not optional. It never reboots for you.
 - **Repoint GRUB** at the signed kernel and pin unsigned kernels out of apt.
 
+`make report` prints what your box is and what would stop a converge, without changing it. It needs
+no sudo, only `make deps` and your address in `inventory/hosts.yml`.
+
 ## Whole-system power, if you want it
 
 `nvidia-smi` sees the GPU rail alone, which is about half of what the box pulls. The firmware knows
@@ -105,10 +108,11 @@ password (`sparkup` unless you changed it), which needs a keyboard and a monitor
 
 ```
 site.yml              the playbook
+report.yml            reads a box and prints what it is, changing nothing
 inventory/hosts.yml   which box
 group_vars/all.yml    defaults for any Spark
 host_vars/spark.yml   your box (untracked)
-roles/                base, docker, gpu, users, spbm, exporters, monitoring, firmware, kernel
+roles/                base, docker, gpu, users, spbm, exporters, monitoring, firmware, kernel, report
 tests/                everything that runs without a Spark
 ```
 

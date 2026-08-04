@@ -1,0 +1,94 @@
+{# Backslashes are doubled throughout: Jinja unescapes string literals, so '\1' is chr(1). #}
+{% set root_fs = (ansible_mounts | selectattr('mount', 'equalto', '/') | list | first) | default({}, true) %}
+{# mokutil answers on stderr where the firmware has no Secure Boot support at all. #}
+{% set secure_boot = ((report_secure_boot.stdout | default('', true)) ~ (report_secure_boot.stderr | default('', true))) | trim %}
+{% set kernel_candidate = (report_signed_kernel.stdout | regex_search('Candidate:\\s*(\\S+)', '\\1') or ['not offered by apt'])[0] %}
+{% set spbm_loaded = 'spbm' in (report_modules.stdout | default('', true)) %}
+{% set hwmon = report_hwmon.stdout | default('', true) | trim %}
+{% set power_channels = report_power_channels.stdout | default('', true) | trim %}
+{% set firmware = report_firmware.stdout | default('', true) | trim %}
+{# /etc/dgx-release carries DGX_SERIAL_NUMBER, so pull the versions out rather
+   than printing the file: this report is written to be pasted in public. #}
+{% set dgx = report_dgx_release.content | default('', true) | b64decode %}
+{% set dgx_build = (dgx | regex_search('DGX_SWBUILD_VERSION="([^"]+)"', '\\1') or [''])[0] %}
+{% set dgx_ota = (dgx | regex_search('DGX_OTA_VERSION="([^"]+)"', '\\1') or [''])[0] %}
+================================================================================
+ sparkup report for {{ inventory_hostname }}. Nothing on this box was changed,
+ and no serial numbers are printed, so this is safe to paste into an issue.
+================================================================================
+
+WILL THIS REPO RUN HERE
+{% if 'SecureBoot enabled' in secure_boot %}
+  Secure Boot          enabled
+{% elif report_secure_boot.rc is not defined %}
+  Secure Boot          cannot be read here: mokutil is not installed
+                       The converge installs it and checks before touching
+                       anything, so this is not a blocker, only unknown for now.
+{% else %}
+  Secure Boot          {{ secure_boot or 'mokutil said nothing' }}
+                       The converge REFUSES to start without it, before changing
+                       anything. Re-enable it in firmware, or use another recipe.
+{% endif %}
+  Signed kernel        {{ kernel_candidate }}
+{% if 'not offered' in kernel_candidate or kernel_candidate == '(none)' %}
+                       linux-image-nvidia-hwe-24.04 is what the kernel role
+                       boots. Without it this is not a DGX OS base and the
+                       converge fails late, at apt.
+{% endif %}
+
+MACHINE
+  Product              {{ ansible_product_name | default('?', true) }} / {{ ansible_board_name | default('?', true) }}
+  BIOS                 {{ ansible_bios_version | default('?', true) }} ({{ ansible_bios_date | default('?', true) }})
+  OS                   {{ ansible_distribution | default('?', true) }} {{ ansible_distribution_version | default('', true) }}
+  DGX release          {{ (dgx_build ~ (' (OTA ' ~ dgx_ota ~ ')' if dgx_ota else '')) or 'no /etc/dgx-release' }}
+  Kernel               {{ ansible_kernel | default('?', true) }} ({{ ansible_architecture | default('?', true) }})
+  Memory               {{ ansible_memtotal_mb | default(0, true) }} MB
+{% if root_fs.size_total | default(0) > 0 %}
+  Root filesystem      {{ (root_fs.size_available / 1024 ** 3) | round | int }} GB free of {{ (root_fs.size_total / 1024 ** 3) | round | int }} GB
+{% endif %}
+  Uptime               {{ ((ansible_uptime_seconds | default(0)) / 3600) | round(1) }} h
+
+GPU
+{% if report_gpu.rc | default(1) == 0 %}
+{{ report_gpu.stdout | default('', true) | trim | indent(4, true) }}
+    (name, driver, compute capability, memory.total, power.draw, power.limit)
+{% else %}
+    nvidia-smi did not answer: {{ (report_gpu.stderr | default('', true)) | trim or (report_gpu.msg | default('unknown error', true)) }}
+{% endif %}
+
+WHOLE-SYSTEM POWER
+  spbm module          {{ 'loaded' if spbm_loaded else 'not loaded (the default; the dashboard Power row stays empty)' }}
+  hwmon devices
+{% if hwmon %}
+{{ hwmon | indent(4, true) }}
+{% else %}
+    none
+{% endif %}
+{% if power_channels %}
+  power channels, live. sys_total is the whole box, DC side of the PSU; the
+  GPU rail alone is what nvidia-smi reports above.
+{{ power_channels | indent(4, true) }}
+{% endif %}
+
+CLAIMS THIS REPO MAKES, WHICH YOUR BOX EITHER CONFIRMS OR KILLS
+Most of these were measured on one machine on one day. Where yours disagrees,
+reality wins and the docs are wrong: please open a "Hardware finding" issue.
+
+{# No `true` on these defaults: it would treat a perfectly good rc of 0 as missing. #}
+  no readable RTC      timedatectl exits {{ report_timedatectl.rc | default('nothing, it is not installed') }}   (claimed: non-zero, EFI RTC reads fail)
+  SSH socket-activated {% for unit in report_ssh_units.results | default([], true) %}{{ unit.item }} {{ unit.status.UnitFileState | default('absent', true) }}{{ ' / ' if not loop.last }}{% endfor %}   (claimed: ssh.socket enabled, ssh.service disabled)
+  hidden boot menu     /etc/default/grub.d/no-grubmenu.cfg {{ 'present' if report_grub_dropin.stat.exists else 'ABSENT' }}   (claimed: present, forcing GRUB_TIMEOUT=0)
+  unified GPU memory   see memory.total above   (claimed: [N/A], the field is dropped)
+
+FIRMWARE
+Older EC firmware reports incorrect CPU power, so the Embedded Controller line
+is the one that matters. The converge stages what fwupd offers and never
+reboots; these are the versions this box runs today.
+
+{% if firmware.startswith('{') %}
+{% for device in (firmware | from_json).get('Devices', []) %}
+  {{ "%-26s"|format(device.get('Name', '?')) }} {{ device.get('Version', '?') }}
+{% endfor %}
+{% else %}
+  fwupdmgr did not answer: {{ (report_firmware.stderr | default('', true)) | trim or (report_firmware.msg | default('unknown error', true)) }}
+{% endif %}

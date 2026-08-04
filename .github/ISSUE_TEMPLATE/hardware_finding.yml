@@ -9,6 +9,10 @@ body:
         on **one** box on one day, and several of those facts are hypotheses. If your machine
         disagrees, reality wins and the docs should change.
 
+        `make report` prints your box's answer to several of those claims side by side with the
+        claim itself. It needs no sudo and changes nothing, and its output fills in most of this
+        form.
+
   - type: textarea
     id: claim
     attributes:
