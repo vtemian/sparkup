@@ -26,8 +26,10 @@ CPU, unified memory and disk; and a row saying whether the exporters themselves 
 
 ## Before you run it
 
-This is root-level automation aimed at one specific machine. It assumes a DGX Spark running DGX OS,
-with Secure Boot **enabled**. The playbook refuses to start otherwise, before changing anything.
+This is root-level automation aimed at one specific machine. It assumes a DGX Spark running a DGX OS
+built on Ubuntu 24.04, with Secure Boot **enabled**. The playbook refuses to start without Secure
+Boot, before changing anything. On an older base it fails later and less clearly, when apt has no
+`linux-image-nvidia-hwe-24.04`.
 
 Read this list. On a converged box it will:
 
