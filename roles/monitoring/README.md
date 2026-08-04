@@ -9,6 +9,8 @@ datasource and dashboard.
 | `monitoring_project_name` | `spark-monitoring` | namespaces the `grafana-data` and `prometheus-data` volumes |
 | `monitoring_dashboards_container_dir` | `/etc/grafana/dashboards` | mount point inside Grafana |
 | `monitoring_grafana_home_dashboard` | `/d/spark-overview/spark-overview` | also what `make dashboard` checks the uid against |
+| `monitoring_grafana_anonymous_role` | `Viewer` | what an unauthenticated visitor may do. See [SECURITY.md](../../SECURITY.md) |
+| `monitoring_grafana_theme` | `dark` | |
 | `prometheus_image` | `prom/prometheus:v3.13.2` | never pin below the running version |
 | `grafana_image` | `grafana/grafana:13.1.1` | never pin below the running version |
 | `prometheus_bind_address` | `127.0.0.1` | published address on the host |
