@@ -69,6 +69,8 @@ Then `make apply`, reboot with a keyboard attached, and enrol the key.
 
 ## Setup
 
+You need `ansible-core` on your own machine, and SSH access to the Spark as an account with sudo.
+
 ```bash
 make deps                                            # once
 cp host_vars/spark.yml.example host_vars/spark.yml   # untracked; your accounts
@@ -80,11 +82,14 @@ On a fresh box put its **IP** in `ansible_host`: `spark.local` only resolves aft
 converge has installed avahi. Keep the inventory host named `spark` whatever your machine is called.
 
 ```bash
-make check     # see what would change, change nothing
 make apply     # converge
 ```
 
 Then `make apply` again. It must report `changed=0`.
+
+`make check` shows what a converge would change without changing it, but only on a box that has
+been converged once. A dry run cannot create the shared group, so on a fresh machine it fails
+adding your accounts to a group that does not exist yet.
 
 ## The first reboot
 

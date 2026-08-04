@@ -140,10 +140,12 @@ from "sparkup should report power".
 ## Running
 
 ```bash
-make check BECOME="--become-password-file ~/.sparkup-become"   # dry run, changes nothing
 make apply BECOME="--become-password-file ~/.sparkup-become"
 make apply BECOME="--become-password-file ~/.sparkup-become"   # must report changed=0
 ```
+
+`make check` is only useful against a box that has converged once; see the trap below for why it
+cannot survive a fresh one.
 
 Play order, and it is load-bearing:
 
