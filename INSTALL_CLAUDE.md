@@ -5,12 +5,12 @@ This repo's facts, commands and traps, for an AI agent running them. Humans want
 in [CLAUDE.md](CLAUDE.md), which loads automatically; read it first and do not restate it here.
 
 **Scope.** sparkup gets the box into a known state and gets metrics into Prometheus. It does not own
-training runs. The wrapper that emits per-run metrics and correlates them against these series is a
-separate project, specified in [`docs/training-observability.md`](docs/training-observability.md).
-What sparkup guarantees it: Prometheus with the remote-write receiver enabled, a provisioned Grafana
-datasource, and live `node` and `gpu` scrape jobs. Do not break those. Power is **not** guaranteed:
-it arrives on `node` from the firmware only where `spbm_enabled` is true, so the wrapper's energy and
-cost figures have to degrade rather than fail when the series is absent.
+training runs, and a wrapper that emits per-run metrics belongs in the project that owns the
+training, not here. What sparkup offers such a project: Prometheus with the remote-write receiver
+enabled, a provisioned Grafana datasource, and live `node` and `gpu` scrape jobs. Do not break
+those. Power is **not** among them: it arrives on `node` from the firmware only where
+`spbm_enabled` is true, so anything costing a run in watt-hours has to degrade rather than fail
+when the series is absent.
 
 ---
 

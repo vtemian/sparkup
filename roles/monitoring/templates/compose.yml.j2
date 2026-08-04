@@ -29,9 +29,9 @@ services:
       # Enables POST /-/reload, so a scrape-config change costs a reload
       # instead of a restart that drops the TSDB head.
       - --web.enable-lifecycle
-      # A contract with the training-observability project: it pushes per-step
-      # samples with their true millisecond timestamps. Removing this flag
-      # breaks that project, silently.
+      # For anything pushing samples with their own timestamps rather than
+      # waiting to be scraped, such as a training wrapper emitting per-step
+      # metrics. Removing this flag breaks that silently, from the writer's end.
       - --web.enable-remote-write-receiver
     ports:
       # LAN must not reach Prometheus: it is unauthenticated and it accepts
