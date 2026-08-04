@@ -66,8 +66,9 @@ curl -s localhost:9100/metrics | grep node_hwmon_power_watt
 energy accumulators (`pkg`, `cpu_e`, `cpu_p`, `gpu`) and 8 temperatures, all as hwmon sensors. No
 extra exporter, no extra scrape job, no hardware.
 
-`node_hwmon_power_watt` is a gauge; `node_hwmon_energy_input_joule_total` is a **counter** in
-**joules**, not watt-hours. Both are labelled `chip` and `sensor`, where `sensor` is
+`node_hwmon_power_watt` is a gauge; `node_hwmon_energy_joule_total` is a **counter** in
+**joules**, not watt-hours. The metric drops the sysfs `_input` suffix that the filename carries,
+so the obvious spelling is the wrong one. Both are labelled `chip` and `sensor`, where `sensor` is
 `power1`/`energy1` rather than the human name, so join `node_hwmon_sensor_label` to get `sys_total`:
 
 ```promql
