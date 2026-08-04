@@ -21,3 +21,14 @@
     - "{{ playbook_dir }}/vars.yml"
   roles:
     - role: users
+
+# A container has no Secure Boot, no fwupd daemon, no GPU and no hwmon, which is
+# the case worth testing: the report is the first thing a stranger runs, and
+# every value in it is missing here. A template that raised on an undefined
+# register would fail this play. It is also read-only, so it belongs in a run
+# that asserts changed=0.
+- name: Render the report in a container where nothing it reads exists
+  hosts: sparkup-test-base
+  gather_facts: true
+  roles:
+    - role: report

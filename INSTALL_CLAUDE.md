@@ -40,6 +40,10 @@ Keep the inventory host **named** `spark` whatever the machine is called; `ansib
 address, and renaming the host orphans its `host_vars` file silently. On a box that has never
 converged use its IP, because `spark.local` only resolves once this playbook has installed avahi.
 
+With the address set, `make report` already works: it reads the box, needs no sudo, and changes
+nothing. Run it before a first converge. It prints what would stop one, and puts this repo's
+hardware claims next to what the box actually answers.
+
 **4. Become.** `-K` prompts interactively, and an agent cannot type into a prompt.
 
 ```bash
@@ -188,7 +192,7 @@ make offline   # lint, syntax, dashboard, dashboard-live, roles-test
 |---|---|
 | `make dashboard` | every panel query parses (real `promtool`) and names a metric an enabled exporter emits |
 | `make dashboard-live` | every query returns data from a real Prometheus holding synthetic samples |
-| `make roles-test` | `base` and `users` converge twice in containers, second run `changed=0` |
+| `make roles-test` | `base` and `users` converge twice in containers, second run `changed=0`, and `report` renders where none of what it reads exists |
 | `make harness-up` / `harness-down` | Grafana and Prometheus locally for editing the dashboard |
 
 `make dashboard` matches `node_memory_` and `node_filesystem_` by **prefix**, so a typo inside a real
@@ -285,6 +289,13 @@ stubbed. A fake that reported success would be worse than no test.
   skipped that variable does not exist, `default('')` yields no match, and the box is told to expect
   a MokManager screen that will never appear. Anything reading a `spbm_*` register must test
   `spbm_enabled` first.
+- **Jinja unescapes string literals, so `'\1'` inside a `.j2` is `chr(1)`.** `regex_search(x, '\1')`
+  then dies with "Unknown argument", which names neither the filter nor the cause. Double every
+  backslash in a template: `'\\1'`. YAML task files do not have this problem, which is why the
+  pattern copied out of a role breaks when it lands in a template.
+- **`default(x, true)` treats a return code of `0` as missing.** The second argument means "replace
+  falsy values too", and `rc: 0` is falsy. `report` claimed a tool was not installed on a box where
+  it had just run successfully. Only use the boolean form on strings.
 - **Neither dashboard check can tell you the Power row is dead.** `make dashboard` allows
   `node_hwmon_` by prefix because the `hwmon` collector is enabled regardless (NVMe
   and SoC temperatures come through it), and `make dashboard-live` passes because

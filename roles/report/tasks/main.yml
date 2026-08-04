@@ -1,0 +1,105 @@
+---
+# Reads a box and prints what it found. Nothing here installs, writes, or becomes
+# root: this is what somebody runs on a machine they have not decided to trust
+# this repo with yet, so a task that changed anything would defeat the point.
+# Every command is failed_when: false, because a missing tool is a finding.
+
+- name: Read the Secure Boot state
+  ansible.builtin.command: mokutil --sb-state
+  register: report_secure_boot
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# The signed kernel this repo boots. Absent means the box is not on a DGX OS
+# base, which is the failure the README warns arrives late and unclearly.
+- name: Read whether apt offers the signed kernel meta package
+  ansible.builtin.command: apt-cache policy linux-image-nvidia-hwe-24.04
+  register: report_signed_kernel
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Read the GPU inventory
+  ansible.builtin.command:
+    argv:
+      - nvidia-smi
+      - --query-gpu=name,driver_version,compute_cap,memory.total,power.draw,power.limit
+      - --format=csv,noheader
+  register: report_gpu
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Read the firmware versions the vendor reports
+  ansible.builtin.command: fwupdmgr get-devices --no-unreported-check
+  register: report_firmware
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Read which hwmon devices the kernel exposes
+  ansible.builtin.shell:
+    cmd: set -o pipefail && grep -H . /sys/class/hwmon/hwmon*/name | sort
+  register: report_hwmon
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# Present only where the spbm module is loaded. Their values alongside the EC
+# version above are the correlation behind "older EC firmware reports incorrect
+# CPU power": one box cannot establish it.
+- name: Read the hwmon power channels
+  ansible.builtin.shell:
+    cmd: set -o pipefail && grep -H . /sys/class/hwmon/hwmon*/power*_label /sys/class/hwmon/hwmon*/power*_input | sort
+  register: report_power_channels
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Read the loaded kernel modules
+  ansible.builtin.command: lsmod
+  register: report_modules
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# This repo claims the EFI RTC on this hardware cannot be read, which makes
+# bare `timedatectl` exit non-zero on a box whose clock is correct.
+- name: Read whether the clock can be queried
+  ansible.builtin.command: timedatectl
+  register: report_timedatectl
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+# Named with no state, which queries the unit and changes nothing. A unit that
+# does not exist fails the module, and "absent" is a legitimate answer here.
+- name: Read how SSH is activated
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+  register: report_ssh_units
+  loop: [ssh.socket, ssh.service]
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Look for the GRUB drop-in that hides the boot menu
+  ansible.builtin.stat:
+    path: /etc/default/grub.d/no-grubmenu.cfg
+  register: report_grub_dropin
+
+- name: Look for the DGX OS release file
+  ansible.builtin.stat:
+    path: /etc/dgx-release
+  register: report_dgx_release_file
+
+- name: Read the DGX OS release
+  ansible.builtin.slurp:
+    src: /etc/dgx-release
+  register: report_dgx_release
+  when: report_dgx_release_file.stat.exists
+
+- name: Print the report
+  ansible.builtin.debug:
+    msg: "{{ lookup('ansible.builtin.template', 'report.txt.j2') }}"

@@ -6,7 +6,7 @@ BECOME ?= -K
 PLAYBOOK ?= site.yml
 EXTRA ?=
 
-.PHONY: help deps lint syntax ping check apply idempotence
+.PHONY: help deps lint syntax ping report check apply idempotence
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -17,11 +17,16 @@ deps: ## Install pinned collections
 lint: ## ansible-lint, production profile
 	ansible-lint
 
-syntax: ## Parse the playbook without contacting the host
-	ansible-playbook $(PLAYBOOK) --syntax-check
+syntax: ## Parse the playbooks without contacting the host
+	ansible-playbook site.yml report.yml --syntax-check
 
 ping: ## Confirm the host answers
 	ansible spark -m ansible.builtin.ping
+
+# No BECOME: it reads only what an unprivileged account can, so that running it
+# costs nothing more than SSH access.
+report: ## Print what the box is, changing nothing
+	ansible-playbook report.yml $(EXTRA)
 
 check: ## Dry run, showing the diff it would make
 	ansible-playbook $(PLAYBOOK) $(BECOME) --check --diff $(EXTRA)

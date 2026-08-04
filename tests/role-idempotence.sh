@@ -23,6 +23,8 @@ What this covers, and what it does not
           boots a real init.
   users   tested. Accounts, groups and the shared tree. The GitHub key import
           is not exercised: it needs the network and a real account.
+  report  tested, against a container holding none of what it reads. That is
+          the case that matters: it renders every "missing" branch at once.
 
   docker      NOT tested. Installing docker-ce inside a container and starting
               a second daemon is docker-in-docker, and the daemon.json this
@@ -140,4 +142,4 @@ if echo "${recap}" | grep -qvE 'unreachable=0'; then
 fi
 
 echo
-echo "IDEMPOTENT: base and users both reported changed=0 on the second run"
+echo "IDEMPOTENT: every containerised role reported changed=0 on the second run"
