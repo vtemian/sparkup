@@ -113,6 +113,12 @@
       tags: [exporters]
     - role: monitoring
       tags: [monitoring]
+    # After monitoring: it installs alerting rules into a directory that role
+    # creates and bind-mounts, and it asserts against the compose file that role
+    # renders. After users and exporters for the same reason: it refuses to write
+    # its contract file until the shared tree and the textfile directory exist.
+    - role: sparks
+      tags: [sparks]
     - role: firmware
       tags: [firmware]
     # LAST: it repoints the boot path, so everything else is already converged

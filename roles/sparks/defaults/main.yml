@@ -1,0 +1,30 @@
+---
+# The contract file sparks reads to discover what this box provides. In /etc
+# rather than the shared tree: /etc is where box configuration belongs, it is
+# outside anything sparks' own `make deploy` rsyncs with --delete, and it
+# survives renaming the shared directory.
+sparks_config_dir: /etc/sparks
+sparks_box_config: "{{ sparks_config_dir }}/box.toml"
+
+# Under monitoring_dir because that whole tree is the compose project, and this
+# is the host side of a bind mount declared in monitoring's compose.yml.j2.
+sparks_rules_dir: "{{ monitoring_dir }}/prometheus/rules"
+# Validated here, installed from here. A rule file that would stop Prometheus
+# must never reach the mounted directory, not even for the seconds before a
+# converge fails.
+sparks_rules_staging_dir: "{{ monitoring_dir }}/prometheus/rules.staged"
+sparks_rules_file: sparks.yml
+
+# Deliberately borrowed from the exporters role rather than repeated: that role
+# creates the directory, so it owns the value. Jinja resolves this when it is
+# used, by which point the exporters defaults are in scope.
+sparks_textfile_dir: "{{ exporters_textfile_dir }}"
+
+# Loopback, matching the port monitoring binds. Not the LAN address: Prometheus
+# is unauthenticated and accepts remote writes, so it is deliberately not
+# reachable off the box.
+sparks_prometheus_url: "http://127.0.0.1:{{ prometheus_port }}"
+# Resolved by avahi, which the base role installs along with the hostname.
+sparks_grafana_url: >-
+  http://{{ spark_hostname }}.local{{ '' if grafana_port | int == 80
+  else ':' ~ grafana_port }}

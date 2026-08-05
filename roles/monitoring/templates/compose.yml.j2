@@ -21,6 +21,10 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Alerting and recording rules, installed by roles rather than by users.
+      # See the rule_files comment in prometheus.yml.j2 for why this one is not a
+      # drop-off directory in the shared tree the way dashboards are.
+      - ./prometheus/rules:/etc/prometheus/rules:ro
       - prometheus-data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml

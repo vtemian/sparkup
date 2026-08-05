@@ -1,0 +1,16 @@
+# Managed by Ansible: roles/sparks/templates/box.toml.j2.
+# Edit the template and re-run the playbook; local edits are overwritten.
+#
+# This box telling the sparks framework what it provisioned. sparks reads this
+# file and refuses to run without it, rather than defaulting to paths that may
+# not be this box's: `spark_shared_dir` is a per-host value, and a wrong guess
+# means a training run recorded into a directory nothing ever reads.
+#
+# Deleting this file does not break a running job. It stops the NEXT one from
+# starting, with an error naming this path.
+
+shared_dir     = "{{ spark_shared_dir }}"
+shared_group   = "{{ spark_shared_group }}"
+textfile_dir   = "{{ sparks_textfile_dir }}"
+prometheus_url = "{{ sparks_prometheus_url }}"
+grafana_url    = "{{ sparks_grafana_url | trim }}"

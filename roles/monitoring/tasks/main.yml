@@ -8,6 +8,10 @@
     mode: "0755"
   loop:
     - "{{ monitoring_dir }}/prometheus"
+    # Bind-mounted into Prometheus, so it must exist before the stack comes up:
+    # Docker would otherwise create it root-owned as a directory anyway, but on
+    # its own terms and after the container has already read the config.
+    - "{{ monitoring_dir }}/prometheus/rules"
     - "{{ monitoring_dir }}/grafana/dashboards"
     - "{{ monitoring_dir }}/grafana/provisioning/datasources"
     - "{{ monitoring_dir }}/grafana/provisioning/dashboards"

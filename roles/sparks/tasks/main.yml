@@ -1,0 +1,159 @@
+---
+# Every precondition first, so a box that cannot support sparks is left alone
+# rather than given a contract file that lies about it. sparks trusts this file
+# enough to refuse to start without it; writing one that names directories that
+# are not there would trade a clear "not provisioned" error for a confusing one.
+
+- name: Check the shared run directory sparks will record into
+  ansible.builtin.stat:
+    path: "{{ spark_shared_dir }}/runs"
+  register: sparks_runs_dir
+
+- name: Check the textfile directory sparks publishes its index to
+  ansible.builtin.stat:
+    path: "{{ sparks_textfile_dir }}"
+  register: sparks_textfile_stat
+
+- name: Read the Prometheus compose file
+  ansible.builtin.slurp:
+    src: "{{ monitoring_dir }}/compose.yml"
+  register: sparks_compose
+  # An absent compose file means monitoring has never converged here, which the
+  # assert below reports along with everything else that is missing. Failing on
+  # the read instead would name only the first of possibly three problems.
+  failed_when: false
+
+- name: Assert that the box can actually support sparks
+  ansible.builtin.assert:
+    that:
+      - sparks_runs_dir.stat.isdir | default(false)
+      - sparks_textfile_stat.stat.isdir | default(false)
+      # sparks publishes per-step metrics with its own timestamps rather than
+      # waiting to be scraped, which needs the receiver. Checked against the
+      # rendered compose file, not the template, because the box is what counts:
+      # without the flag every write is rejected and the writer sees a 404 it
+      # was told to ignore. The check lives here because sparks is the only
+      # thing that depends on the flag.
+      - "'--web.enable-remote-write-receiver' in (sparks_compose.content | default('') | b64decode)"
+    fail_msg: >-
+      This box is not ready for sparks.
+      {{ spark_shared_dir }}/runs is a directory:
+      {{ sparks_runs_dir.stat.isdir | default(false) }} (the users role makes it).
+      {{ sparks_textfile_dir }} is a directory:
+      {{ sparks_textfile_stat.stat.isdir | default(false) }} (the exporters role
+      makes it). Prometheus accepts remote writes:
+      {{ '--web.enable-remote-write-receiver' in (sparks_compose.content | default('') | b64decode) }}
+      (the monitoring role's compose.yml.j2 sets it). Nothing has been written;
+      converge the whole play rather than only `--tags sparks`.
+    success_msg: The box provides everything sparks needs.
+
+# The monitoring role creates the rules directory too, because the bind mount
+# needs it before the container starts. It is repeated here so that this role
+# does not silently depend on having been run after that one, and so that
+# `--tags sparks` works on its own.
+#
+# Both directories, the copy into staging and the promtool call below all run
+# even under --check. What they touch is inert: an empty rules directory matches
+# the rule_files glob zero times, and nothing reads the staging directory at all.
+# Skipping them in check mode leaves the validation with no file to validate and
+# the install with nowhere to install to, so a dry run would report that it was
+# about to install rules without ever establishing whether those rules would stop
+# Prometheus - which is the one thing worth knowing beforehand.
+- name: Create the rule directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ sparks_rules_dir }}"
+    - "{{ sparks_rules_staging_dir }}"
+  check_mode: false
+
+# Staged, checked, and only then installed. A rule file Prometheus cannot parse
+# does not degrade anything: it makes Prometheus REFUSE TO START, so a broken
+# file in the mounted directory is a box that stops having monitoring at its next
+# reboot, with nothing to connect the two events. Validating after installing
+# would leave exactly that window open.
+- name: Stage the sparks alerting rules
+  ansible.builtin.copy:
+    src: "{{ sparks_rules_file }}"
+    dest: "{{ sparks_rules_staging_dir }}/{{ sparks_rules_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  check_mode: false
+  # Reported as a change would be a lie: nothing on this box behaves differently
+  # because a file appeared in a scratch directory. The install task below is the
+  # one whose changed-ness means something.
+  changed_when: false
+
+- name: Validate the staged rules with promtool
+  # promtool ships inside the Prometheus image the monitoring role already
+  # pulled, so this needs no second download and cannot drift from the version
+  # that will load the file.
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - --volume
+      - "{{ sparks_rules_staging_dir }}:/staged:ro"
+      - --entrypoint
+      - promtool
+      - "{{ prometheus_image }}"
+      - check
+      - rules
+      - "/staged/{{ sparks_rules_file }}"
+  register: sparks_promtool
+  changed_when: false
+  check_mode: false
+  # The assert below reports the output, which is more use than a task failure
+  # that hides promtool's own explanation of what is wrong with the file.
+  failed_when: false
+
+- name: Assert that the rules are valid
+  ansible.builtin.assert:
+    that:
+      - sparks_promtool.rc == 0
+    fail_msg: >-
+      promtool rejected roles/sparks/files/{{ sparks_rules_file }}, so it has NOT
+      been installed and Prometheus is untouched and still running.
+      {{ sparks_promtool.stdout | default('', true) }}
+      {{ sparks_promtool.stderr | default('', true) }}
+    success_msg: promtool accepts the sparks rules.
+
+- name: Install the sparks alerting rules
+  ansible.builtin.copy:
+    src: "{{ sparks_rules_staging_dir }}/{{ sparks_rules_file }}"
+    remote_src: true
+    dest: "{{ sparks_rules_dir }}/{{ sparks_rules_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  # The monitoring role's handler, borrowed: handlers are play-wide by name, and
+  # duplicating the reload here would mean two handlers racing to POST /-/reload.
+  # It reloads rather than restarts, so the TSDB head survives.
+  notify: Reload Prometheus configuration
+
+- name: Create the sparks configuration directory
+  ansible.builtin.file:
+    path: "{{ sparks_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Last, and only now that everything it promises has been checked to exist. Its
+# presence is what tells sparks the box is ready, so writing it earlier would
+# advertise provisioning that had not finished.
+- name: Declare what this box provides to sparks
+  ansible.builtin.template:
+    src: box.toml.j2
+    dest: "{{ sparks_box_config }}"
+    owner: root
+    group: root
+    # World-readable: every account that runs a job reads it. Root-writable
+    # only, because a user who could edit it could redirect everyone's runs.
+    mode: "0644"

@@ -32,6 +32,11 @@
         mode: "0755"
       loop:
         - "{{ monitoring_dir }}/prometheus"
+        # Left empty here on purpose. The sparks role installs the alerting
+        # rules on the box; the harness only needs the bind source to exist, and
+        # an empty directory is a case the rule_files glob has to tolerate
+        # anyway, so this covers it.
+        - "{{ monitoring_dir }}/prometheus/rules"
         - "{{ monitoring_dir }}/grafana/dashboards"
         - "{{ monitoring_dir }}/grafana/provisioning/datasources"
         - "{{ monitoring_dir }}/grafana/provisioning/dashboards"

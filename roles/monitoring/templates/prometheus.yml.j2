@@ -6,6 +6,18 @@ global:
   scrape_interval: {{ prometheus_scrape_interval }}
   evaluation_interval: {{ prometheus_scrape_interval }}
 
+# A glob, and one that legitimately matches nothing: this directory is empty on a
+# box where no project has installed rules, and Prometheus is happy with that.
+#
+# Only root writes here, unlike the dashboards directory in the shared tree that
+# any project can drop a board into. The asymmetry is deliberate: a malformed
+# dashboard spoils one Grafana panel, while a malformed rule file makes
+# Prometheus REFUSE TO START. Group-writable rules would let one user's typo
+# take monitoring down at the next reboot, and nothing would connect the two
+# events. Roles install rules here, promtool-validated first.
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
 scrape_configs:
   # Prometheus scraping itself. `localhost` is correct here and only here:
   # this target really is inside the container.
