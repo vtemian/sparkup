@@ -1,0 +1,35 @@
+---
+- name: Create the registry stack directory
+  ansible.builtin.file:
+    path: "{{ registry_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render the registry compose file
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ registry_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart the registry
+
+- name: Bring the registry up
+  community.docker.docker_compose_v2:
+    project_src: "{{ registry_dir }}"
+    project_name: "{{ registry_project_name }}"
+    state: present
+    pull: missing
+    remove_orphans: true
+    wait: true
+
+# A converge that left the container "up" but not accepting pushes would look
+# green until the first laptop submit failed. Fail here instead.
+- name: Wait for the registry to accept connections
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ registry_port }}"
+    timeout: 60
+  changed_when: false

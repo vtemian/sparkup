@@ -1,0 +1,8 @@
+---
+# Recreate rather than restart: the compose file is what changed, and a restart
+# would bring back the container built from the previous one.
+- name: Restart the registry
+  community.docker.docker_compose_v2:
+    project_src: "{{ registry_dir }}"
+    project_name: "{{ registry_project_name }}"
+    state: restarted

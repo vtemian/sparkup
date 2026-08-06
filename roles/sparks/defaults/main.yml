@@ -28,3 +28,7 @@ sparks_prometheus_url: "http://127.0.0.1:{{ prometheus_port }}"
 sparks_grafana_url: >-
   http://{{ spark_hostname }}.local{{ '' if grafana_port | int == 80
   else ':' ~ grafana_port }}
+# Same host:port the registry role publishes. Duplicated rather than borrowed:
+# the contract must still render under `--tags sparks`, and sparks already
+# constructs LAN URLs from spark_hostname the same way.
+sparks_registry_url: "http://{{ spark_hostname }}.local:5000"

@@ -1,0 +1,12 @@
+---
+# Its own directory and compose project, deliberately not monitoring's or the
+# queue's. A registry restart is cheap; a Grafana tweak or a queue recreate is
+# not, and sharing a project would couple them.
+registry_dir: /opt/registry
+registry_project_name: spark-registry
+
+registry_image: registry:2
+registry_port: 5000
+# Same .local name Grafana uses: laptops push here, and the box pulls from the
+# same string so a tag that left a laptop is the tag the runner asks for.
+registry_host: "{{ spark_hostname }}.local"

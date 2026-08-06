@@ -113,6 +113,11 @@
       tags: [exporters]
     - role: monitoring
       tags: [monitoring]
+    # After docker (needs the daemon and insecure-registries), before sparks so
+    # the contract's registry_url names a service that already exists. Own
+    # compose project: a registry recreate must not restart Grafana or the queue.
+    - role: registry
+      tags: [registry]
     # After monitoring: it installs alerting rules into a directory that role
     # creates and bind-mounts, and it asserts against the compose file that role
     # renders. After users and exporters for the same reason: it refuses to write

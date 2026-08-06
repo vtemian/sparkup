@@ -17,6 +17,7 @@ to write training jobs against; what belongs in this repo is the infrastructure 
 | `sparks_textfile_dir` | `{{ exporters_textfile_dir }}` | borrowed; that role creates it |
 | `sparks_prometheus_url` | `http://127.0.0.1:{{ prometheus_port }}` | loopback, as Prometheus is bound |
 | `sparks_grafana_url` | `http://{{ spark_hostname }}.local` | port appended unless it is 80 |
+| `sparks_registry_url` | `http://{{ spark_hostname }}.local:5000` | LAN registry the `registry` role publishes |
 
 ## Why a contract file
 
@@ -33,6 +34,18 @@ sparks run --name smoke -- python -c "print(1)"   # exit 78 if this file is miss
 ```
 
 Exit 78 is `EX_CONFIG`, distinct so that a queue can tell a misconfigured box from a crashed job.
+
+## Laptop Docker and the registry
+
+`registry_url` is plain HTTP on purpose: the trust boundary is the same people who already have
+SSH to the box. On each laptop that submits, Docker must allow that insecure registry, e.g.:
+
+```json
+{ "insecure-registries": ["spark.local:5000"] }
+```
+
+then restart Docker Desktop / dockerd. Without it, `docker push` to the box fails with an HTTPS /
+certificate error that looks like a network problem.
 
 ## Why the rules are staged first
 

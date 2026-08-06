@@ -17,3 +17,9 @@ docker_nvidia_runtime_path: nvidia-container-runtime
 docker_log_driver: json-file
 docker_log_max_size: 50m
 docker_log_max_file: 3
+
+# Same host:port the registry role publishes. HTTP on purpose (LAN trust = ssh
+# trust), so dockerd on this box will not pull without this entry. Duplicated
+# rather than borrowed from registry defaults: this role runs first, and a
+# `--tags docker` converge still has to write the right daemon.json.
+docker_insecure_registry: "{{ spark_hostname }}.local:5000"

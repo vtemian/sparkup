@@ -26,7 +26,7 @@
   register: docker_existing_config
   failed_when: false
 
-- name: Merge the nvidia runtime and log limits into the daemon configuration
+- name: Merge the nvidia runtime, log limits and insecure registry into the daemon configuration
   ansible.builtin.copy:
     content: "{{ docker_merged_config | to_nice_json }}\n"
     dest: "{{ docker_config_dir }}/daemon.json"
@@ -38,6 +38,11 @@
     docker_current_config: >-
       {{ (docker_existing_config.content | default('') | b64decode | from_json)
          if (docker_existing_config.content is defined) else {} }}
+    # Union, not replace: a box may already list other insecure registries, and
+    # wiping them would break pulls that have nothing to do with this role.
+    docker_merged_insecure_registries: >-
+      {{ (docker_current_config['insecure-registries'] | default([])
+          + [docker_insecure_registry]) | unique | list }}
     docker_merged_config: >-
       {{ docker_current_config
          | combine({'runtimes': docker_current_config.runtimes | default({})
@@ -46,7 +51,8 @@
                     'log-driver': docker_log_driver,
                     'log-opts': docker_current_config['log-opts'] | default({})
                     | combine({'max-size': docker_log_max_size,
-                               'max-file': docker_log_max_file | string})}) }}
+                               'max-file': docker_log_max_file | string}),
+                    'insecure-registries': docker_merged_insecure_registries}) }}
   # Compared as parsed JSON, not as bytes: a file that already says the right
   # thing in a different key order or indentation is converged, and rewriting it
   # would restart dockerd, killing every container, to change whitespace.

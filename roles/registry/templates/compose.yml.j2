@@ -1,0 +1,27 @@
+{{ ansible_managed | comment }}
+# Local image registry. Training jobs are built on laptops and pushed here; the
+# queue only pulls. No auth: the trust boundary is the same people who already
+# have SSH to the box (LAN trust = ssh trust). TLS is out of scope for v1, so
+# every client and this box's own dockerd must list host:port under
+# insecure-registries.
+
+services:
+  registry:
+    image: {{ registry_image }}
+    # unless-stopped, not always: `docker compose stop` during maintenance
+    # should stay stopped across a reboot.
+    restart: unless-stopped
+    ports:
+      - "{{ registry_port }}:5000"
+    volumes:
+      # Named, so a compose recreate does not throw away every image people
+      # pushed. Losing this volume loses every tag the queue might still pull.
+      - registry-data:/var/lib/registry
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  registry-data:
