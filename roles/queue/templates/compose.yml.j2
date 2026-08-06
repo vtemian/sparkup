@@ -15,10 +15,10 @@ services:
     # should stay stopped across a reboot, or converging the box turns into a
     # race with the thing you just stopped.
     restart: unless-stopped
+    # ENTRYPOINT is sparks-runner; flags only — no leading `runner` subcommand.
     command:
       - --url
       - {{ queue_prometheus_url }}
-      - runner
       - --shared-dir
       - {{ spark_shared_dir }}
       - --textfile-dir
@@ -29,7 +29,7 @@ services:
       # Root-equivalent, and the reason this service exists: building a job's
       # image and starting its container both go through here.
       - /var/run/docker.sock:/var/run/docker.sock
-      # The spool lives under here, and so do the run directories `sparks run`
+      # The spool lives under here, and so do the run directories `sparks-run`
       # writes. Mounted at the SAME PATH inside as out, because the runner
       # passes these paths to the host's daemon when it starts a job's
       # container - a path that means something different in here would mount
