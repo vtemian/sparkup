@@ -67,6 +67,14 @@
     group: root
     mode: "0755"
 
+- name: Install fire-ctl (SSH-RPC into the queue container)
+  ansible.builtin.template:
+    src: fire-ctl.j2
+    dest: "{{ queue_fire_ctl_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
 # `pull: always` rather than `missing`: the image is pinned by tag, and a tag
 # that has been repointed upstream should be picked up by a converge rather than
 # waiting for a box to be rebuilt. Pinning is what makes this safe to do.

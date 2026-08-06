@@ -12,6 +12,7 @@ queue_spool_dir: "{{ spark_shared_dir }}/queue"
 
 queue_config_dir: /etc/sparks
 queue_wrapper_path: /usr/local/bin/sparks
+queue_fire_ctl_path: /usr/local/bin/fire-ctl
 
 # Prometheus as reachable FROM the runner container, which is not what the box
 # contract says: that is loopback, and inside a container loopback is the

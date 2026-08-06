@@ -1,0 +1,9 @@
+#!/bin/sh
+# {{ ansible_managed }}
+# SSH-RPC into the queue container's fire binary.
+set -eu
+exec docker compose \
+  -f '{{ queue_dir }}/compose.yml' \
+  -p '{{ queue_project_name }}' \
+  exec -T runner \
+  fire "$@"

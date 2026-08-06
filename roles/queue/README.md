@@ -15,6 +15,7 @@ command, and records how it ended.
 | `/opt/queue/compose.yml` | The runner service, its own compose project |
 | `/srv/spark/queue` | The job spool: `3775`, group `spark` |
 | `/usr/local/bin/sparks` | The queue client, which is the runner's image run as you |
+| `/usr/local/bin/fire-ctl` | SSH-RPC into the runner container's `fire` binary (used by laptop `sparks`) |
 
 ## Why the queue is not in monitoring's compose project
 
