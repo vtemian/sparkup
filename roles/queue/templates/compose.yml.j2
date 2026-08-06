@@ -26,7 +26,7 @@ services:
       - --poll-seconds
       - "{{ queue_poll_seconds }}"
     volumes:
-      # Root-equivalent, and the reason this service exists: building a job's
+      # Root-equivalent, and the reason this service exists: pulling a job's
       # image and starting its container both go through here.
       - /var/run/docker.sock:/var/run/docker.sock
       # The spool lives under here, and so do the run directories `sparks-run`
