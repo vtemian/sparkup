@@ -45,8 +45,16 @@ fi
 # Mounted at the same path so the path printed back is the path you typed.
 cwd="$(pwd)"
 
+# `--user uid:gid` carries your primary group and DROPS every supplementary one,
+# so membership of the shared group does not survive into the container and the
+# spool - group-writable, owned by that group - becomes unwritable. Read off the
+# directory rather than named, because the fact is the ownership and the name is
+# a convention.
+shared_gid="$(stat -c %g '{{ spark_shared_dir }}')"
+
 exec docker run --rm ${tty_flags} \
     --user "$(id -u):$(id -g)" \
+    --group-add "${shared_gid}" \
     --volume '{{ spark_shared_dir }}:{{ spark_shared_dir }}' \
     --volume '{{ queue_config_dir }}:{{ queue_config_dir }}:ro' \
     --volume /etc/passwd:/etc/passwd:ro \
