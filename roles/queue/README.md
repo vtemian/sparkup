@@ -4,8 +4,9 @@ Runs the sparks job queue, so that submitting a training run and then closing
 your laptop is a thing you can do.
 
 One container, one job at a time, first in first out. A job is a directory under
-`/srv/spark/queue` holding the submitter's code; the runner builds it into an
-image, starts it under `sparks run`, and records how it ended.
+`/srv/spark/queue` holding the submitter's data and a pre-built image tag; the
+container ENTRYPOINT is `fire`, which pulls that image, starts the training
+command, and records how it ended.
 
 ## What this role puts on the box
 
@@ -44,8 +45,9 @@ sparks rather than here:
 is a wrapper rather than an installed package so that the client and the runner
 can never be different builds reading the same job files.
 
-It does not do `sparks run`; that launches your training command, which in a
-client container would have none of your dependencies. It says so if you try.
+It does not launch training locally; that would run inside the client's own
+container, which has none of your dependencies. Queue work with
+`sparks submit` from a laptop (or this wrapper), and let `fire` pull and run it.
 
 ## Checking on it
 

@@ -21,12 +21,12 @@ IMAGE='{{ queue_image }}'
 case "${1:-}" in
 run)
     cat >&2 <<'EOF'
-sparks: `run` does not work through this wrapper.
+sparks: there is no `run` command.
 
-It launches your training command, and in here that would mean launching it
-inside the client's own container, which has none of your dependencies.
+Training is queued with `sparks submit` and started by `fire` on the box.
+Running a training command through this wrapper would launch it inside the
+client's own container, which has none of your dependencies.
 
-  To run something now:      pip install sparks, then sparks run -- ...
   To queue it and walk away: sparks submit -- ...
 EOF
     exit 64
