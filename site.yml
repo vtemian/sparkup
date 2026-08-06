@@ -119,6 +119,10 @@
     # its contract file until the shared tree and the textfile directory exist.
     - role: sparks
       tags: [sparks]
+    # After sparks: it reads the contract that role writes, and refuses to
+    # start a service that would fail in a loop without it.
+    - role: queue
+      tags: [queue]
     - role: firmware
       tags: [firmware]
     # LAST: it repoints the boot path, so everything else is already converged

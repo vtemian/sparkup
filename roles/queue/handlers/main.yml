@@ -1,0 +1,15 @@
+---
+# Recreate rather than restart: the compose file is what changed, and a restart
+# would bring back the container built from the previous one.
+#
+# This interrupts whatever job is running. It has to: the runner supervises its
+# job from inside this container, so there is no way to replace it and keep the
+# job. The runner's own reconcile step makes that survivable rather than silent
+# - the interrupted job is marked failed with a reason, and `sparks retry` puts
+# it back. That is why the queue is not in monitoring's compose project, where
+# a dashboard edit would trigger this.
+- name: Restart the queue runner
+  community.docker.docker_compose_v2:
+    project_src: "{{ queue_dir }}"
+    project_name: "{{ queue_project_name }}"
+    state: restarted

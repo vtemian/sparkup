@@ -1,0 +1,25 @@
+---
+# Its own directory and its own compose project, deliberately not monitoring's.
+# The runner supervises training jobs that run for hours; monitoring's compose
+# file is restarted whenever a scrape interval or a dashboard changes. Sharing a
+# project would mean every Grafana tweak aborts somebody's run.
+queue_dir: /opt/queue
+queue_project_name: spark-queue
+
+# Where jobs are spooled. Under the shared tree because colleagues submit into
+# it and read each other's status out of it.
+queue_spool_dir: "{{ spark_shared_dir }}/queue"
+
+queue_config_dir: /etc/sparks
+queue_wrapper_path: /usr/local/bin/sparks
+
+# Prometheus as reachable FROM the runner container, which is not what the box
+# contract says: that is loopback, and inside a container loopback is the
+# container. Both the runner and the training containers it starts get the
+# host-gateway alias, so one URL is correct in both.
+queue_prometheus_url: "http://host.docker.internal:{{ prometheus_port }}"
+
+# How often the runner looks for new work. Not tuned for latency: a training job
+# takes hours and this only decides how long a freshly submitted one waits
+# before it starts building.
+queue_poll_seconds: 5

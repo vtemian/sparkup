@@ -1,0 +1,57 @@
+#!/bin/sh
+{{ ansible_managed | comment(decoration='# ') }}
+#
+# The sparks queue client, on the box.
+#
+# It is the runner's own image, run as you. That is the point: the client and
+# the runner read and write the same job files, and a client from a different
+# build than the runner is a format mismatch waiting to happen on somebody's
+# six-hour job. There is exactly one version on this box because there is
+# exactly one image.
+#
+# `--user $(id -u):$(id -g)` is not a detail. Every job's owner is the uid that
+# owns its files, and that is what decides who may abort it. Running this as
+# root would make every job root's, and every colleague able to stop every
+# other colleague's work.
+
+set -eu
+
+IMAGE='{{ queue_image }}'
+
+case "${1:-}" in
+run)
+    cat >&2 <<'EOF'
+sparks: `run` does not work through this wrapper.
+
+It launches your training command, and in here that would mean launching it
+inside the client's own container, which has none of your dependencies.
+
+  To run something now:      pip install sparks, then sparks run -- ...
+  To queue it and walk away: sparks submit -- ...
+EOF
+    exit 64
+    ;;
+esac
+
+# A tty only when there is one to pass on. `-t` without a terminal makes docker
+# emit control sequences into whatever is capturing the output, which over ssh
+# is usually a script.
+tty_flags='-i'
+if [ -t 0 ] && [ -t 1 ]; then
+    tty_flags='-it'
+fi
+
+# The working directory, so `sparks submit --context .` means what it says.
+# Mounted at the same path so the path printed back is the path you typed.
+cwd="$(pwd)"
+
+exec docker run --rm ${tty_flags} \
+    --user "$(id -u):$(id -g)" \
+    --volume '{{ spark_shared_dir }}:{{ spark_shared_dir }}' \
+    --volume '{{ queue_config_dir }}:{{ queue_config_dir }}:ro' \
+    --volume /etc/passwd:/etc/passwd:ro \
+    --volume /etc/group:/etc/group:ro \
+    --volume /etc/localtime:/etc/localtime:ro \
+    --volume "${cwd}:${cwd}" \
+    --workdir "${cwd}" \
+    "${IMAGE}" "$@"

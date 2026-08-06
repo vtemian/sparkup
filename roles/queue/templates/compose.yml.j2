@@ -1,0 +1,78 @@
+{{ ansible_managed | comment }}
+# The queue runner: one container, one job at a time, so that submitting work
+# and then closing your laptop is a thing you can do.
+#
+# It is the only container on this box given the Docker socket, and that is
+# root on the host by any other name. What keeps it honest is that the socket is
+# the ONLY thing it is trusted with: every job it starts gets a fixed set of
+# flags chosen here rather than by the job, and it drops to the submitter's own
+# uid before starting anything. See sparks' engine.py.
+
+services:
+  runner:
+    image: {{ queue_image }}
+    # unless-stopped, not always: `docker compose stop` during maintenance
+    # should stay stopped across a reboot, or converging the box turns into a
+    # race with the thing you just stopped.
+    restart: unless-stopped
+    command:
+      - --url
+      - {{ queue_prometheus_url }}
+      - runner
+      - --shared-dir
+      - {{ spark_shared_dir }}
+      - --textfile-dir
+      - {{ exporters_textfile_dir }}
+      - --poll-seconds
+      - "{{ queue_poll_seconds }}"
+    volumes:
+      # Root-equivalent, and the reason this service exists: building a job's
+      # image and starting its container both go through here.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # The spool lives under here, and so do the run directories `sparks run`
+      # writes. Mounted at the SAME PATH inside as out, because the runner
+      # passes these paths to the host's daemon when it starts a job's
+      # container - a path that means something different in here would mount
+      # the wrong thing out there.
+      - {{ spark_shared_dir }}:{{ spark_shared_dir }}
+      # Where the queue publishes its own metrics for node_exporter to collect.
+      - {{ exporters_textfile_dir }}:{{ exporters_textfile_dir }}
+      # The contract, so the runner reports the same Grafana links everyone else
+      # does. Read-only: a container that could rewrite it could redirect every
+      # run on the box.
+      - {{ queue_config_dir }}:{{ queue_config_dir }}:ro
+      # uid -> name. Without these the runner has numbers where the dashboard
+      # wants people, and every run is recorded against a uid nobody recognises.
+      - /etc/passwd:/etc/passwd:ro
+      - /etc/group:/etc/group:ro
+      # Run ids carry a timestamp and sort chronologically. A container left on
+      # UTC while the box is not produces ids that interleave wrongly with the
+      # ones interactive runs generate, which is a listing that lies about order.
+      - /etc/localtime:/etc/localtime:ro
+      # The board power monitor, read by the energy sampler. Read-only, and the
+      # only reason /sys is here at all.
+      - /sys:/sys:ro
+    extra_hosts:
+      # Prometheus is published on the host's loopback, which from in here
+      # reaches nothing at all. Same alias the monitoring stack uses to scrape
+      # the host's exporters, for the same reason.
+      - "host.docker.internal:host-gateway"
+    # NVML, for the GPU energy counter. `utility` is enough - this container
+    # never computes anything, it only reads the counter.
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [utility]
+    logging:
+      driver: json-file
+      options:
+        # This container is expected to run for months. Uncapped, its log is a
+        # slow leak of the disk the checkpoints need.
+        max-size: "10m"
+        max-file: "5"

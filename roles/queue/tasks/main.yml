@@ -1,0 +1,92 @@
+---
+# Preconditions first, in the shape roles/sparks uses: a box that cannot support
+# the queue is left alone rather than given a service that fails in a loop.
+
+- name: Check the contract the runner reads
+  ansible.builtin.stat:
+    path: "{{ queue_config_dir }}/box.toml"
+  register: queue_contract
+
+- name: Check the textfile directory the queue publishes into
+  ansible.builtin.stat:
+    path: "{{ exporters_textfile_dir }}"
+  register: queue_textfile
+
+- name: Assert that the box can support the queue
+  ansible.builtin.assert:
+    that:
+      - queue_contract.stat.exists | default(false)
+      - queue_textfile.stat.isdir | default(false)
+    fail_msg: >-
+      This box is not ready for the queue.
+      {{ queue_config_dir }}/box.toml exists:
+      {{ queue_contract.stat.exists | default(false) }} (the sparks role writes
+      it). {{ exporters_textfile_dir }} is a directory:
+      {{ queue_textfile.stat.isdir | default(false) }} (the exporters role makes
+      it). Nothing has been written; converge the whole play rather than only
+      `--tags queue`.
+    success_msg: The box provides everything the queue needs.
+
+# setgid and group-writable, like the rest of the shared tree: colleagues submit
+# into the same directory and each job's subdirectory has to inherit the group
+# or nobody can read anybody else's status.
+#
+# The sticky bit is the one addition. Without it, a directory anyone may write
+# to is a directory in which anyone may DELETE anyone else's job - the same
+# reason /tmp has it.
+- name: Create the job spool
+  ansible.builtin.file:
+    path: "{{ queue_spool_dir }}"
+    state: directory
+    owner: root
+    group: "{{ spark_shared_group }}"
+    mode: "3775"
+
+- name: Create the queue stack directory
+  ansible.builtin.file:
+    path: "{{ queue_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render the queue compose file
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ queue_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart the queue runner
+
+- name: Install the queue client
+  ansible.builtin.template:
+    src: sparks.sh.j2
+    dest: "{{ queue_wrapper_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+# `pull: always` rather than `missing`: the image is pinned by tag, and a tag
+# that has been repointed upstream should be picked up by a converge rather than
+# waiting for a box to be rebuilt. Pinning is what makes this safe to do.
+- name: Bring the queue up
+  community.docker.docker_compose_v2:
+    project_src: "{{ queue_dir }}"
+    project_name: "{{ queue_project_name }}"
+    state: present
+    pull: always
+    remove_orphans: true
+    wait: true
+
+# The runner writes its heartbeat on every pass, and the alert rule that watches
+# for a dead queue keys off it. If it never appears, the service is up but doing
+# nothing, which is the failure that would otherwise be invisible: jobs would
+# queue and simply never start.
+- name: Wait for the runner to publish a heartbeat
+  ansible.builtin.wait_for:
+    path: "{{ exporters_textfile_dir }}/sparks_queue.prom"
+    search_regex: sparks_queue_runner_heartbeat_timestamp_seconds
+    timeout: 60
+  # A converge that ran with the service already healthy has nothing to report.
+  changed_when: false
