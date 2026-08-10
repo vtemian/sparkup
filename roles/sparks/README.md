@@ -63,4 +63,5 @@ curl -s localhost:9090/api/v1/rules | jq '.data.groups[].name'
 ```
 
 `roles/sparks/files/sparks.yml` is vendored from the sparks repo, where it is authored as
-`alerts/sparks.yml`. Edit it there and copy it here; provisioning does not reach a git remote.
+`monitoring/alerts/sparks.yml`. Edit it there and copy it here; provisioning does not reach a
+git remote.

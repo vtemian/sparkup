@@ -1,10 +1,10 @@
 # Alerts for the failures nothing else reports.
 #
 # Managed by Ansible: roles/sparks/files/sparks.yml. Vendored from the sparks
-# repo at d47d5b2, where it is authored as alerts/sparks.yml. Edit it there, copy
-# it here, and re-run the playbook; the copy is what the box loads. Kept as a
-# copy rather than fetched at converge time so that provisioning does not depend
-# on reaching a git remote.
+# repo at d47d5b2, where it is authored as monitoring/alerts/sparks.yml. Edit it
+# there, copy it here, and re-run the playbook; the copy is what the box loads.
+# Kept as a copy rather than fetched at converge time so that provisioning does
+# not depend on reaching a git remote.
 #
 # STATUS: evaluated, not routed. Prometheus loads these rules and you can see
 # their state in /rules and query ALERTS{alertname="..."}. There is no
