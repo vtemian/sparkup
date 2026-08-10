@@ -31,6 +31,12 @@ import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+# Set by --safety-mode. A module wedged by the EC does not just report lower caps:
+# it also cannot clock up, so the SM clock is pinned near 500 MHz however much work
+# it is given. Both halves matter, because two separate alerts watch for them and
+# only one of them needs spbm.
+SAFETY_MODE = False
+
 GPU_UUID = "GPU-00000000-0000-0000-0000-000000000000"
 GPU_NAME = "NVIDIA GB10"
 CORES = 20
@@ -129,6 +135,17 @@ SPBM_LIMITS = (
     ("power12", 142.0, 250.0),
     ("power13", 231.0, 300.0),
     ("power14", 244.0, 300.0),
+)
+
+# What the caps collapse to after a failed USB-C PD negotiation, with `--safety-mode`.
+# The point of being able to serve this is that an alert nobody has watched fire is
+# not an alert: tests/check_alerts.sh switches the box into this state and asserts
+# SparkPowerCapCollapsed reaches `firing`.
+SPBM_LIMITS_SAFETY_MODE = (
+    ("power11", 20.0, 250.0),
+    ("power12", 20.0, 250.0),
+    ("power13", 30.0, 300.0),
+    ("power14", 30.0, 300.0),
 )
 
 # Cumulative counters, in joules. Only these four exist in the firmware, and there
@@ -281,13 +298,14 @@ def node_metrics(box: Box) -> str:
             f"node_hwmon_power_watt{labels({'chip': SPBM_CHIP, 'sensor': sensor})} "
             f"{watts[sensor]:.3f}"
         )
+    limits = SPBM_LIMITS_SAFETY_MODE if SAFETY_MODE else SPBM_LIMITS
     render(lines, "node_hwmon_power_cap_watt", "gauge", "Hardware monitor power cap.")
-    for sensor, cap, _ in SPBM_LIMITS:
+    for sensor, cap, _ in limits:
         lines.append(
             f"node_hwmon_power_cap_watt{labels({'chip': SPBM_CHIP, 'sensor': sensor})} {cap:.3f}"
         )
     render(lines, "node_hwmon_power_max_watt", "gauge", "Hardware monitor power max.")
-    for sensor, _, ceiling in SPBM_LIMITS:
+    for sensor, _, ceiling in limits:
         lines.append(
             f"node_hwmon_power_max_watt{labels({'chip': SPBM_CHIP, 'sensor': sensor})} "
             f"{ceiling:.3f}"
@@ -385,6 +403,8 @@ def gpu_metrics(box: Box) -> str:
 
     idle_hz, max_hz = 200e6, 3003e6
     clock = idle_hz + (max_hz - idle_hz) * utilisation
+    if SAFETY_MODE:
+        clock = 495e6
     gauge("nvidia_smi_clocks_current_graphics_clock_hz", clock, "Graphics clock.", "{:.0f}")
     gauge("nvidia_smi_clocks_current_sm_clock_hz", clock, "SM clock.", "{:.0f}")
     gauge("nvidia_smi_clocks_max_sm_clock_hz", max_hz, "Maximum SM clock.", "{:.0f}")
@@ -466,7 +486,17 @@ def main() -> None:
     # reaches these through the host gateway, exactly as it reaches the real
     # host exporters. A loopback-only bind would be unscrapeable.
     parser.add_argument("--bind", default="0.0.0.0")  # noqa: S104
+    parser.add_argument(
+        "--safety-mode",
+        action="store_true",
+        help="serve the collapsed 20/30 W caps and a 495 MHz SM clock of the EC "
+             "USB-PD safety mode, so the alerts that watch for it can be seen firing",
+    )
     args = parser.parse_args()
+    global SAFETY_MODE  # noqa: PLW0603
+    SAFETY_MODE = args.safety_mode
+    if SAFETY_MODE:
+        print("SERVING THE USB-PD SAFETY MODE: caps 20/30 W, SM clock 495 MHz", flush=True)
 
     box = Box()
     servers = [

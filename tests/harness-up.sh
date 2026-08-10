@@ -92,8 +92,12 @@ else
             exit 1
         fi
     done
+    # SPARKUP_HARNESS_SAFETY_MODE=1 serves the collapsed 20/30 W caps and a
+    # 495 MHz clock, which is how tests/check_alerts.sh gets the alerts to fire.
+    safety_flag=()
+    [ "${SPARKUP_HARNESS_SAFETY_MODE:-0}" = "1" ] && safety_flag=(--safety-mode)
     python3 "${REPO_ROOT}/tests/fake_exporters.py" \
-        --node-port "${NODE_PORT}" --gpu-port "${GPU_PORT}" \
+        --node-port "${NODE_PORT}" --gpu-port "${GPU_PORT}" "${safety_flag[@]}" \
         >"${EXPORTER_LOG}" 2>&1 &
     echo $! >"${PID_FILE}"
     echo "    pid $(cat "${PID_FILE}"), log ${EXPORTER_LOG}"

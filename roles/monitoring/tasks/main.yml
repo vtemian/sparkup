@@ -11,7 +11,8 @@
     # Bind-mounted into Prometheus, so it must exist before the stack comes up:
     # Docker would otherwise create it root-owned as a directory anyway, but on
     # its own terms and after the container has already read the config.
-    - "{{ monitoring_dir }}/prometheus/rules"
+    - "{{ monitoring_rules_dir }}"
+    - "{{ monitoring_rules_staging_dir }}"
     - "{{ monitoring_dir }}/grafana/dashboards"
     - "{{ monitoring_dir }}/grafana/provisioning/datasources"
     - "{{ monitoring_dir }}/grafana/provisioning/dashboards"
@@ -87,6 +88,62 @@
     group: root
     mode: "0644"
   notify: Restart monitoring stack
+
+- name: Stage the alerting rules
+  ansible.builtin.copy:
+    src: "rules/{{ monitoring_rules_file }}"
+    dest: "{{ monitoring_rules_staging_dir }}/{{ monitoring_rules_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  check_mode: false
+  # Nothing on the box behaves differently because a file appeared in a scratch
+  # directory. The install task below is the one whose changed-ness means something.
+  changed_when: false
+
+- name: Validate the staged rules with promtool
+  # promtool ships inside the Prometheus image this role already pulled, so it
+  # cannot drift from the version that will load the file.
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - --volume
+      - "{{ monitoring_rules_staging_dir }}:/staged:ro"
+      - --entrypoint
+      - promtool
+      - "{{ prometheus_image }}"
+      - check
+      - rules
+      - "/staged/{{ monitoring_rules_file }}"
+  register: monitoring_promtool
+  changed_when: false
+  check_mode: false
+  # The assert reports promtool's own explanation, which a task failure would hide.
+  failed_when: false
+
+- name: Assert that the alerting rules are valid
+  ansible.builtin.assert:
+    that:
+      - monitoring_promtool.rc == 0
+    fail_msg: >-
+      promtool rejected roles/monitoring/files/rules/{{ monitoring_rules_file }}, so
+      it has NOT been installed and Prometheus is untouched and still running.
+      {{ monitoring_promtool.stdout | default('', true) }}
+      {{ monitoring_promtool.stderr | default('', true) }}
+    success_msg: promtool accepts the alerting rules.
+
+- name: Install the alerting rules
+  ansible.builtin.copy:
+    src: "{{ monitoring_rules_staging_dir }}/{{ monitoring_rules_file }}"
+    remote_src: true
+    dest: "{{ monitoring_rules_dir }}/{{ monitoring_rules_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  # Reload rather than restart: the TSDB head survives.
+  notify: Reload Prometheus configuration
 
 - name: Template the Prometheus configuration
   ansible.builtin.template:

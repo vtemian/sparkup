@@ -106,6 +106,12 @@ jobs:
       - name: Every panel query returns data from a live Prometheus
         run: make dashboard-live
 
+      # Brings the stack up twice more, once with the exporters serving the EC
+      # safety mode, and asserts the rules that watch for it fire while the rest
+      # stay quiet. An alert nobody has watched fire is not an alert.
+      - name: The hardware alerts fire on the failure they describe
+        run: make alerts
+
       - name: Tear the harness down even if it failed
         if: always()
         run: ./tests/harness-down.sh || true

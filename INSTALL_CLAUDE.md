@@ -230,6 +230,7 @@ make offline   # lint, syntax, dashboard, dashboard-live, roles-test
 |---|---|
 | `make dashboard` | every panel query parses (real `promtool`) and names a metric an enabled exporter emits |
 | `make dashboard-live` | every query returns data from a real Prometheus holding synthetic samples |
+| `make alerts` | the hardware alerts stay quiet on a healthy synthetic box and fire when it serves the USB-PD safety mode |
 | `make roles-test` | `base` and `users` converge twice in containers, second run `changed=0`, and `report` renders where none of what it reads exists |
 | `make harness-up` / `harness-down` | Grafana and Prometheus locally for editing the dashboard |
 | `make skill-test` | runs `.claude/skills` against a faked box in containers, with a no-skill control. **Calls a model, so it costs tokens and needs a key**, which is why `offline` does not. Needs `ANTHROPIC_API_KEY` or `~/.sparkup-anthropic-key`; see [tests/skills/README.md](tests/skills/README.md) |
@@ -351,6 +352,18 @@ stubbed. A fake that reported success would be worse than no test.
 - **`default(x, true)` treats a return code of `0` as missing.** The second argument means "replace
   falsy values too", and `rc: 0` is falsy. `report` claimed a tool was not installed on a box where
   it had just run successfully. Only use the boolean form on strings.
+- **An alert nobody has watched fire is a comment with a `for:` clause.** `make alerts` is the reason
+  `tests/fake_exporters.py` has a `--safety-mode`: it serves the collapsed 20/30 W caps and a 495 MHz
+  SM clock, and `tests/check_alerts.sh` asserts the two rules that watch for that state reach
+  `pending` or `firing` while every other hardware rule stays `inactive` on a healthy box. It checks
+  `pending` as well as `firing` on purpose, because waiting out a 10 minute `for:` twice would make
+  the test unusable, and `pending` already proves the expression matched.
+- **`SparkPowerCapCollapsed` cannot fire on a box without spbm, and that is deliberate.** `< 100` on
+  a metric that does not exist yields no series. `SparkGpuClockStuckLow` is the one that covers a
+  default box, because it needs only nvidia-smi.
+- **`SparkFirmwarePowerSilent` is written as "it existed recently and does not now".** `absent()`
+  would fire forever on the majority of boxes, where spbm was never enabled. The consequence is that
+  it resolves by itself six hours after the metric stops: it catches the transition, not the state.
 - **Neither dashboard check can tell you the Power row is dead.** `make dashboard` allows
   `node_hwmon_` by prefix because the `hwmon` collector is enabled regardless (NVMe
   and SoC temperatures come through it), and `make dashboard-live` passes because

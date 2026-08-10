@@ -9,6 +9,7 @@ datasource and dashboard.
 | `monitoring_project_name` | `spark-monitoring` | namespaces the `grafana-data` and `prometheus-data` volumes |
 | `monitoring_dashboards_container_dir` | `/etc/grafana/dashboards` | the provider's search root inside Grafana; the mounts sit under it |
 | `monitoring_grafana_home_dashboard` | `/d/spark-overview/spark-overview` | also what `make dashboard` checks the uid against |
+| `monitoring_rules_file` | `spark.yml` | the alerting rules in `files/rules/`, staged and validated before install |
 | `monitoring_grafana_anonymous_role` | `Viewer` | what an unauthenticated visitor may do. See [SECURITY.md](../../SECURITY.md) |
 | `monitoring_grafana_theme` | `dark` | |
 | `monitoring_grafana_plugin` | `volkovlabs-echarts-panel` | the one panel type Grafana does not ship that the dashboard needs |
@@ -27,6 +28,20 @@ datasource and dashboard.
 
 Dashboards edited in the Grafana UI are kept in the `grafana-data` volume; the provisioned file in
 this repo wins on the next converge.
+
+## Alerting rules
+
+`files/rules/spark.yml` covers the hardware failures nothing else reports: the module power cap
+collapsing to the EC's USB-PD safety mode, a GPU stuck near 500 MHz under load, spbm going silent
+after a kernel upgrade, an exporter down, and root filling. They are staged, validated with the pinned
+image's `promtool`, and only then installed, so a rule Prometheus would reject never reaches the box
+and the running Prometheus is left alone.
+
+**Evaluated, not routed.** There is no Alertmanager here, so nothing pages. Firing means a series
+exists saying so, at `/alerts` or via `ALERTS{alertname="..."}`. `make alerts` proves they stay quiet
+on a healthy synthetic box and fire when it serves the safety mode.
+
+The `sparks` role installs its own rules file into the same directory; the two do not collide.
 
 ## The panel plugin
 

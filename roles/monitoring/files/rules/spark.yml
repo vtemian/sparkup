@@ -1,0 +1,113 @@
+# Alerts for the hardware failures nothing else reports.
+#
+# Managed by Ansible: roles/monitoring/files/rules/spark.yml. Edit it here and
+# re-run the playbook.
+#
+# STATUS: evaluated, not routed, the same as the sparks rules beside it. There is
+# no Alertmanager on this box, so nothing pages. "Firing" means a series exists
+# that says so, visible at /rules, at /alerts, or by querying
+# ALERTS{alertname="..."}. Someone still has to look. The value is that the
+# condition is written down and continuously evaluated, rather than depending on
+# a human noticing a tile.
+#
+# Every expression here is exercised by tests/check_alerts.sh, which puts the
+# synthetic box into the failure state and asserts the alert reaches `firing`.
+groups:
+  - name: spark
+    rules:
+      # The one that matters most. A failed USB-C PD negotiation collapses the
+      # module budget from 140 W to 20 or 30 W, and the box then sits near
+      # 500 MHz. nvidia-smi cannot see it: NVML is above the EC and reports every
+      # clocks event reason Not Active throughout. Only a cold drain clears it,
+      # so this can be days of a wedged box that looks merely slow.
+      #
+      # Absent on a box without spbm rather than firing: `< 100` on a metric that
+      # does not exist yields no series. That is deliberate, and it is why the
+      # next rule exists to cover a default box.
+      - alert: SparkPowerCapCollapsed
+        expr: >-
+          node_hwmon_power_cap_watt
+          * on(chip, sensor) group_left(label)
+          node_hwmon_sensor_label{label="pl1"} < 100
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "pl1 cap has collapsed to {{ $value | printf \"%.0f\" }} W"
+          description: >-
+            Stock is 140 W. A cap this low is the EC's USB-PD safety mode, which
+            pins the GPU near 500 MHz. Reboots do not clear it, because the EC and
+            PD controller keep state on the standby rail. Shut down, unplug at
+            both the wall and the unit, remove every USB-C peripheral, hold the
+            power button 30 s, leave it disconnected 10 minutes, reconnect. This
+            needs someone at the machine; it cannot be done over SSH.
+
+      # The same wedge caught from the other side, and the only one of the two
+      # that works on a default box, because it needs no spbm. A GPU that is being
+      # asked for work while stuck near 500 MHz is either in the safety mode or in
+      # something that looks exactly like it. Healthy under load is 2418 MHz.
+      - alert: SparkGpuClockStuckLow
+        expr: >-
+          nvidia_smi_clocks_current_sm_clock_hz < 800e6
+          and nvidia_smi_utilization_gpu_ratio > 0.5
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SM clock stuck at {{ $value | printf \"%.0f\" }} Hz under load"
+          description: >-
+            The GPU is being given work and cannot clock up. Check the pl1 cap
+            first: if it reads 20 or 30 W this is the USB-PD safety mode and needs
+            a cold drain. See the spark-diagnosis skill.
+
+      # spbm going quiet is the failure mode of a kernel upgrade: DKMS can only
+      # rebuild against headers that arrive with the new kernel, and if
+      # spbm_headers_package is ever removed the module is simply missing after a
+      # reboot, with no error anywhere.
+      #
+      # Written as "it existed recently and does not now" rather than absent(),
+      # which would fire forever on the majority of boxes, where spbm was never
+      # enabled at all. It also means the alert resolves by itself six hours after
+      # the metric stops, silently: this catches the transition, not the state.
+      - alert: SparkFirmwarePowerSilent
+        expr: count_over_time(node_hwmon_power_watt[6h]) > 0 unless node_hwmon_power_watt
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "the spbm power channels have stopped reporting"
+          description: >-
+            This box was reporting firmware power and is not any more, so the
+            module is probably not loaded. After a kernel upgrade, check that
+            spbm_headers_package is still installed and that DKMS rebuilt. Until
+            it is back there is no power instrumentation on this box at all.
+
+      # Telemetry reporting its own absence. Both exporters are host systemd
+      # units, so this is `systemctl status`, not a compose stack.
+      - alert: SparkExporterDown
+        expr: up{job=~"node|gpu"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "the {{ $labels.job }} exporter is down"
+          description: >-
+            Every panel fed by this exporter is stale rather than idle, which
+            looks the same on a dashboard. The exporters are host systemd units:
+            systemctl status node_exporter, or nvidia_gpu_exporter.
+
+      # Root holds spark_shared_dir, so this is the number a training job writing
+      # artifacts runs out of, and it takes the monitoring stack down with it.
+      - alert: SparkRootFilesystemFilling
+        expr: >-
+          node_filesystem_avail_bytes{job="node", mountpoint="/"}
+          / node_filesystem_size_bytes{job="node", mountpoint="/"} < 0.10
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "root filesystem is {{ $value | humanizePercentage }} free"
+          description: >-
+            The shared artifact directory lives here, as do the Prometheus TSDB
+            and the Grafana volume. A full root stops the run and the monitoring
+            that would tell you why.

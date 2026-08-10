@@ -36,7 +36,7 @@
         # rules on the box; the harness only needs the bind source to exist, and
         # an empty directory is a case the rule_files glob has to tolerate
         # anyway, so this covers it.
-        - "{{ monitoring_dir }}/prometheus/rules"
+        - "{{ monitoring_rules_dir }}"
         - "{{ monitoring_dir }}/grafana/dashboards"
         - "{{ monitoring_dir }}/grafana/provisioning/datasources"
         - "{{ monitoring_dir }}/grafana/provisioning/dashboards"
@@ -67,6 +67,14 @@
       ansible.builtin.template:
         src: "{{ harness_monitoring_templates }}/compose.yml.j2"
         dest: "{{ monitoring_dir }}/compose.yml"
+        mode: "0644"
+
+    # The rules are the point of the alert test, so unlike the sparks rules the
+    # harness installs these rather than leaving the directory empty.
+    - name: Install the alerting rules
+      ansible.builtin.copy:
+        src: "{{ harness_repo_root }}/roles/monitoring/files/rules/{{ monitoring_rules_file }}"
+        dest: "{{ monitoring_rules_dir }}/{{ monitoring_rules_file }}"
         mode: "0644"
 
     - name: Render the Prometheus configuration

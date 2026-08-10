@@ -10,6 +10,13 @@ monitoring_project_name: spark-monitoring
 # rather than replaced; see the compose template.
 monitoring_dashboards_container_dir: /etc/grafana/dashboards
 
+# Alerting rules for the hardware failures nothing else reports. Staged, validated
+# with the pinned image's promtool, then installed, so a rule that Prometheus would
+# reject never reaches the box. Same shape as the sparks role's rules.
+monitoring_rules_dir: "{{ monitoring_dir }}/prometheus/rules"
+monitoring_rules_staging_dir: "{{ monitoring_dir }}/prometheus/rules.staged"
+monitoring_rules_file: spark.yml
+
 monitoring_grafana_anonymous_role: Viewer
 monitoring_grafana_theme: dark
 monitoring_grafana_home_dashboard: /d/spark-overview/spark-overview
