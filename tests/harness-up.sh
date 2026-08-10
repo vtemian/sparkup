@@ -153,10 +153,19 @@ scraped_twice() {
     [ "$(promql 'min(count_over_time(up{job=~"node|gpu"}[5m]))')" -ge 2 ]
 }
 
+# The energy panel sums its gauge at a fixed 15 s subquery step, so two samples
+# ten seconds apart leave every step outside the data and the panel is empty for a
+# reason that has nothing to do with the query. Wait for a window wider than the
+# step instead of racing it.
+enough_for_subqueries() {
+    [ "$(promql 'min(count_over_time(up{job=~"node|gpu"}[5m]))')" -ge 6 ]
+}
+
 echo "==> Waiting for the stack"
 wait_for "Prometheus is ready" prometheus_ready
 wait_for "both exporter targets are up" targets_up
 wait_for "both targets scraped twice, so rate() has slope" scraped_twice
+wait_for "a window wider than the dashboard's 15s subquery step" enough_for_subqueries
 
 echo "==> Checking every panel query returns data"
 python3 "${REPO_ROOT}/tests/check_dashboard.py" --prometheus-url "${PROMETHEUS_URL}"

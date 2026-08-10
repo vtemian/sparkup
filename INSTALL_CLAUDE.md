@@ -99,8 +99,10 @@ variable in this repo decides whether a feature happens; see [CLAUDE.md](CLAUDE.
 `spbm_enabled` passes and a second flag would not, and do not add one.
 
 Grep for it before assuming it is read anywhere else. It is not passed into a template, not consulted
-by `exporters`, and not consulted by `monitoring`: the dashboard ships the Power row either way, and
-those panels explain their own emptiness rather than being generated conditionally. Templating the
+by `exporters`, and not consulted by `monitoring`: the dashboard ships the power panels either way,
+and they explain their own emptiness rather than being generated conditionally. Note that three of
+them are status-strip tiles ABOVE the first row, so a default box shows "No data" at the very top of
+the board; that is expected, and each tile says so in its description. Templating the
 dashboard is not an option anyway; see the `copy`, never `template` trap below.
 
 The two things that could once *also* be switched off are guarded by asserts instead, which is the
@@ -118,8 +120,8 @@ A guard that fails loudly beats a default that does nothing.
 ### Where power comes from
 
 The firmware, through `spbm`, and only where somebody asked for it. On a default box there is no
-power and no energy at all, and the three panels on the dashboard's Power row read "No data". That
-is the expected state, not a fault to chase.
+power and no energy at all. The dashboard's Power row and the three power tiles on its status strip
+read "No data", which is the expected state and not a fault to chase.
 
 `spbm_enabled: true` in `host_vars` installs the driver and queues its signing key. A **human at the
 machine** then reboots with a keyboard and monitor attached and answers MokManager, because Secure
@@ -179,7 +181,7 @@ base → docker → gpu → users → spbm → exporters → monitoring → firm
   a containerised node-exporter. Running `--tags monitoring` alone on an unmigrated box removes host
   metrics and gives nothing back.
 - `spbm` precedes `exporters` so its hwmon channels exist before node_exporter starts reading them.
-  It is skipped entirely unless `spbm_enabled` is true, which is the default. `skipping: [spark]`
+  It is skipped entirely unless `spbm_enabled` is true, and false is the default. `skipping: [spark]`
   under the `spbm` tasks is correct output, not a failure.
 
 `pre_tasks` are tagged `always`, so `--tags <anything>` still runs every precondition. `post_tasks`
@@ -230,6 +232,7 @@ make offline   # lint, syntax, dashboard, dashboard-live, roles-test
 | `make dashboard-live` | every query returns data from a real Prometheus holding synthetic samples |
 | `make roles-test` | `base` and `users` converge twice in containers, second run `changed=0`, and `report` renders where none of what it reads exists |
 | `make harness-up` / `harness-down` | Grafana and Prometheus locally for editing the dashboard |
+| `make skill-test` | runs `.claude/skills` against a faked box in containers, with a no-skill control. **Calls a model, so it costs tokens and needs a key**, which is why `offline` does not. Needs `ANTHROPIC_API_KEY` or `~/.sparkup-anthropic-key`; see [tests/skills/README.md](tests/skills/README.md) |
 
 `make dashboard` matches `node_memory_` and `node_filesystem_` by **prefix**, so a typo inside a real
 metric family passes it. `make dashboard-live` is what catches that. Both run in `offline` and in CI.
@@ -371,10 +374,9 @@ stubbed. A fake that reported success would be worse than no test.
   what was measured.
 - **All eight spbm thermal zones carry a real reading, `tj_max` and `dla` included.** Read off the
   box at idle: `tj_max` 32.5 °C tracking the `gpu` zone exactly, `dla` 27.3 °C, the other six 32.2 to
-  32.5 °C. Despite its name `tj_max` is a temperature, not a limit. An earlier version of this file
-  claimed those two read a flat zero and the temperature panel filtered `> 0` to hide them; both were
-  wrong, and the filter was removed. The only spbm channel that really does read zero is the `dla`
-  *power* rail, at 0.01 W, which is a different channel from the `dla` thermal zone.
+  32.5 °C. Despite its name `tj_max` is a temperature, not a limit. The only spbm channel that reads zero is
+  the `dla` *power* rail, at 0.01 W, which is a different channel from the `dla` thermal zone. Do not
+  filter the temperature panel on `> 0`: there is nothing to hide.
 - **`prochot`, `pl_level` and `tj_max_c` are not shippable as metrics, and this is the evidence.**
   Sampled over 24 s on an idle box drawing 23 W of a 140 W `pl1` cap: `prochot` pinned at 1 and
   `pl_level` pinned at 1. If 1 meant "asserted" the box would be throttling at idle, so it does not

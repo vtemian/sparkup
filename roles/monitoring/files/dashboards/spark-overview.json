@@ -473,7 +473,7 @@
               },
               {
                 "color": "orange",
-                "value": 2
+                "value": 1
               },
               {
                 "color": "green",
@@ -1146,7 +1146,7 @@
         "overrides": []
       },
       "options": {
-        "getOption": "// Watts, keyed by the firmware's own channel label.\nconst frame = context.panel.data.series[0];\nif (!frame) {\n  return {};\n}\nconst read = (name) => {\n  const field = frame.fields.find((f) => f.name === name);\n  if (!field) {\n    return [];\n  }\n  return field.values.toArray ? field.values.toArray() : Array.from(field.values);\n};\nconst names = read('label');\nconst values = read('Value');\nconst watts = {};\nnames.forEach((name, i) => {\n  watts[name] = Number(values[i]) || 0;\n});\nconst at = (key) => watts[key] || 0;\n\n// Residuals, not measurements: the firmware has no channel for board overhead\n// or for whatever inside the package is not one of the four named rails, so\n// both are differences and are clamped at zero rather than allowed to go\n// negative when two channels are sampled a moment apart.\nconst rest = (whole, parts) => Math.max(0, at(whole) - parts);\nconst rails = at('gpu') + at('cpu_p') + at('cpu_e') + at('vcore');\n\nconst links = [\n  { source: 'dc_input', target: 'sys_total', value: at('sys_total') },\n  { source: 'dc_input', target: 'conversion', value: rest('dc_input', at('sys_total')) },\n  { source: 'sys_total', target: 'soc_pkg', value: at('soc_pkg') },\n  { source: 'sys_total', target: 'board', value: rest('sys_total', at('soc_pkg')) },\n  { source: 'soc_pkg', target: 'gpu', value: at('gpu') },\n  { source: 'soc_pkg', target: 'cpu_p', value: at('cpu_p') },\n  { source: 'soc_pkg', target: 'cpu_e', value: at('cpu_e') },\n  { source: 'soc_pkg', target: 'vcore', value: at('vcore') },\n  { source: 'soc_pkg', target: 'uncore', value: rest('soc_pkg', rails) },\n].filter((link) => link.value > 0.05);\n\nconst colour = {\n  dc_input: '#5794f2',\n  sys_total: '#73bf69',\n  soc_pkg: '#f2cc0c',\n  gpu: '#5794f2',\n  cpu_p: '#b877d9',\n  cpu_e: '#b877d9',\n  vcore: '#ff9830',\n  uncore: '#8e95a3',\n  board: '#8e95a3',\n  conversion: '#8e95a3',\n};\nconst nodes = Object.keys(colour).map((name) => ({\n  name,\n  itemStyle: { color: colour[name] },\n}));\n\nreturn {\n  backgroundColor: 'transparent',\n  tooltip: {\n    trigger: 'item',\n    valueFormatter: (value) => `${value.toFixed(1)} W`,\n  },\n  series: [\n    {\n      type: 'sankey',\n      left: 8,\n      right: 90,\n      top: 12,\n      bottom: 12,\n      nodeGap: 14,\n      nodeWidth: 14,\n      emphasis: { focus: 'adjacency' },\n      lineStyle: { color: 'gradient', opacity: 0.35 },\n      label: {\n        color: context.grafana.theme.colors.text.primary,\n        formatter: (params) => `${params.name}  ${params.value.toFixed(0)} W`,\n      },\n      data: nodes,\n      links,\n    },\n  ],\n};\n",
+        "getOption": "// Watts, keyed by the firmware's own channel label.\nconst frame = context.panel.data.series[0];\nif (!frame) {\n  return {};\n}\nconst read = (name) => {\n  const field = frame.fields.find((f) => f.name === name);\n  if (!field) {\n    return [];\n  }\n  return field.values.toArray ? field.values.toArray() : Array.from(field.values);\n};\nconst names = read('label');\nconst values = read('Value');\nconst watts = {};\nnames.forEach((name, i) => {\n  watts[name] = Number(values[i]) || 0;\n});\nconst at = (key) => watts[key] || 0;\n\n// Residuals, not measurements: the firmware has no channel for board overhead\n// or for whatever inside the package is not one of the four named rails, so\n// both are differences and are clamped at zero rather than allowed to go\n// negative when two channels are sampled a moment apart.\nconst rest = (whole, parts) => Math.max(0, at(whole) - parts);\nconst rails = at('gpu') + at('cpu_p') + at('cpu_e') + at('vcore');\n\nconst links = [\n  { source: 'dc_input', target: 'sys_total', value: at('sys_total') },\n  { source: 'dc_input', target: 'conversion', value: rest('dc_input', at('sys_total')) },\n  { source: 'sys_total', target: 'soc_pkg', value: at('soc_pkg') },\n  { source: 'sys_total', target: 'board', value: rest('sys_total', at('soc_pkg')) },\n  { source: 'soc_pkg', target: 'gpu', value: at('gpu') },\n  { source: 'soc_pkg', target: 'cpu_p', value: at('cpu_p') },\n  { source: 'soc_pkg', target: 'cpu_e', value: at('cpu_e') },\n  { source: 'soc_pkg', target: 'vcore', value: at('vcore') },\n  { source: 'soc_pkg', target: 'uncore', value: rest('soc_pkg', rails) },\n].filter((link) => link.value > 0.05);\n\nconst colour = {\n  dc_input: '#5794f2',\n  sys_total: '#73bf69',\n  soc_pkg: '#f2cc0c',\n  gpu: '#5794f2',\n  cpu_p: '#b877d9',\n  cpu_e: '#b877d9',\n  vcore: '#ff9830',\n  uncore: '#8e95a3',\n  board: '#8e95a3',\n  conversion: '#8e95a3',\n};\n// Only the nodes that still have a link. A node declared without one lands in\n// the leftmost column at zero height and reads as a source of the flow: on an\n// idle box that is `cpu_e` at 0.02 W and `conversion` at 0.\nconst linked = new Set();\nlinks.forEach((link) => {\n  linked.add(link.source);\n  linked.add(link.target);\n});\nconst nodes = [...linked].map((name) => ({\n  name,\n  itemStyle: { color: colour[name] || '#8e95a3' },\n}));\n\nreturn {\n  backgroundColor: 'transparent',\n  tooltip: {\n    trigger: 'item',\n    valueFormatter: (value) => `${value.toFixed(1)} W`,\n  },\n  series: [\n    {\n      type: 'sankey',\n      left: 8,\n      right: 90,\n      top: 12,\n      bottom: 12,\n      nodeGap: 14,\n      nodeWidth: 14,\n      emphasis: { focus: 'adjacency' },\n      lineStyle: { color: 'gradient', opacity: 0.35 },\n      label: {\n        color: context.grafana.theme.colors.text.primary,\n        formatter: (params) => `${params.name}  ${params.value.toFixed(0)} W`,\n      },\n      data: nodes,\n      links,\n    },\n  ],\n};\n",
         "renderer": "canvas",
         "themeEditor": {
           "name": "default",
@@ -1329,7 +1329,7 @@
       "id": 113,
       "type": "state-timeline",
       "title": "At the cap",
-      "description": "Each limit channel within 2% of its own cap, which is the only honest capping signal on this hardware. NVML's throttle reasons are not: they sit above the EC and read Not Active with `pl1` pinned. A workload below the cap is not a fault either, it is a workload that is not compute-bound. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
+      "description": "All four limit channels, each within 2% of its own cap, which is the only honest capping signal on this hardware. NVML's throttle reasons are not: they sit above the EC and read Not Active with `pl1` pinned. A workload below the cap is not a fault either, it is a workload that is not compute-bound. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1397,7 +1397,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"pl1|syspl1\"}) / on(chip, sensor) group_left() node_hwmon_power_cap_watt{job=\"node\"} >= bool 0.98",
+          "expr": "(node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"pl1|pl2|syspl1|syspl2\"}) / on(chip, sensor) group_left() node_hwmon_power_cap_watt{job=\"node\"} >= bool 0.98",
           "legendFormat": "{{label}}"
         }
       ]
@@ -1464,7 +1464,7 @@
       "id": 115,
       "type": "stat",
       "title": "Whole box, this range",
-      "description": "The `sys_total` gauge integrated over the selected range, because the firmware has no whole-system accumulator. The error scales with the scrape interval: at 15 s over a run measured in hours it is well under a percent. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
+      "description": "The `sys_total` gauge integrated over the selected range, because the firmware has no whole-system accumulator. Summed at a fixed 15 s step rather than averaged over the range: an average multiplied by the whole range counts the minutes the box was off, or before spbm was enabled, at the average of the minutes it was on, and overstates the figure in proportion to the gap. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1511,7 +1511,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "avg_over_time((node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=\"sys_total\"})[$__range:]) * $__range_s / 3600",
+          "expr": "sum_over_time((node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=\"sys_total\"})[$__range:15s]) * 15 / 3600",
           "legendFormat": "energy",
           "instant": true
         }
@@ -1534,7 +1534,7 @@
       "id": 117,
       "type": "timeseries",
       "title": "GPU rail: nvidia-smi against the firmware",
-      "description": "The same rail, measured two ways, and they disagree. nvidia-smi read 71.9 W against the firmware's 103.4 W at the same instant, 30 to 44% low, and its `power.limit` is permanently N/A on GB10. Cost a run from the firmware channel or not at all. The gap is also why the safety mode is so easy to miss: NVML cannot see the EC. The lower line is the one to distrust. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. A single line on a default box is the expected state, not a fault.",
+      "description": "The same rail, measured two ways, and they disagree. nvidia-smi read 71.9 W against the firmware's 103.4 W at the same instant, 30 to 44% low, and its `power.limit` is permanently N/A on GB10. Diagnose power from the firmware channels or not at all. The gap is also why the safety mode is so easy to miss: NVML cannot see the EC. The lower line is the one to distrust. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. A single line on a default box is the expected state, not a fault.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1597,7 +1597,7 @@
       "id": 118,
       "type": "timeseries",
       "title": "GPU clocks",
-      "description": "2418 MHz is not throttling: it is Default Applications Clocks, i.e. spec. The 3003 MHz nvidia-smi calls Max Clocks is the top of the clock table and not a sustained frequency, so it is deliberately not drawn here as a target line and the gap to it is not headroom. A GPU wedged near 500 MHz is the USB-PD safety mode, and the cap on the strip above is where that shows up.",
+      "description": "2418 MHz is not throttling: it is Default Applications Clocks, i.e. spec. The 3003 MHz nvidia-smi calls Max Clocks is the top of the clock table and not a sustained frequency, so it is deliberately not drawn here as a target line and the gap to it is not headroom. The memory clock is absent because GB10 answers [N/A] for `clocks.current.memory`. A GPU wedged near 500 MHz is the USB-PD safety mode, and the cap on the strip above is where that shows up.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1618,20 +1618,7 @@
             "showPoints": "never"
           }
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "memory"
-            },
-            "properties": [
-              {
-                "id": "custom.axisPlacement",
-                "value": "right"
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
         "legend": {
@@ -1666,15 +1653,6 @@
           },
           "expr": "nvidia_smi_clocks_current_sm_clock_hz{job=\"gpu\"}",
           "legendFormat": "sm"
-        },
-        {
-          "refId": "C",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "nvidia_smi_clocks_current_memory_clock_hz{job=\"gpu\"}",
-          "legendFormat": "memory"
         }
       ]
     },
@@ -2216,7 +2194,7 @@
       "id": 127,
       "type": "timeseries",
       "title": "Network",
-      "description": "Per interface. The reference box is headless on WiFi with no wired fallback, so this is also the panel that tells you whether the link you would recover the box over is alive.",
+      "description": "Per physical interface. Docker's bridges and per-container veths are excluded, because a converged box has one of each per project and container and they buried the real link. The reference box is headless on WiFi with no wired fallback, so this is also the panel that tells you whether the link you would recover it over is alive.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2261,7 +2239,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(node_network_receive_bytes_total{job=\"node\",device!=\"lo\"}[$__rate_interval])",
+          "expr": "rate(node_network_receive_bytes_total{job=\"node\",device!~\"lo|docker.*|veth.*|br-.*\"}[$__rate_interval])",
           "legendFormat": "{{device}} in"
         },
         {
@@ -2270,7 +2248,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(node_network_transmit_bytes_total{job=\"node\",device!=\"lo\"}[$__rate_interval])",
+          "expr": "rate(node_network_transmit_bytes_total{job=\"node\",device!~\"lo|docker.*|veth.*|br-.*\"}[$__rate_interval])",
           "legendFormat": "{{device}} out"
         }
       ]
@@ -2279,7 +2257,7 @@
       "id": 128,
       "type": "timeseries",
       "title": "Temperatures: every hwmon sensor",
-      "description": "Every temperature the kernel exposes under hwmon: the SoC thermal zone, the NVMe sensors, the WiFi radio, and with spbm on the eight zones its driver adds. All eight of those carry a real reading, `dla` included, and `tj_max` is a temperature rather than the limit its name suggests: on this box it tracks the `gpu` zone. spbm's power and energy channels are on the Power row, not here.",
+      "description": "Every temperature the kernel exposes under hwmon. The firmware zones carry a label and are named by it; the SoC, NVMe and WiFi sensors carry none, so they are matched separately and named by chip and sensor. All eight firmware zones carry a real reading, `dla` included, and `tj_max` is a temperature rather than the limit its name suggests: on this box it tracks the `gpu` zone. spbm's power and energy channels are on the Power row, not here.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2324,7 +2302,16 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_hwmon_temp_celsius{job=\"node\"}",
+          "expr": "node_hwmon_temp_celsius{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\"}",
+          "legendFormat": "firmware {{label}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "node_hwmon_temp_celsius{job=\"node\"} unless on(chip, sensor) node_hwmon_sensor_label{job=\"node\"}",
           "legendFormat": "{{chip}} / {{sensor}}"
         }
       ]

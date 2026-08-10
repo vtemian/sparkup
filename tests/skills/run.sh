@@ -147,14 +147,15 @@ judge() {
 
     docker run --rm \
         -v "${workdir}/judge-prompt.txt:/work/judge-prompt.txt:ro" \
-        -e "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}" \
+        -e ANTHROPIC_API_KEY \
         "${IMAGE}" \
         "claude -p \"\$(cat /work/judge-prompt.txt)\" --model ${MODEL} --dangerously-skip-permissions"
 }
 
 # A file rather than only an env var, for the same reason the become password is
-# one: it keeps the key out of shell history, out of `ps`, and out of any
-# transcript. Same shape as ~/.sparkup-become.
+# one: it keeps the key out of shell history and out of any transcript. Same
+# shape as ~/.sparkup-become. It is handed to the container as `-e NAME`, by name,
+# so it does not appear in the docker argv either.
 #
 # The file may be a bare key or a dotenv holding ANTHROPIC_API_KEY, because the
 # key usually already exists in some project's .env and copying it to a second
@@ -162,9 +163,12 @@ judge() {
 # never sourced, so nothing else in it can execute.
 KEY_FILE="${SPARKUP_ANTHROPIC_KEY_FILE:-${HOME}/.sparkup-anthropic-key}"
 if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -r "${KEY_FILE}" ]; then
-    from_file="$(sed -n 's/^[[:space:]]*ANTHROPIC_API_KEY[[:space:]]*=[[:space:]]*//p' "${KEY_FILE}" \
-        | head -1 | tr -d '"'"'"'[:space:]')"
-    if [ -z "${from_file}" ]; then
+    from_file="$(sed -n -E \
+        's/^[[:space:]]*(export[[:space:]]+)?ANTHROPIC_API_KEY[[:space:]]*=[[:space:]]*//p' \
+        "${KEY_FILE}" | head -1 | sed -E 's/[[:space:]]+#.*$//' | tr -d '"'"'"'[:space:]')"
+    # Only if the whole file is one token. Falling back to the file's entire
+    # contents would send every other secret in a .env as the API key.
+    if [ -z "${from_file}" ] && [ "$(wc -l <"${KEY_FILE}")" -le 1 ]; then
         from_file="$(tr -d '[:space:]' <"${KEY_FILE}")"
     fi
     ANTHROPIC_API_KEY="${from_file}"
@@ -178,8 +182,20 @@ if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
     exit 2
 fi
 
-if [ "$#" -ge 1 ]; then SCENARIOS=("$1"); fi
-if [ "$#" -ge 2 ]; then ARMS=("$2"); fi
+if [ "$#" -ge 1 ]; then
+    case " ${SCENARIOS[*]} " in
+        *" $1 "*) SCENARIOS=("$1") ;;
+        *) echo "unknown scenario: $1" >&2; exit 2 ;;
+    esac
+fi
+# Validated, because `with-skil` silently ran the control and then reported that
+# every with-skill arm had passed.
+if [ "$#" -ge 2 ]; then
+    case "$2" in
+        no-skill|with-skill) ARMS=("$2") ;;
+        *) echo "unknown arm: $2 (want no-skill or with-skill)" >&2; exit 2 ;;
+    esac
+fi
 
 echo "==> Building ${IMAGE}"
 docker build -q -t "${IMAGE}" "${HERE}" >/dev/null
@@ -211,9 +227,11 @@ for scenario in "${SCENARIOS[@]}"; do
             -v "${fake}/Makefile:/work/Makefile:ro"
             -v "${fake}/report.sh:/work/report.sh:ro"
         )
+        # Only the skills. INSTALL_CLAUDE.md used to be mounted here too, and it
+        # states three of the four rubrics almost verbatim, so the arms differed by
+        # two things and a pass could not be attributed to the skill.
         if [ "${arm}" = "with-skill" ]; then
             mounts+=(-v "${REPO_ROOT}/.claude/skills:/work/.claude/skills:ro")
-            mounts+=(-v "${REPO_ROOT}/INSTALL_CLAUDE.md:/work/INSTALL_CLAUDE.md:ro")
         fi
 
         # The prompt goes in as a mounted file, not on stdin: `docker run` without
@@ -228,7 +246,7 @@ for scenario in "${SCENARIOS[@]}"; do
         # beyond the key, and the alternative is an agent that cannot run the
         # very commands the skill tells it to run.
         if ! docker run --rm "${mounts[@]}" \
-            -e "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}" \
+            -e ANTHROPIC_API_KEY \
             "${IMAGE}" \
             "claude -p \"\$(cat /work/prompt.txt)\" --model ${MODEL} --dangerously-skip-permissions" \
             >"${log}" 2>&1; then
@@ -248,11 +266,21 @@ for scenario in "${SCENARIOS[@]}"; do
             continue
         fi
 
-        if grep -qiE '^[^a-z]*pass' "${judgement}"; then
-            verdict="pass"
-        else
-            verdict="fail"
-        fi
+        # First word only, and unparseable is an error rather than a pass. Scanning
+        # the whole file graded a FAIL that itemised its reasoning as a pass, the
+        # moment any line began "Passes requirement 1".
+        first="$(tr -d '\r' <"${judgement}" | grep -m1 -oiE '^[^[:alpha:]]*(pass|fail)' || true)"
+        case "$(printf '%s' "${first}" | tr '[:upper:]' '[:lower:]')" in
+            *pass) verdict="pass" ;;
+            *fail) verdict="fail" ;;
+            *)
+                echo "    JUDGE GAVE NO VERDICT"
+                head -3 "${judgement}" | sed 's/^/    | /'
+                summary+="${scenario} ${arm}: ERROR"$'\n'
+                failures=$((failures + 1))
+                continue
+                ;;
+        esac
         head -3 "${judgement}" | sed 's/^/    /'
 
         echo "    ${verdict}"
@@ -270,7 +298,7 @@ echo "==> Summary"
 printf '%s' "${summary}" | sed 's/^/    /'
 echo
 if [ "${failures}" -gt 0 ]; then
-    echo "FAIL: ${failures} with-skill arm(s) did not reach the documented verdict"
+    echo "FAIL: ${failures} arm(s) errored or missed the documented verdict"
     exit 1
 fi
 echo "PASS: every with-skill arm reached the documented verdict"

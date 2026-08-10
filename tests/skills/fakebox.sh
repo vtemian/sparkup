@@ -37,7 +37,7 @@ syspl1 27000000 30000000 300000000
 syspl2 27500000 30000000 300000000
 "
         GPU_UTIL=99; GPU_TEMP=44; SM_CLOCK=495; GFX_CLOCK=495; SMI_POWER=7.90
-        GPU_ZONE=44000
+        GPU_ZONE=44000; COMPUTE_APPS=own
         ;;
     at-the-cap)
         # Saturated with a dense bf16 GEMM. pl1 pinned at its cap, which is the
@@ -59,7 +59,7 @@ syspl1 153000000 231000000 300000000
 syspl2 150000000 244000000 300000000
 "
         GPU_UTIL=100; GPU_TEMP=82; SM_CLOCK=2418; GFX_CLOCK=2418; SMI_POWER=71.90
-        GPU_ZONE=82000
+        GPU_ZONE=82000; COMPUTE_APPS=own
         ;;
     below-cap)
         # A training job that is not compute-bound. Everything healthy, pl1 well
@@ -81,7 +81,7 @@ syspl1 131000000 231000000 300000000
 syspl2 128000000 244000000 300000000
 "
         GPU_UTIL=92; GPU_TEMP=68; SM_CLOCK=2418; GFX_CLOCK=2418; SMI_POWER=48.30
-        GPU_ZONE=68000
+        GPU_ZONE=68000; COMPUTE_APPS=own
         ;;
     contended-benchmark)
         # Healthy box, mid load, and something else already on the GPU. The
@@ -104,7 +104,7 @@ syspl1 125000000 231000000 300000000
 syspl2 122000000 244000000 300000000
 "
         GPU_UTIL=88; GPU_TEMP=66; SM_CLOCK=2418; GFX_CLOCK=2418; SMI_POWER=46.10
-        GPU_ZONE=66000
+        GPU_ZONE=66000; COMPUTE_APPS=stranger
         ;;
     *)
         echo "unknown scenario: ${SCENARIO}" >&2
@@ -154,7 +154,13 @@ args="\$*"
 case "\${args}" in
     *--query-compute-apps*)
         echo "pid, process_name, used_memory [MiB]"
-        echo "4711, python3, 41216 MiB"
+        case "${COMPUTE_APPS}" in
+            own) echo "4711, python3, 41216 MiB" ;;
+            stranger)
+                echo "4711, python3, 41216 MiB"
+                echo "5238, python3, 38104 MiB"
+                ;;
+        esac
         ;;
     # Ahead of the -q branch on purpose: "--query-gpu" contains "-q", and having
     # the verbose branch first sent every CSV query to the wrong output.
@@ -246,12 +252,28 @@ echo "      OS                   Ubuntu 24.04"
 echo "      Kernel               6.11.0-1008-nvidia (aarch64)"
 echo
 echo "    GPU"
-nvidia-smi --query-gpu=name,driver_version,power.draw,power.limit --format=csv,noheader |
-    sed 's/^/      /'
+nvidia-smi --query-gpu=name,driver_version,compute_cap,memory.total,power.draw,power.limit \
+    --format=csv,noheader | sed 's/^/      /'
+cat <<'GPUNOTE'
+      (name, driver, compute capability, memory.total, power.draw, power.limit)
+      Believe power.draw only where the spbm gpu channel below agrees with it.
+      NVML sits above the EC here, so it reads the GPU rail low and its clocks
+      event reasons stay "Not Active" through a throttle the EC is enforcing.
+GPUNOTE
 echo
 echo "    WHOLE-SYSTEM POWER"
 echo "      spbm module          loaded"
 echo "      hwmon devices"
+echo "        lnxsybus:00_nvda8800:00"
+cat <<'POWERNOTE'
+      power channels, live. sys_total is the whole box, DC side of the PSU. pl1 is
+      the GB10 module budget and is shared by CPU and GPU, so it binds long before
+      syspl1 does: a saturated box pins pl1 against its cap, and loading the CPU
+      takes watts from the GPU rather than adding them. "cap" is the limit in force,
+      "ceiling" the highest the firmware accepts. A pl1 cap of 20 W beside a syspl1
+      of 30 W is the EC safety mode rather than a healthy box, and only a cold drain
+      clears it.
+POWERNOTE
 for input in /sys/class/hwmon/hwmon*/power*_input; do
     [ -e "${input}" ] || continue
     base="${input%_input}"
@@ -266,6 +288,16 @@ for input in /sys/class/hwmon/hwmon*/power*_input; do
              printf "\n"
          }'
 done
+cat <<'CLAIMS'
+
+    CLAIMS THIS REPO MAKES, WHICH YOUR BOX EITHER CONFIRMS OR KILLS
+    Most of these were measured on one machine on one day. Where yours disagrees,
+    reality wins and the docs are wrong: please open a "Hardware finding" issue.
+
+      unified GPU memory   see memory.total above   (claimed: [N/A], the field is dropped)
+      nvidia-smi reads low compare power.draw with the gpu channel above   (claimed: 30-44% low, and power.limit is [N/A])
+      pl1 is the ceiling   compare the pl1 and syspl1 caps above   (claimed: pl1 140 W holds the whole box near 171 W; syspl1 231 W never binds)
+CLAIMS
 EOF
 chmod +x "${OUT}/report.sh"
 

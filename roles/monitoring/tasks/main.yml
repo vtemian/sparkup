@@ -19,7 +19,8 @@
     # of these it cannot open.
     - "{{ monitoring_dir }}/grafana/provisioning/alerting"
     - "{{ monitoring_dir }}/grafana/provisioning/plugins"
-    # Where the panel plugin is unpacked, bind-mounted as Grafana's plugin root.
+    # Where the panel plugin is unpacked. Only the plugin's own directory inside
+    # this one is mounted, into Grafana's plugin root rather than over it.
     - "{{ monitoring_dir }}/grafana/plugins"
 
 # A literal hash, not a checksum-file URL as in the exporters role: grafana.com
@@ -34,16 +35,49 @@
     group: root
     mode: "0644"
 
+# `creates` names the VERSION, not just the plugin: the archive always unpacks to
+# a directory called after the plugin, so a guard on that path alone is satisfied
+# by whatever version is already there. A bump would then fetch the new zip, skip
+# the unpack, fire no handler, report success, and leave Grafana serving the old
+# version forever. The exporters role scopes its guard the same way.
 - name: Unpack the Grafana panel plugin the power flow diagram needs
   ansible.builtin.unarchive:
     src: "{{ monitoring_dir }}/{{ monitoring_grafana_plugin }}-{{ monitoring_grafana_plugin_version }}.zip"
     dest: "{{ monitoring_dir }}/grafana/plugins"
     remote_src: true
-    creates: "{{ monitoring_dir }}/grafana/plugins/{{ monitoring_grafana_plugin }}/plugin.json"
+    creates: "{{ monitoring_grafana_plugin_stamp }}"
   # No owner/group/mode: the archive already carries 0664 files under 0775
   # directories, and forcing a file mode here would strip the execute bit the
   # directories need for Grafana's own uid to traverse them.
   notify: Restart monitoring stack
+
+- name: Record which plugin version is unpacked
+  ansible.builtin.copy:
+    content: "{{ monitoring_grafana_plugin_version }}\n"
+    dest: "{{ monitoring_grafana_plugin_stamp }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+# The bind mount cannot fail loudly on its own: Docker creates a missing bind
+# source as an empty directory, so a plugin that never landed gives a Grafana that
+# starts clean and a panel reading "plugin not found" with a green converge.
+# Neither dashboard check can see it either; they read queries, not panel types.
+- name: Assert the panel plugin is where Grafana will look for it
+  ansible.builtin.stat:
+    path: "{{ monitoring_dir }}/grafana/plugins/{{ monitoring_grafana_plugin }}/plugin.json"
+  register: monitoring_plugin_manifest
+  changed_when: false
+
+- name: Fail if the panel plugin did not unpack
+  ansible.builtin.assert:
+    that: monitoring_plugin_manifest.stat.exists
+    fail_msg: >-
+      {{ monitoring_grafana_plugin }} did not unpack into
+      {{ monitoring_dir }}/grafana/plugins. Grafana would start without it and the
+      dashboard's power flow panel would read "plugin not found". Check that unzip
+      is installed and that the archive's top-level directory is still named after
+      the plugin.
 
 - name: Template the compose file
   ansible.builtin.template:

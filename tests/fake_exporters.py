@@ -6,11 +6,12 @@ is the part that most needs a running box. This stands in for the box: two
 HTTP endpoints in the Prometheus exposition format, shaped like the two host
 exporters the `exporters` role installs, carrying values that plausibly
 resemble a DGX Spark: 20 cores, 121 GiB of unified memory, one 3.7 TB NVMe,
-a GPU rail that peaks near 83 W, and clocks between 200 MHz idle and 3003 MHz.
+a GPU rail that peaks near 92 W, and clocks between 200 MHz idle and 3003 MHz.
 
-It is deliberately not a simulator. The numbers move on a slow cycle so panels
-show a line rather than a flat bar; nothing here is a claim about how the real
-hardware behaves under load.
+It is not a simulator. The numbers move on a slow cycle so panels show a line
+rather than a flat bar. Where a figure is a reading off the reference box the
+comment beside it says so; everything else is shaped to be plausible and is not a
+claim about the hardware.
 
 The series names are the ones the panels query. If a name here drifts from a
 name in the dashboard, `check_dashboard.py --prometheus-url` fails, which is
@@ -39,9 +40,11 @@ FS_ROOT_USED = 65_000_000_000
 FS_BOOT_SIZE = 1_073_741_824
 UPTIME_AT_START = 20 * 3600
 
-# Where the box sat at the audit: 6.45 hours of power capping, no thermal
-# slowdown at all.
-POWER_CAP_SECONDS_AT_START = 23224.5
+# NVML's cumulative power-capping counter, which is frozen on this hardware: it
+# read the same value before and after 75 s with `pl1` pinned at its cap. The
+# absolute number is whatever the box booted with and means nothing; what matters
+# is that it does not move, so panels built on it must not appear to work here.
+POWER_CAP_SECONDS_AT_START = 26.526172
 
 CPU_MODES = ("user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal")
 HWMON_SENSORS = (
@@ -64,24 +67,19 @@ HWMON_SENSORS = (
 # nothing on hardware.
 #
 # Watts are (idle, span), and value = idle + span * busy. `busy` runs from 0.05
-# to 0.65, and every pair is solved so that the bottom of the cycle lands on the
-# value read off the reference box at idle and the top lands on the value
-# measured under a saturating bf16 GEMM. Where only one end was measured the
-# other is shaped to be plausible and is not a claim: that is `prereg` above
-# idle, `cpu_e` above idle, and the pl2/syspl2 peaks.
+# to 0.65. Every peak lands on a value measured under a saturating bf16 GEMM.
 #
-# Two things the box taught that guesswork had wrong. `prereg` is a 6 W rail, not
-# a pre-regulator total near `dc_input`. And `dc_input` idles a shade *below*
-# `sys_total` (28.79 against 29.00), so the two are equal within noise rather
-# than separated by a conversion loss; the power flow panel's `conversion` band
-# is a sliver on real hardware, not the fat band a fabricated gap produced.
+# The idle end is anchored to the box only where the nesting permits it: pl1, pl2,
+# syspl1, syspl2, cpu_p, cpu_e, vcore, gpu and prereg bottom out within a watt of
+# their measured idle readings. `sys_total`, `soc_pkg`, `cpu_gpu` and `dc_input`
+# deliberately do not, because the box idles with dc_input 28.79 W BELOW sys_total
+# 29.00 W and with the four rails summing to more than the slack in soc_pkg, and a
+# fixture that reproduced that would draw a box larger than the box containing it.
+# Those four sit high enough to keep the nesting true at both ends instead.
 #
-# The nesting has to hold at BOTH ends of the cycle. The rails stay inside
-# soc_pkg, soc_pkg inside sys_total, sys_total inside dc_input, and cpu_gpu is
-# the sum of the CPU and GPU rails, which the box confirms: 15.96 W against
-# 11.90 + 3.34 + 0.02. The power flow panel computes board overhead and uncore as
-# differences between channels, so an idle value that breaks the nesting draws a
-# box bigger than the box containing it.
+# `prereg` is a 6 W rail, not a pre-regulator total near `dc_input`, and `cpu_gpu`
+# is the sum of the CPU and GPU rails (15.96 W against 11.90 + 3.34 + 0.02 at
+# idle). Both were guessed wrong before the box was read.
 SPBM_CHIP = "lnxsybus:00_nvda8800:00"
 SPBM_POWER = (
     ("power1", "sys_total", 28.0, 220.0),
@@ -198,8 +196,8 @@ class Box:
                 self.cpu_seconds[(cpu, "user")] += elapsed * weight * 0.80
                 self.cpu_seconds[(cpu, "system")] += elapsed * weight * 0.15
                 self.cpu_seconds[(cpu, "iowait")] += elapsed * weight * 0.05
-            if self.gpu_utilisation(now) > 0.75:
-                self.power_cap_seconds += elapsed
+            # Deliberately not advanced: see the clocks-event-reason comment in
+            # gpu_metrics. The counter is frozen on this hardware.
             watts = dict(self.power_watts(busy))
             for _, label, source in SPBM_ENERGY:
                 self.energy_joules[label] += elapsed * watts[source]
@@ -359,7 +357,14 @@ def gpu_metrics(box: Box) -> str:
 
     gauge("nvidia_smi_utilization_gpu_ratio", utilisation, "GPU occupancy, 0 to 1.")
     gauge("nvidia_smi_utilization_memory_ratio", utilisation * 0.6, "Memory controller occupancy.")
-    gauge("nvidia_smi_temperature_gpu", 41.0 + 32.0 * utilisation, "GPU die temperature.", "{:.1f}")
+    # From the firmware `gpu` zone, like the power reading below and for the same
+    # reason: on the box these are the same number (82 °C saturated), so driving
+    # them from different cycles invented a 10 °C ceiling gap and momentary 35 °C
+    # inversions, and taught a discrepancy the hardware does not have.
+    firmware_gpu_zone = dict(
+        (label, base + span * box.busy(now)) for _, label, base, span in SPBM_TEMP
+    )["gpu"]
+    gauge("nvidia_smi_temperature_gpu", firmware_gpu_zone, "GPU die temperature.", "{:.1f}")
     # Deliberately derived from the firmware's own gpu channel and then made to
     # read low, rather than from `utilisation`: nvidia-smi measured 71.9 W where
     # the firmware read 103.4 W at the same instant, and a dashboard panel exists
@@ -373,16 +378,22 @@ def gpu_metrics(box: Box) -> str:
     clock = idle_hz + (max_hz - idle_hz) * utilisation
     gauge("nvidia_smi_clocks_current_graphics_clock_hz", clock, "Graphics clock.", "{:.0f}")
     gauge("nvidia_smi_clocks_current_sm_clock_hz", clock, "SM clock.", "{:.0f}")
-    gauge("nvidia_smi_clocks_current_memory_clock_hz", 7500e6, "Memory clock.", "{:.0f}")
     gauge("nvidia_smi_clocks_max_sm_clock_hz", max_hz, "Maximum SM clock.", "{:.0f}")
     gauge("nvidia_smi_clocks_max_graphics_clock_hz", max_hz, "Maximum graphics clock.", "{:.0f}")
 
+    # No nvidia_smi_clocks_current_memory_clock_hz either: GB10 answers [N/A] for
+    # clocks.current.memory, so the exporter drops it. Read on the box.
+    #
     # Unified memory: nvidia-smi reports [N/A] for the memory fields on GB10
     # and the exporter drops unavailable fields, so no nvidia_smi_memory_*
     # series exist here either. That absence is the honest thing to reproduce.
 
-    capping = 1.0 if utilisation > 0.75 else 0.0
-    gauge("nvidia_smi_clocks_event_reasons_sw_power_cap", capping, "Power cap active.", "{:.0f}")
+    # Flat zero, and the counter below never advances, because that is what the box
+    # does: measured through 75 s with `pl1` pinned at its cap, every clocks event
+    # reason read Not Active and the SW Power Capping counter did not move. NVML
+    # sits above the EC. A harness that animates this signal makes the two panels
+    # built on it look alive here and leaves them dead on hardware.
+    gauge("nvidia_smi_clocks_event_reasons_sw_power_cap", 0.0, "Power cap active.", "{:.0f}")
     gauge("nvidia_smi_clocks_event_reasons_hw_thermal_slowdown", 0.0, "HW thermal slowdown.", "{:.0f}")
     gauge("nvidia_smi_clocks_event_reasons_sw_thermal_slowdown", 0.0, "SW thermal slowdown.", "{:.0f}")
     gauge(

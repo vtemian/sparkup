@@ -9,6 +9,11 @@
       - util-linux
       - python3-apt
       - avahi-daemon
+      # ansible.builtin.unarchive shells out to unzip for a .zip and has no
+      # Python fallback, so without this the monitoring role's Grafana plugin
+      # fails on a box that does not happen to ship it, after five roles have
+      # already changed state.
+      - unzip
     state: present
     update_cache: true
     cache_valid_time: 3600

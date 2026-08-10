@@ -3,8 +3,11 @@
 # abandons grafana-data (hand-made dashboards) and prometheus-data (history).
 monitoring_project_name: spark-monitoring
 
-# Not under /var/lib/grafana: that path is the named volume's, and nesting a bind
-# mount inside it is a needless ordering dependency.
+# Not under /var/lib/grafana: that path is the named volume's, and a directory of
+# dashboards nested inside it would have to be created before Grafana's first
+# start populates the volume. The panel plugin below IS mounted inside that
+# volume, because there Grafana's own plugin root is the thing being extended
+# rather than replaced; see the compose template.
 monitoring_dashboards_container_dir: /etc/grafana/dashboards
 
 monitoring_grafana_anonymous_role: Viewer
@@ -25,3 +28,8 @@ monitoring_grafana_plugin_checksum: sha256:e49f520eef92f391d11c77a94f5503b540451
 monitoring_grafana_plugin_url: >-
   https://grafana.com/api/plugins/{{ monitoring_grafana_plugin }}/versions/{{
   monitoring_grafana_plugin_version }}/download
+# What makes a version bump actually install. The archive unpacks to a directory
+# named only after the plugin, so this stamp carries the version instead.
+monitoring_grafana_plugin_stamp: >-
+  {{ monitoring_dir }}/grafana/plugins/.{{ monitoring_grafana_plugin }}-{{
+  monitoring_grafana_plugin_version }}.unpacked

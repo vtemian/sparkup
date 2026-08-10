@@ -32,11 +32,14 @@ make apply BECOME="--become-password-file ~/.sparkup-become"
 That file lives outside the repo at mode `0600` and is never committed. If it is missing, the human
 creates it; never ask anyone to paste a password into a transcript.
 [INSTALL_CLAUDE.md](../../../INSTALL_CLAUDE.md) step 4 has the setup and the check that it works.
-Scope the converge to what you are fixing, `--tags monitoring` and so on: a bare `make apply` also
-runs `firmware` and `kernel`, and CLAUDE.md says not to decide those alone.
+A bare `make apply` also runs `firmware` and `kernel`, and CLAUDE.md says not to decide those alone,
+so scope the converge to what you are fixing. Read the tag's own trap first: `--tags monitoring` on a
+box that still runs a containerised node-exporter deletes it and gives nothing back, because the role
+uses `remove_orphans: true`. See INSTALL_CLAUDE.md, "Play order is load-bearing".
 
-Read the `WHOLE-SYSTEM POWER` section. Every channel prints its reading, the cap in force, and the
-firmware ceiling.
+Read the `WHOLE-SYSTEM POWER` section. Every channel prints its reading; only `pl1`, `pl2`, `syspl1`
+and `syspl2` also print the cap in force and the firmware ceiling, because only those four carry them.
+Ten channels with no cap column is correct output, not truncated output.
 
 **If it says `spbm module not loaded`**, there is no power instrumentation on this box and you
 cannot diagnose power at all. That is the default state and not a fault. Enabling it is `spbm_enabled`

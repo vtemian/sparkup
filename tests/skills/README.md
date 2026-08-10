@@ -19,30 +19,34 @@ Not part of `make offline`. It calls a model, so it costs tokens and needs a key
 
 ## What a run does
 
-Four scenarios, each run twice: once with `.claude/skills` mounted and once without.
+Four scenarios, each run twice: once with `.claude/skills` mounted and once without. That mount is
+the **only** difference between the arms, so a pass can be attributed to it.
 
 | Scenario | The box | The verdict that counts as correct |
 |---|---|---|
 | `pd-safety-mode` | `pl1` cap collapsed to 20 W, GPU at 495 MHz | EC safety mode, needs a cold drain, needs someone at the machine |
 | `at-the-cap` | caps healthy, `pl1` pinned at 139.7/140 W | working as designed, 240 W is the PSU rating, nothing to fix |
 | `below-cap` | caps healthy, `pl1` at 117/140 W | not compute-bound, profile the job, do not raise limits |
-| `contended-benchmark` | healthy, another process holding 41 GiB | a throughput number now is invalid; 213 TFLOPS is the wrong target |
+| `contended-benchmark` | healthy, plus a second process the user did not mention | a throughput number now is invalid; 213 TFLOPS is the wrong target |
 
 **The `no-skill` arm is the control and is expected to fail.** A skill that changes nothing is not
 earning its place, so the run prints both and only fails the build on a `with-skill` arm.
 
-Measured on Sonnet, all four `with-skill` arms pass. Three of the four controls fail, and the way
-they fail is the argument for the skills existing:
+Measured on Sonnet, all four `with-skill` arms pass and three of the four controls fail.
 
-- `pd-safety-mode` blamed software, thermals, ECC and storage, never looked at the caps, and never
-  reached a cold drain. The skill is the whole diagnosis here.
-- `at-the-cap` treated a correctly working box as a platform fault and reached for a power cycle, a
-  driver update and a firmware update.
-- `contended-benchmark` never noticed the 41 GiB process already on the GPU, so it would have
-  reported a contended number as this box's throughput.
-- `below-cap` **passes without the skill.** A capable model already knows that high utilisation with
-  low power means memory-bound work. That branch is a regression guard, not evidence of value, and
-  saying otherwise would overstate what these tests show.
+- `pd-safety-mode` blamed software and thermals, never reached a cold drain, and this is the only
+  scenario whose answer exists nowhere but the skill.
+- `contended-benchmark` never noticed the second process on the GPU and told the user to run the
+  benchmark anyway.
+- `below-cap` offered `nvidia-smi -pl` as a limit to raise, which is the one action the branch exists
+  to rule out.
+- `at-the-cap` **passes without the skill**, because `make report` itself prints that pl1 holds the box
+  near 171 W and that 240 W is the PSU rating. The fixture reproduces that guidance deliberately; a
+  control denied it would make the skill look better than it is.
+
+**One sample per cell, so per-scenario control results move between runs.** An earlier pass had
+`below-cap` passing and `at-the-cap` failing, the reverse of the above. Treat "every with-skill arm
+passes" as the result and a single control verdict as weak evidence.
 
 ## Grading is a judge, not a regex
 
@@ -76,6 +80,8 @@ Four container details that are not optional:
   without that flag a headless agent cannot run the commands the skill tells it to run.
 - The prompt arrives as a mounted file. `docker run` without `-i` attaches no stdin, and the CLI exits
   saying it was given no input.
+- The CLI version is pinned in the Dockerfile. It is the thing under test, and `latest` plus a cached
+  npm layer means two machines test two different CLIs and neither result reproduces.
 
 `~/.claude` is deliberately **not** mounted. It carries no credential on macOS anyway (the token is in
 the Keychain), and it holds this project's memory files and every past transcript, which is to say the

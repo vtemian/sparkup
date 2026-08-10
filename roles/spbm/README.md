@@ -6,8 +6,9 @@ the console.
 
 **Off by default.** This is the only role a plain `make apply` does not run, and the only one that
 asks for two things the rest of the playbook never does: third-party code running in kernel space,
-and a person standing at the machine with a keyboard and a monitor. Skipping it costs you the Power
-row on the dashboard and nothing else.
+and a person standing at the machine with a keyboard and a monitor. Skipping it costs you the dashboard's
+Power row and the three power tiles on its status strip, which then read "No data" and explain why in
+their own descriptions. Nothing else changes.
 
 ## Turning it on
 

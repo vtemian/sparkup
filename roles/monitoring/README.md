@@ -35,12 +35,17 @@ downloads and checksums the plugin itself, then bind-mounts that one directory i
 path. `GF_INSTALL_PLUGINS` is not used: it makes Grafana fetch from grafana.com at every container
 start, so a box whose WiFi is down comes up with a broken panel and no error anyone sees.
 
-Bumping the version means bumping `monitoring_grafana_plugin_checksum` in the same edit:
+Bumping the version means bumping `monitoring_grafana_plugin_checksum` in the same edit. The variable
+carries the `sha256:` prefix; the command below does not print it:
 
 ```bash
-curl -sL "https://grafana.com/api/plugins/volkovlabs-echarts-panel/versions/7.2.5/download" \
-  | shasum -a 256
+v=7.3.0    # the version you are moving to
+curl -sL "https://grafana.com/api/plugins/volkovlabs-echarts-panel/versions/$v/download" \
+  | shasum -a 256 | awk '{print "sha256:" $1}'
 ```
+
+The unpack is guarded on a stamp file carrying the version, so a bump re-extracts. Guarding on the
+plugin directory alone would fetch the new archive, skip the unpack and leave the old version running.
 
 ## Installing a dashboard from another project
 
