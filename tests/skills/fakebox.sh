@@ -83,6 +83,29 @@ syspl2 128000000 244000000 300000000
         GPU_UTIL=92; GPU_TEMP=68; SM_CLOCK=2418; GFX_CLOCK=2418; SMI_POWER=48.30
         GPU_ZONE=68000
         ;;
+    contended-benchmark)
+        # Healthy box, mid load, and something else already on the GPU. The
+        # benchmark skill's first trap: a contended measurement is valid for peak
+        # power and worthless for throughput.
+        CHANNELS="
+sys_total 132000000 - -
+soc_pkg 106000000 - -
+cpu_gpu 88000000 - -
+cpu_p 13000000 - -
+cpu_e 2000000 - -
+vcore 7000000 - -
+dc_input 135000000 - -
+gpu 67000000 - -
+prereg 23000000 - -
+dla 10000 - -
+pl1 111000000 140000000 250000000
+pl2 112000000 142000000 250000000
+syspl1 125000000 231000000 300000000
+syspl2 122000000 244000000 300000000
+"
+        GPU_UTIL=88; GPU_TEMP=66; SM_CLOCK=2418; GFX_CLOCK=2418; SMI_POWER=46.10
+        GPU_ZONE=66000
+        ;;
     *)
         echo "unknown scenario: ${SCENARIO}" >&2
         exit 2

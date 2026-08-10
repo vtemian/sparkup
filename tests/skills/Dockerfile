@@ -18,6 +18,12 @@ RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
 # The fake nvidia-smi goes first on PATH, so an agent that reaches for it gets
 # the instrument that lies, exactly as it would on the box.
 ENV PATH=/fakebox/bin:$PATH
+
+# Not root: the CLI refuses --dangerously-skip-permissions when it has root
+# privileges, and without that flag a headless agent cannot run the commands the
+# skill tells it to run. The node image ships this user at uid 1000.
+RUN mkdir -p /work && chown node:node /work
+USER node
 WORKDIR /work
 
 # `bash -c`, deliberately not `-lc`: a login shell re-reads /etc/profile, which
