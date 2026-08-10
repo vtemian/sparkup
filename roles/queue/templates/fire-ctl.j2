@@ -1,9 +1,24 @@
 #!/bin/sh
 # {{ ansible_managed }}
 # SSH-RPC into the queue container's fire binary.
+#
+# The uid is the one thing the container cannot work out for itself. It runs as
+# root and `docker compose exec` carries no trace of who was on the other end of
+# the ssh connection, so a job reserved in there is owned by root: privileges
+# drop to uid 0, the training container runs as host root over the shared tree,
+# and every run is recorded against `root` whoever submitted it.
+#
+# sshd has already authenticated this account, so `id -u` here is the only
+# identity in the chain that is vouched for rather than claimed. It goes in the
+# environment, and BEFORE the service name: everything after `runner` is
+# arguments to `fire`, so a caller controlling "$@" cannot append another -e and
+# name themselves somebody else.
 set -eu
 exec docker compose \
   -f '{{ queue_dir }}/compose.yml' \
   -p '{{ queue_project_name }}' \
-  exec -T runner \
+  exec -T \
+  -e SPARKS_SSH_UID="$(id -u)" \
+  -e SPARKS_SSH_USER="$(id -un)" \
+  runner \
   fire "$@"
