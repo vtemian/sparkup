@@ -22,6 +22,19 @@ Every number that decides anything below comes from the `spbm` firmware channels
 make report
 ```
 
+`make report` needs no sudo, which is why it is first. Anything that *changes* the box does, and `-K`
+prompts interactively, which an agent cannot answer. Pass the password file instead:
+
+```sh
+make apply BECOME="--become-password-file ~/.sparkup-become"
+```
+
+That file lives outside the repo at mode `0600` and is never committed. If it is missing, the human
+creates it; never ask anyone to paste a password into a transcript.
+[INSTALL_CLAUDE.md](../../../INSTALL_CLAUDE.md) step 4 has the setup and the check that it works.
+Scope the converge to what you are fixing, `--tags monitoring` and so on: a bare `make apply` also
+runs `firmware` and `kernel`, and CLAUDE.md says not to decide those alone.
+
 Read the `WHOLE-SYSTEM POWER` section. Every channel prints its reading, the cap in force, and the
 firmware ceiling.
 

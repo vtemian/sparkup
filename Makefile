@@ -2,6 +2,10 @@
 
 # Sudo on the box. Default prompts once per run; override with `BECOME=` if you
 # have passwordless sudo. No password ever belongs in this repo.
+#
+# `-K` cannot be answered by anything non-interactive, so an agent or a CI step
+# passes a file outside the repo instead:
+#   make apply BECOME="--become-password-file ~/.sparkup-become"
 BECOME ?= -K
 PLAYBOOK ?= site.yml
 EXTRA ?=
