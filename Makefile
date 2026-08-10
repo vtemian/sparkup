@@ -65,6 +65,12 @@ dashboard-live: ## Evaluate every panel query against a live Prometheus, then te
 roles-test: ## Converge base and users in containers twice, expect changed=0
 	./tests/role-idempotence.sh
 
+# Deliberately not in `offline`: it calls a model, so it costs tokens and needs
+# ANTHROPIC_API_KEY, and CI has neither.
+.PHONY: skill-test
+skill-test: ## Run the skills against a faked box in containers (needs ANTHROPIC_API_KEY)
+	./tests/skills/run.sh
+
 harness-up: ## Grafana + Prometheus locally on :13000, fed synthetic metrics
 	./tests/harness-up.sh
 
