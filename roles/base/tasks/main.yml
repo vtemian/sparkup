@@ -36,12 +36,12 @@
     mode: "0644"
   notify: Restart avahi-daemon
 
-# Not community.general.timezone. On this hardware the EFI RTC registers but
-# cannot be read (`rtc-efi: hctosys: unable to read the hardware clock` at boot)
-# so bare `timedatectl` exits 1. The module reads that as "no systemd", falls
-# back to a path that needs `hwclock`, and arm64 Ubuntu's util-linux ships that
-# binary's documentation and not the binary. Writing the timezone works; only
-# reading the clock does not, so drive the write directly.
+# Not community.general.timezone. The EFI RTC here reads intermittently, and on
+# a failed read bare `timedatectl` exits 1. The module treats that as "no
+# systemd", falls back to a path that needs `hwclock`, and arm64 Ubuntu's
+# util-linux ships that binary's documentation and not the binary. Writing the
+# timezone works either way, so drive the write directly. `timedatectl` usually
+# exits 0 here: that does not make the module safe, it makes it break rarely.
 - name: Read the configured timezone
   ansible.builtin.command:
     cmd: readlink -f /etc/localtime

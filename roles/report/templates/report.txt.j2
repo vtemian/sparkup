@@ -83,7 +83,7 @@ Most of these were measured on one machine on one day. Where yours disagrees,
 reality wins and the docs are wrong: please open a "Hardware finding" issue.
 
 {# No `true` on these defaults: it would treat a perfectly good rc of 0 as missing. #}
-  no readable RTC      timedatectl exits {{ report_timedatectl.rc | default('nothing, it is not installed') }}   (claimed: non-zero, EFI RTC reads fail)
+  RTC reads sometimes  timedatectl exits {{ report_timedatectl.rc | default('nothing, it is not installed') }}   (claimed: 0 most of the time; the EFI RTC fails rarely, which is why base drives timedatectl itself)
   SSH socket-activated {% for unit in report_ssh_units.results | default([], true) %}{{ unit.item }} {{ unit.status.UnitFileState | default('absent', true) }}{{ ' / ' if not loop.last }}{% endfor %}   (claimed: ssh.socket enabled, ssh.service disabled)
   hidden boot menu     /etc/default/grub.d/no-grubmenu.cfg {{ 'present' if report_grub_dropin.stat.exists else 'ABSENT' }}   (claimed: present, forcing GRUB_TIMEOUT=0)
   unified GPU memory   see memory.total above   (claimed: [N/A], the field is dropped)

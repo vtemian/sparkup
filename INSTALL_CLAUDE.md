@@ -242,13 +242,19 @@ stubbed. A fake that reported success would be worse than no test.
 
 ## Traps
 
-- **This hardware has no readable RTC, and it breaks `community.general.timezone`.** The kernel logs
-  `rtc-efi rtc-efi.0: hctosys: unable to read the hardware clock` at boot, and every read fails with
-  EIO, so bare `timedatectl` exits 1. The module treats a non-zero `timedatectl` as "not systemd",
-  falls back to a path requiring `hwclock`, and arm64 Ubuntu's `util-linux` ships that binary's
-  documentation and not the binary. The converge dies on a box whose clock is perfectly correct.
-  `timedatectl set-timezone` writes fine; only reading the clock fails, so `base` compares
-  `readlink -f /etc/localtime` and drives the write itself. Do not "simplify" it back to the module.
+- **The EFI RTC on this hardware reads intermittently, and that breaks `community.general.timezone`
+  worse than a clean failure would.** When a read fails, bare `timedatectl` exits 1; the module
+  treats non-zero as "not systemd", falls back to a path requiring `hwclock`, and arm64 Ubuntu's
+  `util-linux` ships that binary's documentation and not the binary. The converge then dies on a box
+  whose clock is perfectly correct. `timedatectl set-timezone` writes fine either way, so `base`
+  compares `readlink -f /etc/localtime` and drives the write itself.
+
+  **`timedatectl` exiting 0 is not evidence that the module is safe here**, and `make report` will
+  show it exiting 0 most of the time. Measured over four retained boots, `rtc-efi` logged
+  `setting system clock to ...` every time, i.e. `hctosys` succeeded on all of them, and one
+  `rtc-efi rtc-efi.0: can't read time` appeared in 140 h of uptime. An intermittent failure is the
+  argument *for* the workaround, not against it: the module would pass every test and then break on
+  somebody's box on a boot nobody can reproduce. Do not "simplify" it back to the module.
 - **`curl 127.0.0.1:9100` hangs** on this hardware even when node-exporter is healthy. Verify through
   Prometheus.
 - **Prometheus publishes on two addresses, and dropping the second silently loses every training

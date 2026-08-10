@@ -93,8 +93,9 @@
   failed_when: false
   check_mode: false
 
-# This repo claims the EFI RTC on this hardware cannot be read, which makes
-# bare `timedatectl` exit non-zero on a box whose clock is correct.
+# The EFI RTC here reads intermittently, so this usually exits 0 and sometimes
+# does not. Both answers are worth collecting: the rare failure is what breaks
+# community.general.timezone, and a box that never fails would kill the trap.
 - name: Read whether the clock can be queried
   ansible.builtin.command: timedatectl
   register: report_timedatectl

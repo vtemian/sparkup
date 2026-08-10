@@ -12,7 +12,7 @@ or `site.yml` refuses to start, and `linux-image-nvidia-hwe-24.04` has to exist 
 fails late at apt. Second, whether this hardware behaves the way the rest of the repo claims it does.
 
 That second part is the reason the role exists. Most of what [INSTALL_CLAUDE.md](../../INSTALL_CLAUDE.md)
-records was measured on one machine on one day: the unreadable EFI RTC, socket-activated SSH, the
+records was measured on one machine on one day: the intermittent EFI RTC, socket-activated SSH, the
 GRUB drop-in that hides the boot menu, `[N/A]` GPU memory, and incorrect CPU power on older EC
 firmware. Each is a hypothesis with a sample size of one. The report puts the claim and the measured
 value on the same line so a second box can kill it, and the output pastes straight into a
