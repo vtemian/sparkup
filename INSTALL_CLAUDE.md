@@ -127,6 +127,42 @@ Boot will not load the module until that key is trusted and there is no SSH at t
 flip this variable for a box you cannot reach, and never on someone else's behalf.
 [roles/spbm/README.md](roles/spbm/README.md) holds the procedure and the metric reference.
 
+### What the box can actually draw
+
+**`pl1`, the GB10 module budget, is the limit that binds.** Saturated with a dense bf16 GEMM it pins
+at 139.7 W against its 140 W cap and will not move. `sys_total` peaks at **171 W**, `syspl1` at 153 W
+against a 231 W cap it never approaches. The 240 W in the product spec is the PSU rating, and roughly
+70 W of it is unreachable because `pl1` binds first. Nobody is entitled to 240 W and a box that will
+not draw it is not broken.
+
+**`pl1` is shared, so the GPU rail cannot approach 140 W.** Under load `cpu_p` rises 10.7 → 20.6 W
+while `gpu` rises 79.5 → 91.7 W, together filling `soc_pkg` to 137.9 W. Loading the Grace cores takes
+watts from the GPU instead of adding them, and a GPU rail plateauing near 100 W is correct.
+
+**`nvidia-smi` cannot measure any of this.** It read 71.9 W against the spbm `gpu` channel's 103.4 W
+at the same instant, 30–44 % low, and `power.limit` is permanently `[N/A]`. Worse, its
+`SW Power Capping` counter did not advance through 75 s with `pl1` pinned at its cap: **NVML sits
+above the EC, so "Not Active" on every clocks event reason proves nothing.** Diagnose power from the
+spbm channels or not at all. The same blindness is what makes the safety mode below so easy to miss.
+
+**Heat is not the limiter at the stock cap,** which is why the fan-curve advice circulating for this
+hardware is untested here: saturated at 140 W the GPU sits at 82 °C with 0 µs of SW thermal, HW
+thermal and HW power-brake slowdown. That says nothing about a raised cap. `pl1` is writable and its
+firmware ceiling is 250 W, but GB10 reports `N/A` for every thermal-limit register, so there is no
+Tjmax to raise it against — it would be adjusting the one thing this hardware cannot measure. Board
+overhead is ~31 W, so `syspl1`'s 231 W cap corresponds to about 200 W of module: the headroom is real
+and deliberately unused by the vendor. Treat raising it as firmware territory and ask first.
+
+**Reading the channels by hand: glob `power*_label`, never index.** `power10` sorts before `power2`,
+so a positional read silently returns a different channel, and the hwmon index moves across boots.
+Find the device by name, not number:
+`for d in /sys/class/hwmon/hwmon*; do [ "$(cat $d/name)" = spbm ] && echo $d; done`. `make report`
+already does this correctly and prints every cap and ceiling.
+
+**A workload below the cap is not a fault.** Training on this box sits at `pl1` 117 W of 140 W. Low
+power means the job is not compute-bound; it does not mean it is slow. Memory-bandwidth-bound kernels
+draw less than a GEMM by nature, so profile before treating the gap as headroom to reclaim.
+
 ---
 
 ## Tags and play order
@@ -325,10 +361,12 @@ Rejected on evidence. Re-proposing one costs the same argument again.
   optional. The wall-socket number it produced is the one thing `sys_total` cannot give you, and
   that was not worth the surface. If you genuinely need PSU conversion loss measured, that is a
   different conversation from "sparkup should report power".
-- **Do not add a GPU clock cap or a fan curve without measuring first.** Over 20 h of uptime
-  including training this box logged 0 µs of SW and HW thermal slowdown against 23 224 s of SW
-  power capping, at 79–80 °C with clocks at 2405 of 3003 MHz. The limiter here is the power cap,
-  not heat, so the fan-curve advice circulating for this hardware is a hypothesis about our box
-  rather than a finding on it. `nvidia-smi` also reports `N/A` for every thermal-limit register, so there is no
-  headroom figure to check against. Where `spbm` is live, its power channels are how you would take
-  that measurement.
+- **Do not add a GPU clock cap or a fan curve.** The measurement this once asked for has been taken,
+  and it killed the idea: saturated at the stock cap the limiter is `pl1` at 140 W, not heat, at
+  82 °C with 0 µs of thermal slowdown of any kind. See [What the box can actually draw](#what-the-box-can-actually-draw).
+  The fan-curve advice circulating for this hardware addresses a throttle this box does not have.
+- **2418 MHz is not throttling.** It is `Default Applications Clocks`, i.e. spec. The 3003 MHz
+  `Max Clocks` is the top of the clock table and is not a sustained frequency, so the gap between
+  them is not headroom and chasing it wastes a session. Dense bf16 peak is 48 SMs × 1024 FLOP/clk,
+  about 119 TFLOP/s at 2418 MHz; the "~213 TFLOPS" figure circulating for this hardware is not dense
+  bf16 and is the wrong thing to benchmark against.
