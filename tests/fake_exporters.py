@@ -58,19 +58,62 @@ HWMON_SENSORS = (
 # `chip` is derived from the sysfs device path, not the driver name, and
 # this is the value a real Spark produces, and unguessable, which is why every
 # dashboard query joins node_hwmon_sensor_label rather than naming a chip.
-# Watts are (idle, span) and roughly match the real box: a GPU rail near 87 W
-# under load against a system total comfortably more than double it.
+#
+# All 14 channels, in the driver's own order, so `power11` is `pl1` here exactly
+# as it is on the box. A subset would let a panel pass this harness and find
+# nothing on hardware.
+#
+# Watts are (idle, span), and value = idle + span * busy. `busy` tops out at
+# 0.65, so every span is scaled against that rather than against 1.0, which is
+# what makes the peak of the cycle land on the figures measured on the reference
+# box: sys_total 171 W, soc_pkg 138 W, pl1 139.7 W against its 140 W cap,
+# syspl1 153 W, the GPU rail 92 W, cpu_p 10.7 W idle rising to 20.6 W.
+#
+# The nesting has to hold at BOTH ends of the cycle, not just at the peak: the
+# rails have to stay inside soc_pkg, soc_pkg inside sys_total and sys_total
+# inside dc_input at idle too. The power flow panel computes board overhead and
+# uncore as differences between channels, so an idle value that breaks the
+# nesting draws a box bigger than the box containing it.
 SPBM_CHIP = "lnxsybus:00_nvda8800:00"
 SPBM_POWER = (
-    ("power1", "sys_total", 28.0, 120.0),
-    ("power2", "soc_pkg", 12.0, 95.0),
-    ("power3", "cpu_gpu", 8.0, 85.0),
-    ("power4", "cpu_p", 3.0, 18.0),
-    ("power5", "cpu_e", 1.0, 4.0),
-    ("power6", "vcore", 2.0, 9.0),
-    ("power7", "dc_input", 32.0, 128.0),
-    ("power8", "gpu", 5.0, 82.0),
+    ("power1", "sys_total", 28.0, 220.0),
+    ("power2", "soc_pkg", 26.0, 172.3),
+    ("power3", "cpu_gpu", 25.0, 141.5),
+    ("power4", "cpu_p", 10.7, 15.2),
+    ("power5", "cpu_e", 1.0, 4.6),
+    ("power6", "vcore", 2.0, 10.8),
+    ("power7", "dc_input", 42.0, 212.3),
+    ("power8", "gpu", 5.0, 133.8),
+    ("power9", "prereg", 40.0, 207.7),
+    # Present in the driver's channel table, unpopulated on GB10: there is no
+    # DLA behind it. A channel reading a flat zero is what the box shows, and
+    # panels have to survive it rather than assume every channel carries watts.
+    ("power10", "dla", 0.0, 0.0),
+    # `pl1` is an average of module power, so it tracks soc_pkg and grazes its
+    # cap at the peak. It has to: a limit channel that never reaches its cap
+    # leaves every capping panel a flat "not capped" line and untestable.
+    ("power11", "pl1", 26.0, 174.9),
+    ("power12", "pl2", 26.0, 174.9),
+    ("power13", "syspl1", 28.0, 192.3),
+    ("power14", "syspl2", 28.0, 192.3),
 )
+
+# `powerN_cap` and `powerN_max` exist only for the four limit channels, which is
+# why reading a `pl1` value without the cap beside it says nothing: 140 W is the
+# stock module budget and 20 W is the PD safety mode, and the channel reads the
+# same way in both. `_cap` is writable on the box and clamped to `_max`.
+#
+# pl1's 140 W cap and 250 W firmware ceiling and syspl1's 231 W cap are measured
+# on the reference box. The pl2 and syspl2 figures are placeholders shaped like
+# them; no reading was taken. The driver also exposes `powerN_min`, which nothing
+# queries yet.
+SPBM_LIMITS = (
+    ("power11", 140.0, 250.0),
+    ("power12", 140.0, 250.0),
+    ("power13", 231.0, 281.0),
+    ("power14", 231.0, 281.0),
+)
+
 # Cumulative counters, in joules. Only these four exist in the firmware, and there
 # is no sys_total accumulator, which is why whole-box energy is a gauge integral.
 SPBM_ENERGY = (
@@ -78,6 +121,22 @@ SPBM_ENERGY = (
     ("energy2", "cpu_e", "power5"),
     ("energy3", "cpu_p", "power4"),
     ("energy4", "gpu", "power8"),
+)
+
+# The driver's eight thermal zones, in its own order. `tj_max` and `dla` are the
+# two that read zero: GB10 answers N/A for every thermal-limit register, so there
+# is no Tjmax to report, and there is no DLA. Reproduced rather than omitted,
+# because the dashboard has to exclude them explicitly and would otherwise draw
+# two flat lines at zero next to real sensors.
+SPBM_TEMP = (
+    ("temp1", "tj_max", 0.0, 0.0),
+    ("temp2", "cpu_e_clu0", 41.0, 35.0),
+    ("temp3", "cpu_p_clu0", 43.0, 42.0),
+    ("temp4", "cpu_e_clu1", 41.0, 35.0),
+    ("temp5", "cpu_p_clu1", 43.0, 42.0),
+    ("temp6", "gpu", 45.0, 57.0),
+    ("temp7", "soc", 42.0, 45.0),
+    ("temp8", "dla", 0.0, 0.0),
 )
 
 
@@ -184,6 +243,11 @@ def node_metrics(box: Box) -> str:
             f"node_hwmon_temp_celsius{labels({'chip': chip, 'sensor': sensor})} "
             f"{temperature:.2f}"
         )
+    for sensor, _, base, span in SPBM_TEMP:
+        lines.append(
+            f"node_hwmon_temp_celsius{labels({'chip': SPBM_CHIP, 'sensor': sensor})} "
+            f"{base + span * busy:.2f}"
+        )
 
     # The spbm channels. Without the label metric the dashboard's power queries
     # match nothing: they join on it rather than naming a chip.
@@ -193,6 +257,17 @@ def node_metrics(box: Box) -> str:
         lines.append(
             f"node_hwmon_power_watt{labels({'chip': SPBM_CHIP, 'sensor': sensor})} "
             f"{watts[sensor]:.3f}"
+        )
+    render(lines, "node_hwmon_power_cap_watt", "gauge", "Hardware monitor power cap.")
+    for sensor, cap, _ in SPBM_LIMITS:
+        lines.append(
+            f"node_hwmon_power_cap_watt{labels({'chip': SPBM_CHIP, 'sensor': sensor})} {cap:.3f}"
+        )
+    render(lines, "node_hwmon_power_max_watt", "gauge", "Hardware monitor power max.")
+    for sensor, _, ceiling in SPBM_LIMITS:
+        lines.append(
+            f"node_hwmon_power_max_watt{labels({'chip': SPBM_CHIP, 'sensor': sensor})} "
+            f"{ceiling:.3f}"
         )
     render(
         lines,
@@ -212,6 +287,11 @@ def node_metrics(box: Box) -> str:
             f"{labels({'chip': SPBM_CHIP, 'label': label, 'sensor': sensor})} 1"
         )
     for sensor, label, _ in SPBM_ENERGY:
+        lines.append(
+            f"node_hwmon_sensor_label"
+            f"{labels({'chip': SPBM_CHIP, 'label': label, 'sensor': sensor})} 1"
+        )
+    for sensor, label, _, _ in SPBM_TEMP:
         lines.append(
             f"node_hwmon_sensor_label"
             f"{labels({'chip': SPBM_CHIP, 'label': label, 'sensor': sensor})} 1"
@@ -268,8 +348,14 @@ def gpu_metrics(box: Box) -> str:
     gauge("nvidia_smi_utilization_gpu_ratio", utilisation, "GPU occupancy, 0 to 1.")
     gauge("nvidia_smi_utilization_memory_ratio", utilisation * 0.6, "Memory controller occupancy.")
     gauge("nvidia_smi_temperature_gpu", 41.0 + 32.0 * utilisation, "GPU die temperature.", "{:.1f}")
-    # The GPU rail alone: roughly half of what the box pulls at the wall.
-    gauge("nvidia_smi_power_draw_watts", 5.0 + 82.0 * utilisation, "GPU rail power.", "{:.2f}")
+    # Deliberately derived from the firmware's own gpu channel and then made to
+    # read low, rather than from `utilisation`: nvidia-smi measured 71.9 W where
+    # the firmware read 103.4 W at the same instant, and a dashboard panel exists
+    # to show that gap. Driving the two from different cycles would let them
+    # cross, which would teach the opposite of what was measured. Power and
+    # occupancy need not be in phase, so `utilisation` keeps its own cycle.
+    firmware_gpu = dict(box.power_watts(box.busy(now)))["power8"]
+    gauge("nvidia_smi_power_draw_watts", 0.695 * firmware_gpu, "GPU rail power.", "{:.2f}")
 
     idle_hz, max_hz = 200e6, 3003e6
     clock = idle_hz + (max_hz - idle_hz) * utilisation
