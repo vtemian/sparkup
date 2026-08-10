@@ -28,7 +28,7 @@
     {
       "id": 100,
       "type": "stat",
-      "title": "Drawing now",
+      "title": "Power now",
       "description": "The whole box, DC side, from the firmware. Excludes PSU conversion loss so a wall meter reads a little higher. Peaks at 171 W on the reference box. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
       "datasource": {
         "type": "prometheus",
@@ -85,7 +85,7 @@
     {
       "id": 101,
       "type": "stat",
-      "title": "Module budget used",
+      "title": "Budget",
       "description": "`pl1` as a percentage of its own cap. This is the limit that actually binds on GB10: saturated, `pl1` pins at 139.7 W against a 140 W cap and nothing moves it. The 240 W in the product spec is the PSU rating and roughly 70 W of it is unreachable. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
       "datasource": {
         "type": "prometheus",
@@ -148,7 +148,7 @@
     {
       "id": 102,
       "type": "stat",
-      "title": "Module power cap",
+      "title": "Power cap",
       "description": "**Read this before believing any other power number.** 140 W is the stock module budget. 20 W or 30 W means the EC has dropped into its USB-PD safety mode, which pins the GPU near 500 MHz; nvidia-smi cannot see it and only a cold drain clears it. The channel reads the same way in both cases, so the cap beside it is the only tell. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
       "datasource": {
         "type": "prometheus",
@@ -268,7 +268,7 @@
     {
       "id": 104,
       "type": "stat",
-      "title": "GPU temperature",
+      "title": "GPU temp",
       "description": "Saturated at the stock cap this box sits at 82 \u00b0C with zero thermal slowdown of any kind, so heat is not the limiter here and a fan curve does not buy anything.",
       "datasource": {
         "type": "prometheus",
