@@ -215,6 +215,16 @@ stubbed. A fake that reported success would be worse than no test.
   `readlink -f /etc/localtime` and drives the write itself. Do not "simplify" it back to the module.
 - **`curl 127.0.0.1:9100` hangs** on this hardware even when node-exporter is healthy. Verify through
   Prometheus.
+- **Prometheus publishes on two addresses, and dropping the second silently loses every training
+  curve.** Everything else Prometheus does is a scrape it opens itself, so loopback is enough; the one
+  inbound flow is remote-write from job containers. Those sit on the default bridge and reach the host
+  only at its docker0 address, so `prometheus_docker_bind_address` publishes there as well. With only
+  the loopback publish the whole stack still looks healthy — the supervisor's `sparks_*` metrics travel
+  by textfile collector and keep arriving, all scrape targets stay `up`, and Grafana talks to
+  Prometheus by service name over the compose network. Only `training_*` vanishes, and the job's own
+  log is the only place that says so. Diagnose it from inside a container
+  (`docker run --rm --add-host=host.docker.internal:host-gateway alpine nc -z -w3 host.docker.internal
+  9090`), never from the host, where loopback always answers.
 - **SSH is socket-activated.** `ssh.socket` is enabled, `ssh.service` is disabled. Restarting
   `ssh.service` is a no-op that looks like success.
 - **`ansible.builtin.cron` with `state: absent` silently does nothing** for a hand-written line. It

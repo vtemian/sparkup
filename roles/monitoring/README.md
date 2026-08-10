@@ -14,6 +14,7 @@ datasource and dashboard.
 | `prometheus_image` | `prom/prometheus:v3.13.2` | never pin below the running version |
 | `grafana_image` | `grafana/grafana:13.1.1` | never pin below the running version |
 | `prometheus_bind_address` | `127.0.0.1` | published address on the host |
+| `prometheus_docker_bind_address` | the host's `docker0` address | second publish, so job containers can remote-write in |
 | `prometheus_port` | `9090` | the container always listens on 9090 |
 | `grafana_port` | `80` | so `http://spark.local` needs no suffix |
 | `prometheus_retention` | `1y` | roughly 10 GB at 1527 active series |

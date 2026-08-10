@@ -44,6 +44,13 @@ grafana_port: 80
 # Split, not "host:port": used both as a Docker port-binding prefix and as a URL
 # authority, and a value valid for one is not always valid for the other.
 prometheus_bind_address: "127.0.0.1"
+# The second address Prometheus publishes on. Every other flow into Prometheus
+# is a scrape it opens itself; remote-write is the one that comes inbound, and
+# it comes from job containers on the default bridge, which reach the host at
+# its docker0 address and at no other. Loopback alone is invisible to them, so
+# training curves are dropped while the textfile metrics keep arriving and the
+# stack looks healthy. Empty on a host with no docker0, which skips the publish.
+prometheus_docker_bind_address: "{{ ansible_facts.docker0.ipv4.address | default('', true) }}"
 prometheus_port: 9090
 # A year, because a rolling window turns a long-running experiment into one that
 # cannot be compared with the run before it. Cheap here: at the current 1527

@@ -42,6 +42,13 @@ services:
       # remote writes. Bound to loopback, reached through Grafana or an SSH
       # tunnel.
       - "{{ prometheus_bind_address }}:{{ prometheus_port }}:9090"
+{% if prometheus_docker_bind_address and prometheus_bind_address not in ['0.0.0.0', '::'] %}
+      # And the docker0 address, which is the only one a job container can
+      # reach: it pushes per-step metrics in, rather than being scraped. Skipped
+      # when the bind address above is already every interface, since the two
+      # would collide on the port.
+      - "{{ prometheus_docker_bind_address }}:{{ prometheus_port }}:9090"
+{% endif %}
 
   grafana:
     image: {{ grafana_image }}
