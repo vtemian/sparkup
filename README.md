@@ -114,6 +114,7 @@ group_vars/all.yml    defaults for any Spark
 host_vars/spark.yml   your box (untracked)
 roles/                base, docker, gpu, users, spbm, exporters, monitoring, firmware, kernel, report
 tests/                everything that runs without a Spark
+.claude/skills/       diagnosing and benchmarking the box, if you drive it with Claude Code
 ```
 
 Each role has its own README. Running the playbook produces the machine described above, and per-box
