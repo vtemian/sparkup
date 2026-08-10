@@ -42,7 +42,26 @@
         - "{{ monitoring_dir }}/grafana/provisioning/dashboards"
         - "{{ monitoring_dir }}/grafana/provisioning/alerting"
         - "{{ monitoring_dir }}/grafana/provisioning/plugins"
+        - "{{ monitoring_dir }}/grafana/plugins"
         - "{{ spark_shared_dir }}/dashboards"
+
+    # The same download the role does, with the same pinned version and
+    # checksum. Without it the power flow panel renders as "plugin not found"
+    # here while working on the box, which is the one failure this harness
+    # exists to catch.
+    - name: Fetch the Grafana panel plugin archive
+      ansible.builtin.get_url:
+        url: "{{ monitoring_grafana_plugin_url }}"
+        dest: "{{ monitoring_dir }}/{{ monitoring_grafana_plugin }}-{{ monitoring_grafana_plugin_version }}.zip"
+        checksum: "{{ monitoring_grafana_plugin_checksum }}"
+        mode: "0644"
+
+    - name: Unpack the Grafana panel plugin the power flow diagram needs
+      ansible.builtin.unarchive:
+        src: "{{ monitoring_dir }}/{{ monitoring_grafana_plugin }}-{{ monitoring_grafana_plugin_version }}.zip"
+        dest: "{{ monitoring_dir }}/grafana/plugins"
+        remote_src: true
+        creates: "{{ monitoring_dir }}/grafana/plugins/{{ monitoring_grafana_plugin }}/plugin.json"
 
     - name: Render the compose file
       ansible.builtin.template:

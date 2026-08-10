@@ -11,6 +11,10 @@ datasource and dashboard.
 | `monitoring_grafana_home_dashboard` | `/d/spark-overview/spark-overview` | also what `make dashboard` checks the uid against |
 | `monitoring_grafana_anonymous_role` | `Viewer` | what an unauthenticated visitor may do. See [SECURITY.md](../../SECURITY.md) |
 | `monitoring_grafana_theme` | `dark` | |
+| `monitoring_grafana_plugin` | `volkovlabs-echarts-panel` | the one panel type Grafana does not ship that the dashboard needs |
+| `monitoring_grafana_plugin_version` | `7.2.5` | needs Grafana 12.3 or newer |
+| `monitoring_grafana_plugin_checksum` | a `sha256:` literal | bump it with the version or the converge fails |
+| `monitoring_grafana_plugin_url` | grafana.com download API | |
 | `prometheus_image` | `prom/prometheus:v3.13.2` | never pin below the running version |
 | `grafana_image` | `grafana/grafana:13.1.1` | never pin below the running version |
 | `prometheus_bind_address` | `127.0.0.1` | published address on the host |
@@ -23,6 +27,20 @@ datasource and dashboard.
 
 Dashboards edited in the Grafana UI are kept in the `grafana-data` volume; the provisioned file in
 this repo wins on the next converge.
+
+## The panel plugin
+
+The dashboard's power flow diagram is a sankey, and Grafana has no built-in sankey. The role
+downloads and checksums the plugin itself, then bind-mounts that one directory into Grafana's plugin
+path. `GF_INSTALL_PLUGINS` is not used: it makes Grafana fetch from grafana.com at every container
+start, so a box whose WiFi is down comes up with a broken panel and no error anyone sees.
+
+Bumping the version means bumping `monitoring_grafana_plugin_checksum` in the same edit:
+
+```bash
+curl -sL "https://grafana.com/api/plugins/volkovlabs-echarts-panel/versions/7.2.5/download" \
+  | shasum -a 256
+```
 
 ## Installing a dashboard from another project
 

@@ -69,6 +69,11 @@ services:
       - GF_USERS_HOME_PAGE={{ monitoring_grafana_home_dashboard }}
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      # Only this one plugin directory, mounted inside Grafana's own plugin path
+      # rather than replacing it with GF_PATHS_PLUGINS. Moving the whole path to
+      # a read-only mount makes Grafana's background installer fail on every
+      # bundled app it tries to update, once per app, at every start.
+      - "./grafana/plugins/{{ monitoring_grafana_plugin }}:/var/lib/grafana/plugins/{{ monitoring_grafana_plugin }}:ro"
       # Two sibling mounts under a directory Docker creates in the container's
       # own layer. Neither may be the other's parent: mounting one inside a
       # read-only bind mount fails at container init, because runc has to

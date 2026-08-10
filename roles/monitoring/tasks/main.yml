@@ -19,6 +19,31 @@
     # of these it cannot open.
     - "{{ monitoring_dir }}/grafana/provisioning/alerting"
     - "{{ monitoring_dir }}/grafana/provisioning/plugins"
+    # Where the panel plugin is unpacked, bind-mounted as Grafana's plugin root.
+    - "{{ monitoring_dir }}/grafana/plugins"
+
+# A literal hash, not a checksum-file URL as in the exporters role: grafana.com
+# publishes no sums file beside the download, so the version and the hash are
+# pinned together here and a bumped version with a stale hash fails the converge.
+- name: Fetch the Grafana panel plugin archive
+  ansible.builtin.get_url:
+    url: "{{ monitoring_grafana_plugin_url }}"
+    dest: "{{ monitoring_dir }}/{{ monitoring_grafana_plugin }}-{{ monitoring_grafana_plugin_version }}.zip"
+    checksum: "{{ monitoring_grafana_plugin_checksum }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Unpack the Grafana panel plugin the power flow diagram needs
+  ansible.builtin.unarchive:
+    src: "{{ monitoring_dir }}/{{ monitoring_grafana_plugin }}-{{ monitoring_grafana_plugin_version }}.zip"
+    dest: "{{ monitoring_dir }}/grafana/plugins"
+    remote_src: true
+    creates: "{{ monitoring_dir }}/grafana/plugins/{{ monitoring_grafana_plugin }}/plugin.json"
+  # No owner/group/mode: the archive already carries 0664 files under 0775
+  # directories, and forcing a file mode here would strip the execute bit the
+  # directories need for Grafana's own uid to traverse them.
+  notify: Restart monitoring stack
 
 - name: Template the compose file
   ansible.builtin.template:
