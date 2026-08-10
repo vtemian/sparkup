@@ -63,39 +63,49 @@ HWMON_SENSORS = (
 # as it is on the box. A subset would let a panel pass this harness and find
 # nothing on hardware.
 #
-# Watts are (idle, span), and value = idle + span * busy. `busy` tops out at
-# 0.65, so every span is scaled against that rather than against 1.0, which is
-# what makes the peak of the cycle land on the figures measured on the reference
-# box: sys_total 171 W, soc_pkg 138 W, pl1 139.7 W against its 140 W cap,
-# syspl1 153 W, the GPU rail 92 W, cpu_p 10.7 W idle rising to 20.6 W.
+# Watts are (idle, span), and value = idle + span * busy. `busy` runs from 0.05
+# to 0.65, and every pair is solved so that the bottom of the cycle lands on the
+# value read off the reference box at idle and the top lands on the value
+# measured under a saturating bf16 GEMM. Where only one end was measured the
+# other is shaped to be plausible and is not a claim: that is `prereg` above
+# idle, `cpu_e` above idle, and the pl2/syspl2 peaks.
 #
-# The nesting has to hold at BOTH ends of the cycle, not just at the peak: the
-# rails have to stay inside soc_pkg, soc_pkg inside sys_total and sys_total
-# inside dc_input at idle too. The power flow panel computes board overhead and
-# uncore as differences between channels, so an idle value that breaks the
-# nesting draws a box bigger than the box containing it.
+# Two things the box taught that guesswork had wrong. `prereg` is a 6 W rail, not
+# a pre-regulator total near `dc_input`. And `dc_input` idles a shade *below*
+# `sys_total` (28.79 against 29.00), so the two are equal within noise rather
+# than separated by a conversion loss; the power flow panel's `conversion` band
+# is a sliver on real hardware, not the fat band a fabricated gap produced.
+#
+# The nesting has to hold at BOTH ends of the cycle. The rails stay inside
+# soc_pkg, soc_pkg inside sys_total, sys_total inside dc_input, and cpu_gpu is
+# the sum of the CPU and GPU rails, which the box confirms: 15.96 W against
+# 11.90 + 3.34 + 0.02. The power flow panel computes board overhead and uncore as
+# differences between channels, so an idle value that breaks the nesting draws a
+# box bigger than the box containing it.
 SPBM_CHIP = "lnxsybus:00_nvda8800:00"
 SPBM_POWER = (
     ("power1", "sys_total", 28.0, 220.0),
     ("power2", "soc_pkg", 26.0, 172.3),
-    ("power3", "cpu_gpu", 25.0, 141.5),
-    ("power4", "cpu_p", 10.7, 15.2),
-    ("power5", "cpu_e", 1.0, 4.6),
-    ("power6", "vcore", 2.0, 10.8),
-    ("power7", "dc_input", 42.0, 212.3),
+    ("power3", "cpu_gpu", 17.3, 153.3),
+    ("power4", "cpu_p", 1.97, 28.7),
+    ("power5", "cpu_e", 0.0, 6.2),
+    ("power6", "vcore", 4.23, 7.33),
+    ("power7", "dc_input", 28.75, 225.0),
     ("power8", "gpu", 5.0, 133.8),
-    ("power9", "prereg", 40.0, 207.7),
-    # Present in the driver's channel table, unpopulated on GB10: there is no
-    # DLA behind it. A channel reading a flat zero is what the box shows, and
-    # panels have to survive it rather than assume every channel carries watts.
+    ("power9", "prereg", 4.22, 39.7),
+    # The DLA power rail, which reads 0.01 W on the box. Kept at zero, because a
+    # channel that carries no watts is a case panels have to survive rather than
+    # assume every channel is live. The thermal zone of the same name does report
+    # a real temperature; the two are not the same channel.
     ("power10", "dla", 0.0, 0.0),
     # `pl1` is an average of module power, so it tracks soc_pkg and grazes its
     # cap at the peak. It has to: a limit channel that never reaches its cap
-    # leaves every capping panel a flat "not capped" line and untestable.
-    ("power11", "pl1", 26.0, 174.9),
-    ("power12", "pl2", 26.0, 174.9),
-    ("power13", "syspl1", 28.0, 192.3),
-    ("power14", "syspl2", 28.0, 192.3),
+    # leaves every capping panel a flat "not capped" line and untestable. It sits
+    # just under soc_pkg at idle and just over it at the peak, as measured.
+    ("power11", "pl1", 13.93, 193.5),
+    ("power12", "pl2", 16.85, 191.0),
+    ("power13", "syspl1", 13.62, 214.4),
+    ("power14", "syspl2", 11.84, 227.9),
 )
 
 # `powerN_cap` and `powerN_max` exist only for the four limit channels, which is
@@ -103,15 +113,14 @@ SPBM_POWER = (
 # stock module budget and 20 W is the PD safety mode, and the channel reads the
 # same way in both. `_cap` is writable on the box and clamped to `_max`.
 #
-# pl1's 140 W cap and 250 W firmware ceiling and syspl1's 231 W cap are measured
-# on the reference box. The pl2 and syspl2 figures are placeholders shaped like
-# them; no reading was taken. The driver also exposes `powerN_min`, which nothing
-# queries yet.
+# Every figure here is read off the reference box, not chosen: pl1 140/250,
+# pl2 142/250, syspl1 231/300, syspl2 244/300. The driver also exposes
+# `powerN_min`, which reads 0.1 W on all four and which nothing queries.
 SPBM_LIMITS = (
     ("power11", 140.0, 250.0),
-    ("power12", 140.0, 250.0),
-    ("power13", 231.0, 281.0),
-    ("power14", 231.0, 281.0),
+    ("power12", 142.0, 250.0),
+    ("power13", 231.0, 300.0),
+    ("power14", 244.0, 300.0),
 )
 
 # Cumulative counters, in joules. Only these four exist in the firmware, and there
@@ -123,20 +132,23 @@ SPBM_ENERGY = (
     ("energy4", "gpu", "power8"),
 )
 
-# The driver's eight thermal zones, in its own order. `tj_max` and `dla` are the
-# two that read zero: GB10 answers N/A for every thermal-limit register, so there
-# is no Tjmax to report, and there is no DLA. Reproduced rather than omitted,
-# because the dashboard has to exclude them explicitly and would otherwise draw
-# two flat lines at zero next to real sensors.
+# The driver's eight thermal zones, in its own order. All eight carry a real
+# temperature: read on the reference box at idle, `tj_max` 32.5 °C tracking the
+# `gpu` zone exactly, `dla` 27.3 °C, the rest 32.2 to 32.5 °C. Despite the name,
+# `tj_max` is not a limit register.
+#
+# Only the idle values were observed. The `gpu` zone reaching 82 °C saturated is
+# measured; the spans on the other seven are shaped to be plausible beside it and
+# are not claims about how those zones behave under load.
 SPBM_TEMP = (
-    ("temp1", "tj_max", 0.0, 0.0),
+    ("temp1", "tj_max", 45.0, 57.0),
     ("temp2", "cpu_e_clu0", 41.0, 35.0),
     ("temp3", "cpu_p_clu0", 43.0, 42.0),
     ("temp4", "cpu_e_clu1", 41.0, 35.0),
     ("temp5", "cpu_p_clu1", 43.0, 42.0),
     ("temp6", "gpu", 45.0, 57.0),
     ("temp7", "soc", 42.0, 45.0),
-    ("temp8", "dla", 0.0, 0.0),
+    ("temp8", "dla", 27.0, 12.0),
 )
 
 
