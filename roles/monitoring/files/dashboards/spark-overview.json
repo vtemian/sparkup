@@ -1,18 +1,18 @@
 {
   "uid": "spark-overview",
   "title": "Spark overview",
-  "description": "System, GPU and exporter health for the DGX Spark. Provisioned from roles/monitoring/files/dashboards/spark-overview.json. Edit in the UI to experiment, then export the JSON and commit it, or the next converge overwrites the change.",
+  "description": "What this box is drawing, and what is limiting it. Provisioned from roles/monitoring/files/dashboards/spark-overview.json. Edit in the UI to experiment, then export the JSON and commit it, or the next converge overwrites the change.",
   "tags": [
     "spark",
     "system",
-    "gpu"
+    "gpu",
+    "power"
   ],
-  "timezone": "browser",
   "editable": true,
   "graphTooltip": 1,
-  "schemaVersion": 39,
-  "version": 1,
   "refresh": "10s",
+  "schemaVersion": 39,
+  "timezone": "browser",
   "time": {
     "from": "now-1h",
     "to": "now"
@@ -23,61 +23,233 @@
   "annotations": {
     "list": []
   },
+  "version": 1,
   "panels": [
     {
-      "id": 1,
-      "type": "row",
-      "title": "GPU",
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
-      "panels": []
-    },
-    {
-      "id": 2,
-      "type": "timeseries",
-      "title": "GPU utilisation",
-      "description": "Fraction of the sampling window in which at least one kernel was resident. It is an occupancy signal, not an efficiency one: a memory-bound kernel can read 100% while the SMs mostly wait.",
+      "id": 100,
+      "type": "stat",
+      "title": "Drawing now",
+      "description": "The whole box, DC side, from the firmware. Excludes PSU conversion loss so a wall meter reads a little higher. Peaks at 171 W on the reference box. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 8,
-        "w": 8,
+        "h": 4,
+        "w": 3,
         "x": 0,
-        "y": 1
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=\"sys_total\"}",
+          "legendFormat": "sys_total",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 101,
+      "type": "stat",
+      "title": "Module budget used",
+      "description": "`pl1` as a percentage of its own cap. This is the limit that actually binds on GB10: saturated, `pl1` pins at 139.7 W against a 140 W cap and nothing moves it. The 240 W in the product spec is the PSU rating and roughly 70 W of it is unreachable. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 3,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 60
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * (node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=\"pl1\"}) / on(chip, sensor) group_left() node_hwmon_power_cap_watt{job=\"node\"}",
+          "legendFormat": "pl1",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "type": "stat",
+      "title": "Module power cap",
+      "description": "**Read this before believing any other power number.** 140 W is the stock module budget. 20 W or 30 W means the EC has dropped into its USB-PD safety mode, which pins the GPU near 500 MHz; nvidia-smi cannot see it and only a cold drain clears it. The channel reads the same way in both cases, so the cap beside it is the only tell. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 6,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 100
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "node_hwmon_power_cap_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=\"pl1\"}",
+          "legendFormat": "pl1 cap",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 103,
+      "type": "stat",
+      "title": "GPU",
+      "description": "Occupancy, not efficiency: a memory-bound kernel reads 100% while the SMs wait.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 9,
+        "y": 0
       },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
           "min": 0,
           "max": 1,
-          "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "showPoints": "never"
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
           }
         },
         "overrides": []
       },
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true,
+        "colorMode": "none",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
           "calcs": [
-            "mean",
-            "max"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         }
       },
       "targets": [
@@ -88,34 +260,30 @@
             "uid": "prometheus"
           },
           "expr": "nvidia_smi_utilization_gpu_ratio{job=\"gpu\"}",
-          "legendFormat": "utilisation"
+          "legendFormat": "utilisation",
+          "instant": true
         }
       ]
     },
     {
-      "id": 3,
-      "type": "timeseries",
+      "id": 104,
+      "type": "stat",
       "title": "GPU temperature",
-      "description": "temperature.gpu from nvidia-smi. The shutdown and slowdown limit registers read N/A on GB10, so there is no headroom line to draw here, so judge it against the hwmon sensors below and against the throttle counters, not against a limit the hardware refuses to report.",
+      "description": "Saturated at the stock cap this box sits at 82 \u00b0C with zero thermal slowdown of any kind, so heat is not the limiter here and a fan curve does not buy anything.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 1
+        "h": 4,
+        "w": 3,
+        "x": 12,
+        "y": 0
       },
       "fieldConfig": {
         "defaults": {
           "unit": "celsius",
-          "min": 20,
-          "custom": {
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "showPoints": "never"
-          },
+          "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -125,13 +293,912 @@
               },
               {
                 "color": "orange",
-                "value": 75
+                "value": 85
               },
               {
                 "color": "red",
-                "value": 85
+                "value": 95
               }
             ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "nvidia_smi_temperature_gpu{job=\"gpu\"}",
+          "legendFormat": "GPU",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 105,
+      "type": "stat",
+      "title": "Load",
+      "description": "One-minute load average against 20 cores.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 15,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "node_load1{job=\"node\"}",
+          "legendFormat": "1m",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 106,
+      "type": "stat",
+      "title": "Uptime",
+      "description": "Since the last boot. A firmware capsule only lands on a reboot performed by hand.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 18,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dtdurations",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "time() - node_boot_time_seconds{job=\"node\"}",
+          "legendFormat": "uptime",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 107,
+      "type": "stat",
+      "title": "Targets up",
+      "description": "Both host exporters. Anything under 2 means a panel below is stale, not idle.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 21,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "min": 0,
+          "max": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 2
+              },
+              {
+                "color": "green",
+                "value": 2
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(up{job=~\"node|gpu\"})",
+          "legendFormat": "up",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 108,
+      "type": "row",
+      "title": "Power",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      }
+    },
+    {
+      "id": 109,
+      "type": "canvas",
+      "title": "Where the watts go",
+      "description": "The same watts, nested the way the firmware reports them: the GPU rail sits inside `soc_pkg`, which sits inside `sys_total`, which sits inside what arrives from the PSU. That nesting is the whole reason a GPU rail near 100 W is correct rather than disappointing: `pl1` is shared, so loading the Grace cores takes watts from the GPU instead of adding them. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 10,
+        "x": 0,
+        "y": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "inlineEditing": true,
+        "showAdvancedTypes": true,
+        "panZoom": false,
+        "infinitePan": false,
+        "root": {
+          "type": "frame",
+          "name": "Element 1",
+          "background": {
+            "color": {
+              "fixed": "transparent"
+            }
+          },
+          "border": {
+            "color": {
+              "fixed": "transparent"
+            }
+          },
+          "constraint": {
+            "horizontal": "left",
+            "vertical": "top"
+          },
+          "placement": {
+            "left": 0,
+            "top": 0,
+            "width": 748,
+            "height": 330,
+            "rotation": 0
+          },
+          "elements": [
+            {
+              "type": "rectangle",
+              "name": "dc_input",
+              "background": {
+                "color": {
+                  "fixed": "rgba(31, 41, 61, 0.55)"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#3d5a99"
+                },
+                "width": 2
+              },
+              "config": {
+                "align": "right",
+                "valign": "top",
+                "color": {
+                  "fixed": "#c7ccd6"
+                },
+                "size": 14,
+                "text": {
+                  "mode": "field",
+                  "field": "dc_input",
+                  "fixed": ""
+                }
+              },
+              "constraint": {
+                "horizontal": "scale",
+                "vertical": "scale"
+              },
+              "placement": {
+                "left": 0.0,
+                "right": 0.0,
+                "top": 0.0,
+                "bottom": 0.0,
+                "rotation": 0
+              }
+            },
+            {
+              "type": "text",
+              "name": "dc_input caption",
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "config": {
+                "align": "left",
+                "valign": "top",
+                "color": {
+                  "fixed": "#8e95a3"
+                },
+                "size": 11,
+                "text": {
+                  "mode": "fixed",
+                  "fixed": "dc_input"
+                }
+              },
+              "constraint": {
+                "horizontal": "scale",
+                "vertical": "scale"
+              },
+              "placement": {
+                "left": 1.07,
+                "right": 1.07,
+                "top": 1.212,
+                "bottom": 93.939,
+                "rotation": 0
+              }
+            },
+            {
+              "type": "rectangle",
+              "name": "sys_total",
+              "background": {
+                "color": {
+                  "fixed": "rgba(31, 61, 51, 0.55)"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#3d9977"
+                },
+                "width": 2
+              },
+              "config": {
+                "align": "right",
+                "valign": "top",
+                "color": {
+                  "fixed": "#c7ccd6"
+                },
+                "size": 14,
+                "text": {
+                  "mode": "field",
+                  "field": "sys_total",
+                  "fixed": ""
+                }
+              },
+              "constraint": {
+                "horizontal": "scale",
+                "vertical": "scale"
+              },
+              "placement": {
+                "left": 2.139,
+                "right": 2.139,
+                "top": 13.333,
+                "bottom": 4.848,
+                "rotation": 0
+              }
+            },
+            {
+              "type": "text",
+              "name": "sys_total caption",
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "config": {
+                "align": "left",
+                "valign": "top",
+                "color": {
+                  "fixed": "#8e95a3"
+                },
+                "size": 11,
+                "text": {
+                  "mode": "fixed",
+                  "fixed": "sys_total"
+                }
+              },
+              "constraint": {
+                "horizontal": "scale",
+                "vertical": "scale"
+              },
+              "placement": {
+                "left": 3.209,
+                "right": 3.209,
+                "top": 14.545,
+                "bottom": 80.606,
+                "rotation": 0
+              }
+            },
+            {
+              "type": "rectangle",
+              "name": "soc_pkg",
+              "background": {
+                "color": {
+                  "fixed": "rgba(61, 51, 31, 0.55)"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#997d3d"
+                },
+                "width": 2
+              },
+              "config": {
+                "align": "right",
+                "valign": "top",
+                "color": {
+                  "fixed": "#c7ccd6"
+                },
+                "size": 14,
+                "text": {
+                  "mode": "field",
+                  "field": "soc_pkg",
+                  "fixed": ""
+                }
+              },
+              "constraint": {
+                "horizontal": "scale",
+                "vertical": "scale"
+              },
+              "placement": {
+                "left": 4.278,
+                "right": 4.278,
+                "top": 27.879,
+                "bottom": 8.485,
+                "rotation": 0
+              }
+            },
+            {
+              "type": "text",
+              "name": "soc_pkg caption",
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "config": {
+                "align": "left",
+                "valign": "top",
+                "color": {
+                  "fixed": "#8e95a3"
+                },
+                "size": 11,
+                "text": {
+                  "mode": "fixed",
+                  "fixed": "soc_pkg"
+                }
+              },
+              "constraint": {
+                "horizontal": "scale",
+                "vertical": "scale"
+              },
+              "placement": {
+                "left": 5.348,
+                "right": 5.348,
+                "top": 29.091,
+                "bottom": 66.061,
+                "rotation": 0
+              }
+            },
+            {
+              "type": "rectangle",
+              "name": "gpu",
+              "background": {
+                "color": {
+                  "fixed": "rgba(20, 26, 38, 0.85)"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#5794f2"
+                },
+                "width": 2
+              },
+              "config": {
+                "align": "center",
+                "valign": "middle",
+                "color": {
+                  "fixed": "#e6e9ef"
+                },
+                "size": 30,
+                "text": {
+                  "mode": "field",
+                  "field": "gpu",
+                  "fixed": ""
+                }
+              },
+              "constraint": {
+                "horizontal": "scale",
+                "vertical": "scale"
+              },
+              "placement": {
+                "left": 6.417,
+                "right": 53.476,
+                "top": 42.424,
+                "bottom": 13.939,
+                "rotation": 0
+              }
+            },
+            {
+              "type": "text",
+              "name": "gpu caption",
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "config": {
+                "align": "left",
+                "valign": "top",
+                "color": {
+                  "fixed": "#8e95a3"
+                },
+                "size": 11,
+                "text": {
+                  "mode": "fixed",
+                  "fixed": "gpu"
+                }
+              },
+              "constraint": {
+                "horizontal": "scale",
+                "vertical": "scale"
+              },
+              "placement": {
+                "left": 7.487,
+                "right": 54.545,
+                "top": 43.636,
+                "bottom": 51.515,
+                "rotation": 0
+              }
+            },
+            {
+              "type": "rectangle",
+              "name": "cpu_p",
+              "background": {
+                "color": {
+                  "fixed": "rgba(20, 26, 38, 0.85)"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#b877d9"
+                },
+                "width": 2
+              },
+              "config": {
+                "align": "center",
+                "valign": "middle",
+                "color": {
+                  "fixed": "#e6e9ef"
+                },
+                "size": 22,
+                "text": {
+                  "mode": "field",
+                  "field": "cpu_p",
+                  "fixed": ""
+                }
+              },
+              "constraint": {
+                "horizontal": "scale",
+                "vertical": "scale"
+              },
+              "placement": {
+                "left": 48.128,
+                "right": 31.016,
+                "top": 42.424,
+                "bottom": 13.939,
+                "rotation": 0
+              }
+            },
+            {
+              "type": "text",
+              "name": "cpu_p caption",
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "config": {
+                "align": "left",
+                "valign": "top",
+                "color": {
+                  "fixed": "#8e95a3"
+                },
+                "size": 11,
+                "text": {
+                  "mode": "fixed",
+                  "fixed": "cpu_p"
+                }
+              },
+              "constraint": {
+                "horizontal": "scale",
+                "vertical": "scale"
+              },
+              "placement": {
+                "left": 49.198,
+                "right": 32.086,
+                "top": 43.636,
+                "bottom": 51.515,
+                "rotation": 0
+              }
+            },
+            {
+              "type": "rectangle",
+              "name": "cpu_e",
+              "background": {
+                "color": {
+                  "fixed": "rgba(20, 26, 38, 0.85)"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#b877d9"
+                },
+                "width": 2
+              },
+              "config": {
+                "align": "center",
+                "valign": "middle",
+                "color": {
+                  "fixed": "#e6e9ef"
+                },
+                "size": 16,
+                "text": {
+                  "mode": "field",
+                  "field": "cpu_e",
+                  "fixed": ""
+                }
+              },
+              "constraint": {
+                "horizontal": "scale",
+                "vertical": "scale"
+              },
+              "placement": {
+                "left": 70.588,
+                "right": 18.182,
+                "top": 42.424,
+                "bottom": 13.939,
+                "rotation": 0
+              }
+            },
+            {
+              "type": "text",
+              "name": "cpu_e caption",
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "config": {
+                "align": "left",
+                "valign": "top",
+                "color": {
+                  "fixed": "#8e95a3"
+                },
+                "size": 11,
+                "text": {
+                  "mode": "fixed",
+                  "fixed": "cpu_e"
+                }
+              },
+              "constraint": {
+                "horizontal": "scale",
+                "vertical": "scale"
+              },
+              "placement": {
+                "left": 71.658,
+                "right": 19.251,
+                "top": 43.636,
+                "bottom": 51.515,
+                "rotation": 0
+              }
+            },
+            {
+              "type": "rectangle",
+              "name": "vcore",
+              "background": {
+                "color": {
+                  "fixed": "rgba(20, 26, 38, 0.85)"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#ff9830"
+                },
+                "width": 2
+              },
+              "config": {
+                "align": "center",
+                "valign": "middle",
+                "color": {
+                  "fixed": "#e6e9ef"
+                },
+                "size": 16,
+                "text": {
+                  "mode": "field",
+                  "field": "vcore",
+                  "fixed": ""
+                }
+              },
+              "constraint": {
+                "horizontal": "scale",
+                "vertical": "scale"
+              },
+              "placement": {
+                "left": 83.422,
+                "right": 6.417,
+                "top": 42.424,
+                "bottom": 13.939,
+                "rotation": 0
+              }
+            },
+            {
+              "type": "text",
+              "name": "vcore caption",
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "config": {
+                "align": "left",
+                "valign": "top",
+                "color": {
+                  "fixed": "#8e95a3"
+                },
+                "size": 11,
+                "text": {
+                  "mode": "fixed",
+                  "fixed": "vcore"
+                }
+              },
+              "constraint": {
+                "horizontal": "scale",
+                "vertical": "scale"
+              },
+              "placement": {
+                "left": 84.492,
+                "right": 7.487,
+                "top": 43.636,
+                "bottom": 51.515,
+                "rotation": 0
+              }
+            }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"dc_input|sys_total|soc_pkg|gpu|cpu_p|cpu_e|vcore\"}",
+          "legendFormat": "{{label}}",
+          "instant": true,
+          "format": "time_series"
+        }
+      ]
+    },
+    {
+      "id": 110,
+      "type": "volkovlabs-echarts-panel",
+      "title": "Power flow",
+      "description": "Where the watts end up, at the last scrape. `conversion`, `board` and `uncore` are differences between channels rather than channels of their own: the firmware has no accumulator for them. `cpu_gpu` is deliberately absent, because it is a combined rail that overlaps the ones drawn here and would double-count; it is on the time series below. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 14,
+        "x": 10,
+        "y": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt"
+        },
+        "overrides": []
+      },
+      "options": {
+        "getOption": "// Watts, keyed by the firmware's own channel label.\nconst frame = context.panel.data.series[0];\nif (!frame) {\n  return {};\n}\nconst read = (name) => {\n  const field = frame.fields.find((f) => f.name === name);\n  if (!field) {\n    return [];\n  }\n  return field.values.toArray ? field.values.toArray() : Array.from(field.values);\n};\nconst names = read('label');\nconst values = read('Value');\nconst watts = {};\nnames.forEach((name, i) => {\n  watts[name] = Number(values[i]) || 0;\n});\nconst at = (key) => watts[key] || 0;\n\n// Residuals, not measurements: the firmware has no channel for board overhead\n// or for whatever inside the package is not one of the four named rails, so\n// both are differences and are clamped at zero rather than allowed to go\n// negative when two channels are sampled a moment apart.\nconst rest = (whole, parts) => Math.max(0, at(whole) - parts);\nconst rails = at('gpu') + at('cpu_p') + at('cpu_e') + at('vcore');\n\nconst links = [\n  { source: 'dc_input', target: 'sys_total', value: at('sys_total') },\n  { source: 'dc_input', target: 'conversion', value: rest('dc_input', at('sys_total')) },\n  { source: 'sys_total', target: 'soc_pkg', value: at('soc_pkg') },\n  { source: 'sys_total', target: 'board', value: rest('sys_total', at('soc_pkg')) },\n  { source: 'soc_pkg', target: 'gpu', value: at('gpu') },\n  { source: 'soc_pkg', target: 'cpu_p', value: at('cpu_p') },\n  { source: 'soc_pkg', target: 'cpu_e', value: at('cpu_e') },\n  { source: 'soc_pkg', target: 'vcore', value: at('vcore') },\n  { source: 'soc_pkg', target: 'uncore', value: rest('soc_pkg', rails) },\n].filter((link) => link.value > 0.05);\n\nconst colour = {\n  dc_input: '#5794f2',\n  sys_total: '#73bf69',\n  soc_pkg: '#f2cc0c',\n  gpu: '#5794f2',\n  cpu_p: '#b877d9',\n  cpu_e: '#b877d9',\n  vcore: '#ff9830',\n  uncore: '#8e95a3',\n  board: '#8e95a3',\n  conversion: '#8e95a3',\n};\nconst nodes = Object.keys(colour).map((name) => ({\n  name,\n  itemStyle: { color: colour[name] },\n}));\n\nreturn {\n  backgroundColor: 'transparent',\n  tooltip: {\n    trigger: 'item',\n    valueFormatter: (value) => `${value.toFixed(1)} W`,\n  },\n  series: [\n    {\n      type: 'sankey',\n      left: 8,\n      right: 90,\n      top: 12,\n      bottom: 12,\n      nodeGap: 14,\n      nodeWidth: 14,\n      emphasis: { focus: 'adjacency' },\n      lineStyle: { color: 'gradient', opacity: 0.35 },\n      label: {\n        color: context.grafana.theme.colors.text.primary,\n        formatter: (params) => `${params.name}  ${params.value.toFixed(0)} W`,\n      },\n      data: nodes,\n      links,\n    },\n  ],\n};\n",
+        "renderer": "canvas",
+        "themeEditor": {
+          "name": "default",
+          "config": "{}"
+        },
+        "editor": {
+          "format": "auto"
+        },
+        "map": "none",
+        "visualEditor": {
+          "dataset": [],
+          "series": [],
+          "code": "return {}"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"dc_input|sys_total|soc_pkg|gpu|cpu_p|cpu_e|vcore\"}",
+          "legendFormat": "{{label}}",
+          "instant": true,
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 111,
+      "type": "timeseries",
+      "title": "System power: every channel",
+      "description": "Every telemetry channel the firmware reports, `cpu_gpu` included: it is CPU and GPU combined, so it overlaps `gpu` and `cpu_p` on purpose. `nvidia_smi_power_draw_watts` is the GPU rail alone and roughly half of `sys_total`. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
           }
         },
         "overrides": []
@@ -158,25 +1225,325 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "nvidia_smi_temperature_gpu{job=\"gpu\"}",
-          "legendFormat": "GPU"
+          "expr": "node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"sys_total|dc_input|soc_pkg|cpu_gpu|gpu|cpu_p|cpu_e|vcore\"}",
+          "legendFormat": "{{label}}"
         }
       ]
     },
     {
-      "id": 4,
+      "id": 112,
       "type": "timeseries",
-      "title": "GPU power draw",
-      "description": "The GPU rail only, roughly half of what the box actually pulls. It cannot see CPU, memory, NVMe, fans or PSU conversion loss, so never cost a run from this number. Whole-system power is the Power row below, which is empty unless spbm is switched on.",
+      "title": "The limit that binds: pl1 and syspl1 against their caps",
+      "description": "`pl1` is the GB10 module budget and the only limit that binds in practice: it pins at 139.7 W against its 140 W cap under a dense bf16 GEMM. `syspl1` peaks at 153 W against a 231 W cap it never approaches. The ceiling is what the cap could be raised to, which is firmware territory: GB10 answers N/A for every thermal-limit register, so there is no Tjmax to raise it against. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 1
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*(cap|ceiling)$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    12,
+                    8
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"pl1|syspl1\"}",
+          "legendFormat": "{{label}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "node_hwmon_power_cap_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"pl1|syspl1\"}",
+          "legendFormat": "{{label}} cap"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "node_hwmon_power_max_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"pl1|syspl1\"}",
+          "legendFormat": "{{label}} firmware ceiling"
+        }
+      ]
+    },
+    {
+      "id": 113,
+      "type": "state-timeline",
+      "title": "At the cap",
+      "description": "Each limit channel within 2% of its own cap, which is the only honest capping signal on this hardware. NVML's throttle reasons are not: they sit above the EC and read Not Active with `pl1` pinned. A workload below the cap is not a fault either, it is a workload that is not compute-bound. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "under the cap",
+                  "color": "green",
+                  "index": 0
+                },
+                "1": {
+                  "text": "at the cap",
+                  "color": "orange",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "mergeValues": true,
+        "showValue": "never",
+        "alignValue": "left",
+        "rowHeight": 0.8,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "(node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"pl1|syspl1\"}) / on(chip, sensor) group_left() node_hwmon_power_cap_watt{job=\"node\"} >= bool 0.98",
+          "legendFormat": "{{label}}"
+        }
+      ]
+    },
+    {
+      "id": 114,
+      "type": "bargauge",
+      "title": "Energy by rail over this range",
+      "description": "From the firmware's own accumulators, so this is a counter increase rather than an integral. Only four exist: `pkg`, `cpu_e`, `cpu_p` and `gpu`. None of them is `sys_total`, which is why the whole-box figure beside this one is computed differently. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watth",
+          "decimals": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "increase(node_hwmon_energy_joule_total{job=\"node\"}[$__range]) / 3600 * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\"}",
+          "legendFormat": "{{label}}",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 115,
+      "type": "stat",
+      "title": "Whole box, this range",
+      "description": "The `sys_total` gauge integrated over the selected range, because the firmware has no whole-system accumulator. The error scales with the scrape interval: at 15 s over a run measured in hours it is well under a percent. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 24
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watth",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "avg_over_time((node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=\"sys_total\"})[$__range:]) * $__range_s / 3600",
+          "legendFormat": "energy",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 116,
+      "type": "row",
+      "title": "GPU",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      }
+    },
+    {
+      "id": 117,
+      "type": "timeseries",
+      "title": "GPU rail: nvidia-smi against the firmware",
+      "description": "The same rail, measured two ways, and they disagree. nvidia-smi read 71.9 W against the firmware's 103.4 W at the same instant, 30 to 44% low, and its `power.limit` is permanently N/A on GB10. Cost a run from the firmware channel or not at all. The gap is also why the safety mode is so easy to miss: NVML cannot see the EC. The lower line is the one to distrust. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. A single line on a default box is the expected state, not a fault.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 31
       },
       "fieldConfig": {
         "defaults": {
@@ -213,15 +1580,24 @@
             "uid": "prometheus"
           },
           "expr": "nvidia_smi_power_draw_watts{job=\"gpu\"}",
-          "legendFormat": "GPU rail"
+          "legendFormat": "nvidia-smi power.draw"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=\"gpu\"}",
+          "legendFormat": "firmware gpu channel"
         }
       ]
     },
     {
-      "id": 5,
+      "id": 118,
       "type": "timeseries",
       "title": "GPU clocks",
-      "description": "Current graphics and SM clocks. Idle sits near 200 MHz and clocks.max.sm is 3003 MHz on this unit. A clock that sags while utilisation stays high is the visible half of throttling; the throttle counters are the other half.",
+      "description": "2418 MHz is not throttling: it is Default Applications Clocks, i.e. spec. The 3003 MHz nvidia-smi calls Max Clocks is the top of the clock table and not a sustained frequency, so it is deliberately not drawn here as a target line and the gap to it is not headroom. A GPU wedged near 500 MHz is the USB-PD safety mode, and the cap on the strip above is where that shows up.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -229,20 +1605,33 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 9
+        "x": 12,
+        "y": 31
       },
       "fieldConfig": {
         "defaults": {
           "unit": "hertz",
           "min": 0,
           "custom": {
-            "fillOpacity": 0,
+            "fillOpacity": 10,
             "lineWidth": 1,
             "showPoints": "never"
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "memory"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -277,14 +1666,243 @@
           },
           "expr": "nvidia_smi_clocks_current_sm_clock_hz{job=\"gpu\"}",
           "legendFormat": "sm"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "nvidia_smi_clocks_current_memory_clock_hz{job=\"gpu\"}",
+          "legendFormat": "memory"
         }
       ]
     },
     {
-      "id": 6,
+      "id": 119,
+      "type": "state-timeline",
+      "title": "NVML throttle reasons, which are blind to the EC",
+      "description": "**Not Active here proves nothing.** NVML sits above the EC: measured on this box, every reason read Not Active and the SW Power Capping counter did not advance through 75 s with `pl1` pinned at its cap. Kept because an Active reading is still information and because the absence is worth being able to see. The Power row's `At the cap` panel is the signal to trust.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 16,
+        "x": 0,
+        "y": 39
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "not active",
+                  "color": "dark-green",
+                  "index": 0
+                },
+                "1": {
+                  "text": "active",
+                  "color": "red",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "mergeValues": true,
+        "showValue": "never",
+        "alignValue": "left",
+        "rowHeight": 0.8,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "nvidia_smi_clocks_event_reasons_sw_power_cap{job=\"gpu\"}",
+          "legendFormat": "sw power cap"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "nvidia_smi_clocks_event_reasons_hw_thermal_slowdown{job=\"gpu\"}",
+          "legendFormat": "hw thermal slowdown"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "nvidia_smi_clocks_event_reasons_sw_thermal_slowdown{job=\"gpu\"}",
+          "legendFormat": "sw thermal slowdown"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "nvidia_smi_clocks_event_reasons_gpu_idle{job=\"gpu\"}",
+          "legendFormat": "gpu idle"
+        }
+      ]
+    },
+    {
+      "id": 120,
+      "type": "stat",
+      "title": "NVML: seconds power capped",
+      "description": "Cumulative since boot, per NVML. Read it next to the panel on the left: this counter failed to advance while the firmware had `pl1` pinned, so a small number is not evidence of a box that is not capped.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 4,
+        "x": 16,
+        "y": 39
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "nvidia_smi_clocks_event_reasons_counters_sw_power_cap_seconds{job=\"gpu\"}",
+          "legendFormat": "sw power cap",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 121,
+      "type": "stat",
+      "title": "GPU utilisation",
+      "description": "Occupancy over the last scrape, beside the throttle history it belongs to.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 4,
+        "x": 20,
+        "y": 39
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "nvidia_smi_utilization_gpu_ratio{job=\"gpu\"}",
+          "legendFormat": "utilisation",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 122,
       "type": "timeseries",
       "title": "Unified memory (GPU + CPU)",
-      "description": "This is the GPU memory panel. GB10 has unified memory: CPU and GPU share one 121 GiB pool and there is no discrete framebuffer, so nvidia-smi reports memory.used and memory.total as [N/A] and the exporter drops unavailable fields, so nvidia_smi_memory_used_bytes does not exist on this box, by design. That absence is correct, not a broken panel, and node_memory_* IS the GPU memory signal. Do not 'fix' it with DCGM's DCGM_FI_DEV_FB_* family: NVIDIA states DCGM does not support Spark, and nvmlDeviceGetMemoryInfo returns NVML_ERROR_NOT_SUPPORTED here.",
+      "description": "This is the GPU memory panel. GB10 has unified memory: CPU and GPU share one 121 GiB pool and there is no discrete framebuffer, so nvidia-smi reports memory.used and memory.total as [N/A], the exporter drops unavailable fields, and `nvidia_smi_memory_used_bytes` does not exist on this box by design. That absence is correct, not a broken panel, and `node_memory_*` IS the GPU memory signal. Do not 'fix' this by adding a DCGM exporter.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -292,8 +1910,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 9
+        "x": 0,
+        "y": 46
       },
       "fieldConfig": {
         "defaults": {
@@ -305,27 +1923,7 @@
             "showPoints": "never"
           }
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "total"
-            },
-            "properties": [
-              {
-                "id": "custom.fillOpacity",
-                "value": 0
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "text"
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
         "legend": {
@@ -373,23 +1971,10 @@
       ]
     },
     {
-      "id": 19,
-      "type": "row",
-      "title": "Power",
-      "collapsed": false,
-      "panels": [],
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 17
-      }
-    },
-    {
-      "id": 20,
+      "id": 123,
       "type": "timeseries",
-      "title": "System power",
-      "description": "Whole-system power from the firmware's SPBM region, via the spbm driver. `sys_total` is the box; `dc_input` is what arrives from the PSU. Both are DC-side and exclude PSU conversion loss, so a wall meter reads a little higher. This whole row is empty until you ask for it: set spbm_enabled: true, converge, then enrol the module's Secure Boot key at the console. Empty with spbm already on means the module is built but not loaded, which means the key is still not enrolled. See roles/spbm/README.md.",
+      "title": "GPU temperature",
+      "description": "The die sensor next to the firmware's own zones, which only exist with spbm on. Saturated at the stock cap this box sits at 82 \u00b0C with no thermal slowdown recorded, so the fan-curve advice circulating for this hardware addresses a throttle it does not have.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -397,13 +1982,13 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 18
+        "x": 12,
+        "y": 46
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "watt",
-          "min": 0,
+          "unit": "celsius",
+          "min": 20,
           "custom": {
             "fillOpacity": 10,
             "lineWidth": 1,
@@ -434,142 +2019,38 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"sys_total|dc_input|cpu_gpu|soc_pkg|gpu\"}",
-          "legendFormat": "{{label}}"
-        }
-      ]
-    },
-    {
-      "id": 21,
-      "type": "stat",
-      "title": "Drawing now",
-      "description": "`sys_total` at the last scrape. The GPU rail alone is roughly half of this, which is why costing a run from nvidia-smi understates it. Needs spbm; see the System power panel.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 12,
-        "y": 18
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watt",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "text",
-                "value": null
-              }
-            ]
-          }
+          "expr": "nvidia_smi_temperature_gpu{job=\"gpu\"}",
+          "legendFormat": "nvidia-smi GPU die"
         },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "none",
-        "graphMode": "area",
-        "textMode": "value",
-        "justifyMode": "center",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "targets": [
         {
-          "refId": "A",
+          "refId": "B",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=\"sys_total\"}",
-          "legendFormat": "sys_total",
-          "instant": true
+          "expr": "node_hwmon_temp_celsius{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"gpu|soc|cpu_p_clu0|cpu_p_clu1\"}",
+          "legendFormat": "firmware {{label}}"
         }
       ]
     },
     {
-      "id": 22,
-      "type": "stat",
-      "title": "Energy over this range",
-      "description": "The sys_total gauge integrated over the selected range. There is no whole-system energy counter in the firmware (only pkg, cpu_e, cpu_p and gpu have one), so this is an integral whose error scales with the scrape interval. At 15s over a run measured in hours that is well under a percent. Needs spbm; see the System power panel.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 18,
-        "y": 18
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watth",
-          "decimals": 1,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "text",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "none",
-        "graphMode": "none",
-        "textMode": "value",
-        "justifyMode": "center",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "avg_over_time((node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=\"sys_total\"})[$__range:]) * $__range_s / 3600",
-          "legendFormat": "energy",
-          "instant": true
-        }
-      ]
-    },
-    {
-      "id": 7,
+      "id": 124,
       "type": "row",
       "title": "Host",
       "collapsed": false,
+      "panels": [],
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 26
-      },
-      "panels": []
+        "y": 54
+      }
     },
     {
-      "id": 8,
+      "id": 125,
       "type": "timeseries",
       "title": "CPU busy",
-      "description": "Share of all 20 cores not idle. Ten Cortex-X925 and ten Cortex-A725 are averaged together, so a saturated big-core cluster reads about 50%.",
+      "description": "Averaged over all 20 cores, so a saturated big-core cluster reads about half. Loading these cores does not add watts to the box, it moves them: `cpu_p` and `gpu` share `pl1`.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -578,7 +2059,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 27
+        "y": 55
       },
       "fieldConfig": {
         "defaults": {
@@ -621,10 +2102,10 @@
       ]
     },
     {
-      "id": 9,
+      "id": 126,
       "type": "timeseries",
       "title": "Load average",
-      "description": "Runnable plus uninterruptible tasks. Read it against the core count drawn alongside: sustained load above it means work is queueing, not just running.",
+      "description": "Against the core count, drawn as a line so the crossover is visible.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -633,14 +2114,14 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 27
+        "y": 55
       },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
           "min": 0,
           "custom": {
-            "fillOpacity": 0,
+            "fillOpacity": 10,
             "lineWidth": 1,
             "showPoints": "never"
           }
@@ -657,10 +2138,14 @@
                 "value": {
                   "fill": "dash",
                   "dash": [
-                    8,
-                    6
+                    12,
+                    8
                   ]
                 }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
               },
               {
                 "id": "color",
@@ -728,10 +2213,10 @@
       ]
     },
     {
-      "id": 10,
-      "type": "stat",
-      "title": "Uptime",
-      "description": "Since the last boot. A reboot is the one operation this box does not survive unattended mid-run, so an unexpectedly small number here is worth explaining.",
+      "id": 127,
+      "type": "timeseries",
+      "title": "Network",
+      "description": "Per interface. The reference box is headless on WiFi with no wired fallback, so this is also the panel that tells you whether the link you would recover the box over is alive.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -740,70 +2225,14 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 27
+        "y": 55
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "dtdurations",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "text",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "none",
-        "graphMode": "none",
-        "textMode": "value",
-        "justifyMode": "center",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        }
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "time() - node_boot_time_seconds{job=\"node\"}",
-          "legendFormat": "uptime",
-          "instant": true
-        }
-      ]
-    },
-    {
-      "id": 11,
-      "type": "timeseries",
-      "title": "Temperatures: every hwmon sensor",
-      "description": "Every temperature the kernel exposes under hwmon: the SoC thermal zone, the NVMe sensors, and, with spbm switched on, the eight zones its driver adds. spbm's power and energy channels are on the Power row, not here.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 35
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "celsius",
-          "min": 20,
+          "unit": "Bps",
+          "min": 0,
           "custom": {
-            "fillOpacity": 0,
+            "fillOpacity": 10,
             "lineWidth": 1,
             "showPoints": "never"
           }
@@ -812,8 +2241,8 @@
       },
       "options": {
         "legend": {
-          "displayMode": "table",
-          "placement": "right",
+          "displayMode": "list",
+          "placement": "bottom",
           "showLegend": true,
           "calcs": [
             "mean",
@@ -832,26 +2261,89 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_hwmon_temp_celsius{job=\"node\"}",
+          "expr": "rate(node_network_receive_bytes_total{job=\"node\",device!=\"lo\"}[$__rate_interval])",
+          "legendFormat": "{{device}} in"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(node_network_transmit_bytes_total{job=\"node\",device!=\"lo\"}[$__rate_interval])",
+          "legendFormat": "{{device}} out"
+        }
+      ]
+    },
+    {
+      "id": 128,
+      "type": "timeseries",
+      "title": "Temperatures: every hwmon sensor",
+      "description": "Every temperature the kernel exposes under hwmon: the SoC thermal zone, the NVMe sensors, the WiFi radio, and with spbm on the eight zones its driver adds. Two of those eight read a flat zero on GB10 and are filtered out here rather than drawn: `tj_max`, because this hardware answers N/A for every thermal-limit register, and `dla`, because there is no DLA behind the channel. spbm's power and energy channels are on the Power row, not here.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 63
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "min": 20,
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "node_hwmon_temp_celsius{job=\"node\"} > 0",
           "legendFormat": "{{chip}} / {{sensor}}"
         }
       ]
     },
     {
-      "id": 12,
+      "id": 129,
       "type": "row",
       "title": "Disk",
       "collapsed": false,
+      "panels": [],
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 43
-      },
-      "panels": []
+        "y": 71
+      }
     },
     {
-      "id": 13,
+      "id": 130,
       "type": "bargauge",
       "title": "Filesystem usage",
       "description": "Per mounted filesystem. Docker overlays, snap loops and the pseudo-filesystems are excluded at the exporter, which is deliberate: mounting the host root into a containerised node-exporter made the filesystem collector recurse them and hang, and that is why this box had no disk metrics at all until the exporter moved to the host.",
@@ -863,7 +2355,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 44
+        "y": 72
       },
       "fieldConfig": {
         "defaults": {
@@ -916,10 +2408,10 @@
       ]
     },
     {
-      "id": 14,
+      "id": 131,
       "type": "timeseries",
       "title": "Root filesystem: free space",
-      "description": "The single 3.7 TB NVMe. There is no separate /home on this box, so datasets, checkpoints, container images and logs all consume the same 3.5 TB of headroom.",
+      "description": "A trend, so a run filling the disk is visible before it does.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -928,7 +2420,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 44
+        "y": 72
       },
       "fieldConfig": {
         "defaults": {
@@ -948,8 +2440,8 @@
           "placement": "bottom",
           "showLegend": true,
           "calcs": [
-            "min",
-            "lastNotNull"
+            "mean",
+            "max"
           ]
         },
         "tooltip": {
@@ -970,10 +2462,10 @@
       ]
     },
     {
-      "id": 15,
+      "id": 132,
       "type": "stat",
       "title": "Root filesystem (holds the shared artifact directory)",
-      "description": "Datasets, checkpoints and run metadata live in the shared artifact directory, spark_shared_dir, which defaults to /srv/spark. It sits outside any home directory on purpose, because a laptop rsyncing a home directory with --delete would erase whatever was written there. It is a directory on the root filesystem rather than a mount of its own, so node_exporter emits no series for it and a query for its mountpoint would match nothing; these figures are the root filesystem's, which is the pool it actually draws from. Repoint this panel if it ever gets its own filesystem.",
+      "description": "`/srv/spark` lives here, so this is the number a job writing artifacts runs out of.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -982,7 +2474,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 44
+        "y": 72
       },
       "fieldConfig": {
         "defaults": {
@@ -1001,7 +2493,7 @@
       },
       "options": {
         "colorMode": "none",
-        "graphMode": "area",
+        "graphMode": "none",
         "textMode": "value_and_name",
         "justifyMode": "center",
         "reduceOptions": {
@@ -1034,23 +2526,23 @@
       ]
     },
     {
-      "id": 16,
+      "id": 133,
       "type": "row",
       "title": "Exporter health",
       "collapsed": false,
+      "panels": [],
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 52
-      },
-      "panels": []
+        "y": 80
+      }
     },
     {
-      "id": 17,
+      "id": 134,
       "type": "timeseries",
       "title": "Targets up",
-      "description": "When telemetry lies, this is the first question: is the exporter alive? 1 is up, 0 is a failed scrape. A flat line at 0 for the gpu job usually means the systemd unit died; a gap means Prometheus itself was down. Never diagnose this by curling the exporter: curl 127.0.0.1:9100 hangs on this box even when node-exporter is healthy.",
+      "description": "Zero here makes every panel above it stale rather than idle. The exporters are host systemd units, not containers, so a target going down is a unit to look at with `systemctl status`, not a compose stack.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1059,7 +2551,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 53
+        "y": 81
       },
       "fieldConfig": {
         "defaults": {
@@ -1068,35 +2560,21 @@
           "max": 1,
           "decimals": 0,
           "custom": {
-            "fillOpacity": 20,
-            "lineWidth": 2,
-            "showPoints": "never",
-            "lineInterpolation": "stepAfter"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never"
           }
         },
         "overrides": []
       },
       "options": {
         "legend": {
-          "displayMode": "table",
-          "placement": "right",
+          "displayMode": "list",
+          "placement": "bottom",
           "showLegend": true,
           "calcs": [
-            "min",
-            "lastNotNull"
+            "mean",
+            "max"
           ]
         },
         "tooltip": {
@@ -1117,10 +2595,10 @@
       ]
     },
     {
-      "id": 18,
+      "id": 135,
       "type": "timeseries",
       "title": "Scrape duration",
-      "description": "How long each target takes to answer. A duration climbing toward the scrape interval is an exporter about to start failing: the containerised node-exporter's filesystem hang showed up here before it showed up as a down target.",
+      "description": "The GPU job forks nvidia-smi on every scrape, so it is the slow one by construction. A node job climbing toward the interval means the filesystem collector found something to recurse.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1129,14 +2607,14 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 53
+        "y": 81
       },
       "fieldConfig": {
         "defaults": {
           "unit": "s",
           "min": 0,
           "custom": {
-            "fillOpacity": 0,
+            "fillOpacity": 10,
             "lineWidth": 1,
             "showPoints": "never"
           }
@@ -1145,8 +2623,8 @@
       },
       "options": {
         "legend": {
-          "displayMode": "table",
-          "placement": "right",
+          "displayMode": "list",
+          "placement": "bottom",
           "showLegend": true,
           "calcs": [
             "mean",

@@ -66,6 +66,14 @@ curl -s localhost:9100/metrics | grep node_hwmon_power_watt
 energy accumulators (`pkg`, `cpu_e`, `cpu_p`, `gpu`) and 8 temperatures, all as hwmon sensors. No
 extra exporter, no extra scrape job, no hardware.
 
+The four limit channels (`pl1`, `pl2`, `syspl1`, `syspl2`) also carry `node_hwmon_power_cap_watt`,
+the limit in force, and `node_hwmon_power_max_watt`, the firmware ceiling above it. No other channel
+does. A `pl1` reading means nothing without the cap beside it, because 140 W is the stock module
+budget and 20 W is the USB-PD safety mode and the channel reads the same way in both.
+
+Two of the eight temperatures read a flat zero on GB10: `tj_max`, because this hardware answers N/A
+for every thermal-limit register, and `dla`, because there is no DLA behind the channel.
+
 `node_hwmon_power_watt` is a gauge; `node_hwmon_energy_joule_total` is a **counter** in
 **joules**, not watt-hours. The metric drops the sysfs `_input` suffix that the filename carries,
 so the obvious spelling is the wrong one. Both are labelled `chip` and `sensor`, where `sensor` is

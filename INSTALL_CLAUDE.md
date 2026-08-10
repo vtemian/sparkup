@@ -354,6 +354,64 @@ stubbed. A fake that reported success would be worse than no test.
   `tests/fake_exporters.py` synthesises the spbm power, energy and label series. Both are correct:
   they check the panels against a box where `spbm_enabled` is true. Do not "fix" the harness by
   removing those synthetic channels; that would only stop the row being checked at all.
+- **The harness models all 14 spbm power channels, in the driver's order, and that order is not
+  guessable.** It is `sys_total soc_pkg cpu_gpu cpu_p cpu_e vcore dc_input gpu prereg dla pl1 pl2
+  syspl1 syspl2`, taken from `pwr_chans[]` in the driver source, so `power11` is `pl1` in the harness
+  exactly as on the box. `powerN_cap`, `powerN_max` and `powerN_min` exist for the four limit
+  channels **only**. `_cap` is the effective limit and is writable; `_max` is the firmware ceiling.
+- **The nesting between channels has to hold at idle as well as at load.** The power flow and canvas
+  panels compute board overhead and uncore as differences between channels, so a synthetic idle
+  value that puts the rails above `soc_pkg`, or `soc_pkg` above `sys_total`, draws a box larger than
+  the box containing it. This is why every span in `SPBM_POWER` is scaled against `busy` topping out
+  at 0.65 rather than at 1.0, and why `pl1` tracks `soc_pkg`: it has to graze its 140 W cap at the
+  peak or the capping panels are a flat "not capped" line that nothing tests.
+- **`nvidia_smi_power_draw_watts` in the harness is derived from the firmware `gpu` channel and then
+  made to read low, on purpose.** The dashboard has a panel whose entire point is the 30 to 44% gap
+  between the two. Driving them from different cycles let them cross, which taught the opposite of
+  what was measured.
+- **Two spbm channels read a flat zero on GB10 and both are reproduced rather than dropped:**
+  `tj_max`, because this hardware answers N/A for every thermal-limit register, and `dla`, because
+  there is no DLA behind the channel. The temperature panel filters with `> 0` for exactly this
+  reason. A harness that omits them lets somebody ship a panel that draws two zero lines on the box.
+- **`nvidia_smi_power_limit_watts` and `enforced_power_limit_watts` must stay off the dashboard.**
+  `power.limit` is permanently `[N/A]` on GB10 and the exporter drops unavailable fields, so those
+  series do not exist on the box. They are in `exporters_gpu_query_fields` because asking costs
+  nothing; a panel built on them is green in the harness and dead on hardware.
+- **`prochot` and `pl_level` are plain sysfs attributes, not hwmon channels.** The driver exposes
+  them through its own attribute group, so node_exporter's `hwmon` collector cannot see them and no
+  PromQL will ever find them. They are the EC's own throttle and power-limit-level status, i.e. the
+  signal NVML lacks, and getting them into Prometheus means a textfile-collector script. Not
+  attempted here: it needs a real box to confirm the sysfs path and the value encoding.
+- **The dashboard stays on schema v1 (`schemaVersion: 39`).** Grafana 13's dynamic dashboards, and
+  with them tabs, auto-grid and conditional rendering, need schema v2, which is still `v2beta1` and
+  which **file-based provisioning does not load** (grafana/grafana#106381; the only workaround is a
+  Kubernetes `GrafanaManifest`). Do not port the JSON to v2 to get tabs. It would also break
+  `tests/check_dashboard.py`, which walks `panels[]` and `targets[]`.
+- **Canvas placement is pixels, and the constraint decides what those pixels mean.** With the default
+  `left`/`top` the drawing sits at its authored size in a corner of a wide panel. With
+  `leftright`/`topbottom` every element stretches to the panel edges, which turns concentric boxes
+  into overlapping full-height columns. `scale` is the one that works, and under it Grafana reads
+  `left`/`right`/`top`/`bottom` as **percentages** and discards `width` and `height` entirely, so a
+  placement that still carries a width renders somewhere else. The canvas is authored against a
+  748x330 frame and converted to percentages.
+- **Concentric canvas elements cannot all centre their value.** `dc_input`, `sys_total` and `soc_pkg`
+  are drawn inside one another, so a centred value in each stacks all three in the middle of the
+  panel and then hides them behind the rails. The containers put their value in the top-right corner.
+- **`GF_PATHS_PLUGINS` must not point at a read-only mount.** Doing that makes Grafana's background
+  installer fail to update every bundled app it ships with, once per app, at every container start:
+  `failed to extract plugin archive: mkdir ...: read-only file system`. The panel plugin is instead
+  bind-mounted as a single directory *inside* Grafana's own plugin path, leaving that machinery alone.
+- **The panel plugin is downloaded by Ansible with a pinned checksum, not by `GF_INSTALL_PLUGINS`.**
+  The env var makes Grafana fetch from grafana.com at every container start, so a box whose WiFi is
+  down comes up with a panel reading "plugin not found" and nothing anybody sees. `get_url` with a
+  literal `sha256:` fails the converge instead. grafana.com publishes no sums file beside the
+  download, so the version and the hash are pinned together in `roles/monitoring/defaults/main.yml`
+  and must be bumped together.
+- **A panel that looks empty in `make harness-up` is usually not empty.** A fresh browser profile
+  needs the better part of twenty seconds to load Grafana's plugin bundles before any panel draws,
+  and a provisioned dashboard rewritten under an already-open tab leaves that tab's scene stale.
+  Reload the page before believing a blank panel, and check the panel query with
+  `python3 tests/check_dashboard.py --prometheus-url http://127.0.0.1:19090` before changing it.
 
 ---
 

@@ -17,9 +17,11 @@ in to a kernel module.
 
 ## What it looks like
 
-One dashboard, provisioned from a file in this repo: GPU load, temperature, power and clocks; CPU,
-unified memory and disk; and a row saying whether the exporters themselves are still alive. The
-Power row shown here is the part you opt into; everything else arrives by default.
+One dashboard, provisioned from a file in this repo. A status strip you can read from across the
+room, then the power the firmware reports and the cap it is being held to, the GPU rail measured both
+ways so you can see `nvidia-smi` reading low, clocks, temperatures, CPU, unified memory, network,
+disk, and a row saying whether the exporters themselves are still alive. The Power row is the part
+you opt into; everything else arrives by default.
 
 <p align="center">
   <img src=".github/dashboard.png" alt="The spark-overview dashboard" />
