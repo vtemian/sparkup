@@ -60,10 +60,19 @@ rejects_for() {
     esac
 }
 
+# A file rather than only an env var, for the same reason the become password is
+# one: it keeps the key out of shell history, out of `ps`, and out of any
+# transcript. Same shape as ~/.sparkup-become.
+KEY_FILE="${SPARKUP_ANTHROPIC_KEY_FILE:-${HOME}/.sparkup-anthropic-key}"
+if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -r "${KEY_FILE}" ]; then
+    ANTHROPIC_API_KEY="$(tr -d '\n' <"${KEY_FILE}")"
+    export ANTHROPIC_API_KEY
+fi
 if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-    echo "ANTHROPIC_API_KEY is not set." >&2
-    echo "The container cannot use a host login, so the CLI inside it needs a key:" >&2
-    echo "  export ANTHROPIC_API_KEY=...   # then re-run" >&2
+    echo "No API key. The container cannot use a host login, so the CLI in it needs one:" >&2
+    echo "  install -m 600 /dev/null ${KEY_FILE}" >&2
+    echo "  \$EDITOR ${KEY_FILE}      # paste the key, nothing else" >&2
+    echo "or export ANTHROPIC_API_KEY in the environment before running." >&2
     exit 2
 fi
 

@@ -5,10 +5,15 @@ an agent that has never seen this repo, by putting one in a container with a fak
 the verdict it reaches.
 
 ```bash
-export ANTHROPIC_API_KEY=...            # the container cannot use a host login
-./tests/skills/run.sh                   # every scenario, both arms
+install -m 600 /dev/null ~/.sparkup-anthropic-key   # the container cannot use a host login
+$EDITOR ~/.sparkup-anthropic-key                    # the key, nothing else
+./tests/skills/run.sh                               # every scenario, both arms
 ./tests/skills/run.sh at-the-cap with-skill
 ```
+
+`ANTHROPIC_API_KEY` in the environment works too. The file is the default because it keeps the key
+out of shell history, out of `ps` and out of any transcript, the same reason `~/.sparkup-become`
+exists.
 
 Not part of `make offline`. It calls a model, so it costs tokens and needs a key, and CI has neither.
 
