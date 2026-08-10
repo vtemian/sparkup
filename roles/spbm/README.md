@@ -66,13 +66,24 @@ curl -s localhost:9100/metrics | grep node_hwmon_power_watt
 energy accumulators (`pkg`, `cpu_e`, `cpu_p`, `gpu`) and 8 temperatures, all as hwmon sensors. No
 extra exporter, no extra scrape job, no hardware.
 
-The four limit channels (`pl1`, `pl2`, `syspl1`, `syspl2`) also carry `node_hwmon_power_cap_watt`,
-the limit in force, and `node_hwmon_power_max_watt`, the firmware ceiling above it. No other channel
-does. A `pl1` reading means nothing without the cap beside it, because 140 W is the stock module
-budget and 20 W is the USB-PD safety mode and the channel reads the same way in both.
+The four limit channels also carry `node_hwmon_power_cap_watt`, the limit in force, and
+`node_hwmon_power_max_watt`, the firmware ceiling above it. No other channel does. A `pl1` reading
+means nothing without the cap beside it, because 140 W is the stock module budget and 20 W is the
+USB-PD safety mode and the channel reads the same way in both. On the reference box:
 
-Two of the eight temperatures read a flat zero on GB10: `tj_max`, because this hardware answers N/A
-for every thermal-limit register, and `dla`, because there is no DLA behind the channel.
+| channel | cap | ceiling |
+|---|---|---|
+| `pl1` | 140 W | 250 W |
+| `pl2` | 142 W | 250 W |
+| `syspl1` | 231 W | 300 W |
+| `syspl2` | 244 W | 300 W |
+
+All eight temperatures carry a real reading. `tj_max` is a temperature despite the name, tracking the
+`gpu` zone, not a limit. The one channel that reads nothing is the `dla` **power** rail, at 0.01 W.
+
+The driver also exposes `prochot`, `pl_level` and `tj_max_c` as plain sysfs attributes rather than
+hwmon channels, so node_exporter cannot see them and no panel uses them. Their encoding is
+undocumented and the first two read a constant 1 on an idle box, so there is nothing yet to plot.
 
 `node_hwmon_power_watt` is a gauge; `node_hwmon_energy_joule_total` is a **counter** in
 **joules**, not watt-hours. The metric drops the sysfs `_input` suffix that the filename carries,

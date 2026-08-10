@@ -1179,8 +1179,8 @@
     {
       "id": 111,
       "type": "timeseries",
-      "title": "System power: every channel",
-      "description": "Every telemetry channel the firmware reports, `cpu_gpu` included: it is CPU and GPU combined, so it overlaps `gpu` and `cpu_p` on purpose. `nvidia_smi_power_draw_watts` is the GPU rail alone and roughly half of `sys_total`. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
+      "title": "System power: the telemetry channels",
+      "description": "The firmware's telemetry channels, `cpu_gpu` included: it is CPU and GPU combined, so it overlaps `gpu` and `cpu_p` on purpose, and on this box it is their sum. The four PL averages are the panel beside this one, and the `dla` rail is left out because it reads 0.01 W and would draw a flat line at zero. `nvidia_smi_power_draw_watts` is the GPU rail alone and roughly half of `sys_total`. Needs `spbm_enabled: true` and a human at the console to enrol the module's Secure Boot key; see roles/spbm/README.md. Empty on a default box is the expected state, not a fault.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1225,7 +1225,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"sys_total|dc_input|soc_pkg|cpu_gpu|gpu|cpu_p|cpu_e|vcore\"}",
+          "expr": "node_hwmon_power_watt{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"sys_total|dc_input|soc_pkg|cpu_gpu|gpu|cpu_p|cpu_e|vcore|prereg\"}",
           "legendFormat": "{{label}}"
         }
       ]
@@ -2279,7 +2279,7 @@
       "id": 128,
       "type": "timeseries",
       "title": "Temperatures: every hwmon sensor",
-      "description": "Every temperature the kernel exposes under hwmon: the SoC thermal zone, the NVMe sensors, the WiFi radio, and with spbm on the eight zones its driver adds. Two of those eight read a flat zero on GB10 and are filtered out here rather than drawn: `tj_max`, because this hardware answers N/A for every thermal-limit register, and `dla`, because there is no DLA behind the channel. spbm's power and energy channels are on the Power row, not here.",
+      "description": "Every temperature the kernel exposes under hwmon: the SoC thermal zone, the NVMe sensors, the WiFi radio, and with spbm on the eight zones its driver adds. All eight of those carry a real reading, `dla` included, and `tj_max` is a temperature rather than the limit its name suggests: on this box it tracks the `gpu` zone. spbm's power and energy channels are on the Power row, not here.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2324,7 +2324,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_hwmon_temp_celsius{job=\"node\"} > 0",
+          "expr": "node_hwmon_temp_celsius{job=\"node\"}",
           "legendFormat": "{{chip}} / {{sensor}}"
         }
       ]

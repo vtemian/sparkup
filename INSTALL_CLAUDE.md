@@ -369,10 +369,21 @@ stubbed. A fake that reported success would be worse than no test.
   made to read low, on purpose.** The dashboard has a panel whose entire point is the 30 to 44% gap
   between the two. Driving them from different cycles let them cross, which taught the opposite of
   what was measured.
-- **Two spbm channels read a flat zero on GB10 and both are reproduced rather than dropped:**
-  `tj_max`, because this hardware answers N/A for every thermal-limit register, and `dla`, because
-  there is no DLA behind the channel. The temperature panel filters with `> 0` for exactly this
-  reason. A harness that omits them lets somebody ship a panel that draws two zero lines on the box.
+- **All eight spbm thermal zones carry a real reading, `tj_max` and `dla` included.** Read off the
+  box at idle: `tj_max` 32.5 °C tracking the `gpu` zone exactly, `dla` 27.3 °C, the other six 32.2 to
+  32.5 °C. Despite its name `tj_max` is a temperature, not a limit. An earlier version of this file
+  claimed those two read a flat zero and the temperature panel filtered `> 0` to hide them; both were
+  wrong, and the filter was removed. The only spbm channel that really does read zero is the `dla`
+  *power* rail, at 0.01 W, which is a different channel from the `dla` thermal zone.
+- **`prochot`, `pl_level` and `tj_max_c` are not shippable as metrics, and this is the evidence.**
+  Sampled over 24 s on an idle box drawing 23 W of a 140 W `pl1` cap: `prochot` pinned at 1 and
+  `pl_level` pinned at 1. If 1 meant "asserted" the box would be throttling at idle, so it does not
+  mean that, and the driver only does a bare `ioread32` on all three with no encoding documented
+  anywhere. `tj_max_c` does move, 60 then 50 then 49, while the `gpu` zone sat flat at 32 °C, so it
+  is not a constant limit either. They remain the EC-level signal NVML lacks and they are still worth
+  having, but exporting them now would put a number on the board that nobody can read, and a
+  permanently-red PROCHOT panel is worse than no panel. What would settle it: sample all three
+  through a saturating burn and see which one tracks the cap.
 - **`nvidia_smi_power_limit_watts` and `enforced_power_limit_watts` must stay off the dashboard.**
   `power.limit` is permanently `[N/A]` on GB10 and the exporter drops unavailable fields, so those
   series do not exist on the box. They are in `exporters_gpu_query_fields` because asking costs
