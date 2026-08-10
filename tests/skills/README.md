@@ -27,26 +27,27 @@ the **only** difference between the arms, so a pass can be attributed to it.
 | `pd-safety-mode` | `pl1` cap collapsed to 20 W, GPU at 495 MHz | EC safety mode, needs a cold drain, needs someone at the machine |
 | `at-the-cap` | caps healthy, `pl1` pinned at 139.7/140 W | working as designed, 240 W is the PSU rating, nothing to fix |
 | `below-cap` | caps healthy, `pl1` at 117/140 W | not compute-bound, profile the job, do not raise limits |
-| `contended-benchmark` | healthy, plus a second process the user did not mention | a throughput number now is invalid; 213 TFLOPS is the wrong target |
+| `contended-benchmark` | healthy, plus a second process the user did not mention, and a runnable `gemm.py` | a throughput number now is invalid; 213 TFLOPS is the wrong target |
 
 **The `no-skill` arm is the control and is expected to fail.** A skill that changes nothing is not
 earning its place, so the run prints both and only fails the build on a `with-skill` arm.
 
-Measured on Sonnet, all four `with-skill` arms pass and three of the four controls fail.
+Measured on Sonnet: **all four `with-skill` arms pass, and three of the four controls fail.** That
+holds across runs. *Which* control passes does not, so treat a single scenario's control verdict as
+weak evidence and the with-skill column as the result. One sample per cell buys no more than that.
 
-- `pd-safety-mode` blamed software and thermals, never reached a cold drain, and this is the only
+How the controls fail, when they do:
+
+- `pd-safety-mode` blames software or thermals and never reaches a cold drain. This is the only
   scenario whose answer exists nowhere but the skill.
-- `contended-benchmark` never noticed the second process on the GPU and told the user to run the
-  benchmark anyway.
-- `below-cap` offered `nvidia-smi -pl` as a limit to raise, which is the one action the branch exists
-  to rule out.
-- `at-the-cap` **passes without the skill**, because `make report` itself prints that pl1 holds the box
-  near 171 W and that 240 W is the PSU rating. The fixture reproduces that guidance deliberately; a
-  control denied it would make the skill look better than it is.
+- `contended-benchmark` misses the second process on the GPU, runs `gemm.py` anyway, and reports a
+  contended number as the box's throughput.
+- `below-cap` offers `nvidia-smi -pl` as a limit to raise, the one action the branch exists to rule out.
+- `at-the-cap` treats a correctly working box as a fault, or accepts 240 W as a reachable target.
 
-**One sample per cell, so per-scenario control results move between runs.** An earlier pass had
-`below-cap` passing and `at-the-cap` failing, the reverse of the above. Treat "every with-skill arm
-passes" as the result and a single control verdict as weak evidence.
+`at-the-cap` is the weakest of the four, because `make report` itself prints that pl1 holds the box
+near 171 W and that 240 W is the PSU rating. The fixture reproduces that guidance deliberately: a
+control denied what the real report says would make the skill look better than it is.
 
 ## Grading is a judge, not a regex
 
@@ -80,6 +81,10 @@ Four container details that are not optional:
   without that flag a headless agent cannot run the commands the skill tells it to run.
 - The prompt arrives as a mounted file. `docker run` without `-i` attaches no stdin, and the CLI exits
   saying it was given no input.
+- A runnable `gemm.py` and a python to run it. Without them "just run the benchmark and report the
+  number" is impossible, so the rubric clause forbidding it could never fire.
+- The judge reads the answer from a mounted file and is told it is data. Splicing the answer into the
+  judge's prompt let the text being graded close the markers around itself and address the judge.
 - The CLI version is pinned in the Dockerfile. It is the thing under test, and `latest` plus a cached
   npm layer means two machines test two different CLIs and neither result reproduces.
 

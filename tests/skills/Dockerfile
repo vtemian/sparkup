@@ -9,7 +9,7 @@ FROM node:22-slim
 # gawk and make because the fake box answers `make report` with the real role's
 # formatting rather than an approximation of it.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git gawk make jq \
+    && apt-get install -y --no-install-recommends ca-certificates git gawk make jq python3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Pinned, because the CLI is the thing under test: on `latest` plus a cached npm

@@ -1952,7 +1952,7 @@
       "id": 123,
       "type": "timeseries",
       "title": "GPU temperature",
-      "description": "The die sensor next to the firmware's own zones, which only exist with spbm on. Saturated at the stock cap this box sits at 82 \u00b0C with no thermal slowdown recorded, so the fan-curve advice circulating for this hardware addresses a throttle it does not have.",
+      "description": "The die against the ACPI thermal zones, which are the sensors that actually follow it: measured under load, nvidia-smi read 79 \u00b0C while acpitz reported 76 to 86 \u00b0C. The spbm firmware zones are deliberately not here. They read 32 \u00b0C idle and 35 \u00b0C under a 122 W training load, so they rise 2.5 \u00b0C for a 31 \u00b0C rise in the die and are not junction temperatures whatever their labels say. They are on the all-sensors panel below. Saturated at the stock cap this box reaches 82 \u00b0C with no thermal slowdown recorded, so heat is not the limiter and a fan curve buys nothing.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2006,8 +2006,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_hwmon_temp_celsius{job=\"node\"} * on(chip, sensor) group_left(label) node_hwmon_sensor_label{job=\"node\", label=~\"gpu|soc|cpu_p_clu0|cpu_p_clu1\"}",
-          "legendFormat": "firmware {{label}}"
+          "expr": "node_hwmon_temp_celsius{job=\"node\",chip=\"acpitz\"}",
+          "legendFormat": "acpitz {{sensor}}"
         }
       ]
     },
@@ -2257,7 +2257,7 @@
       "id": 128,
       "type": "timeseries",
       "title": "Temperatures: every hwmon sensor",
-      "description": "Every temperature the kernel exposes under hwmon. The firmware zones carry a label and are named by it; the SoC, NVMe and WiFi sensors carry none, so they are matched separately and named by chip and sensor. All eight firmware zones carry a real reading, `dla` included, and `tj_max` is a temperature rather than the limit its name suggests: on this box it tracks the `gpu` zone. spbm's power and energy channels are on the Power row, not here.",
+      "description": "Every temperature the kernel exposes under hwmon. The firmware zones carry a label and are named by it; the ACPI, NVMe and WiFi sensors carry none, so they are matched separately and named by chip and sensor. Watch the spread rather than the count: `acpitz` follows the die into the 80s while every spbm zone sits near 35 \u00b0C, and the spbm zone named `tj_max` is one of those, not a limit. The register that does report the hottest junction is `tj_max_c`, which the driver exposes as a plain sysfs attribute that node_exporter cannot read, and whose value equals the hottest acpitz zone anyway. spbm's power and energy channels are on the Power row, not here.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

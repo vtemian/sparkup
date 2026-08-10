@@ -79,12 +79,17 @@ USB-PD safety mode and the channel reads the same way in both. On the reference 
 | `syspl1` | 231 W | 300 W |
 | `syspl2` | 244 W | 300 W |
 
-All eight temperatures carry a real reading. `tj_max` is a temperature despite the name, tracking the
-`gpu` zone, not a limit. The one channel that reads nothing is the `dla` **power** rail, at 0.01 W.
+All eight temperatures carry a real reading, and **none of them is a junction temperature.** Measured:
+32.2 to 32.5 °C at idle, 34 to 35 °C under a 122 W training load with the GPU die at 79 °C. They rise
+2.5 °C for a 31 °C rise in the die. `tj_max` is one of them despite the name, not a limit. The sensors
+that do follow the die are `acpitz`, seven zones reading 76 to 86 °C under that load, and node_exporter
+exports them already. The one channel that reads nothing is the `dla` **power** rail, at 0.01 W.
 
-The driver also exposes `prochot`, `pl_level` and `tj_max_c` as plain sysfs attributes rather than
-hwmon channels, so node_exporter cannot see them and no panel uses them. Their encoding is
-undocumented and the first two read a constant 1 on an idle box, so there is nothing yet to plot.
+The driver also exposes `prochot`, `pl_level` and `tj_max_c` as plain sysfs attributes rather than hwmon
+channels, so node_exporter cannot see them. `tj_max_c` is decoded: it is the hottest junction in °C, and
+it equalled the hottest `acpitz` zone exactly in both samples, so exporting it would add nothing. The
+other two read a constant 1 at idle and unchanged under a 122 W load, so `1` cannot mean "asserted" and
+neither is usable until somebody samples them with `pl1` actually pinned at its cap.
 
 `node_hwmon_power_watt` is a gauge; `node_hwmon_energy_joule_total` is a **counter** in
 **joules**, not watt-hours. The metric drops the sysfs `_input` suffix that the filename carries,

@@ -372,20 +372,23 @@ stubbed. A fake that reported success would be worse than no test.
   made to read low, on purpose.** The dashboard has a panel whose entire point is the 30 to 44% gap
   between the two. Driving them from different cycles let them cross, which taught the opposite of
   what was measured.
-- **All eight spbm thermal zones carry a real reading, `tj_max` and `dla` included.** Read off the
-  box at idle: `tj_max` 32.5 °C tracking the `gpu` zone exactly, `dla` 27.3 °C, the other six 32.2 to
-  32.5 °C. Despite its name `tj_max` is a temperature, not a limit. The only spbm channel that reads zero is
+- **The eight spbm thermal zones are not junction temperatures, whatever their labels say.** Measured
+  at idle 32.2 to 32.5 °C with `dla` at 27.3; under a 122 W training load with the GPU die at 79 °C
+  they read 34 to 35 °C. A 2.5 °C rise against the die's 31 °C. Despite its name `tj_max` is one of
+  these zones, not a limit. **`acpitz` is what tracks the die** (seven zones, 76 to 86 °C under that
+  load) and node_exporter already exports it, so any thermal panel should read acpitz and treat the
+  spbm zones as something else. The 82 °C figure recorded elsewhere in this file is the die, not a
+  spbm zone. The only spbm channel that reads zero is
   the `dla` *power* rail, at 0.01 W, which is a different channel from the `dla` thermal zone. Do not
   filter the temperature panel on `> 0`: there is nothing to hide.
-- **`prochot`, `pl_level` and `tj_max_c` are not shippable as metrics, and this is the evidence.**
-  Sampled over 24 s on an idle box drawing 23 W of a 140 W `pl1` cap: `prochot` pinned at 1 and
-  `pl_level` pinned at 1. If 1 meant "asserted" the box would be throttling at idle, so it does not
-  mean that, and the driver only does a bare `ioread32` on all three with no encoding documented
-  anywhere. `tj_max_c` does move, 60 then 50 then 49, while the `gpu` zone sat flat at 32 °C, so it
-  is not a constant limit either. They remain the EC-level signal NVML lacks and they are still worth
-  having, but exporting them now would put a number on the board that nobody can read, and a
-  permanently-red PROCHOT panel is worse than no panel. What would settle it: sample all three
-  through a saturating burn and see which one tracks the cap.
+- **`tj_max_c` is decoded and redundant; `prochot` and `pl_level` are still unusable.** All three are
+  plain sysfs attributes the hwmon collector cannot see. `tj_max_c` is the hottest junction in °C: it
+  read 49 to 60 at idle and 86 to 87 under a 122 W load, and it equalled the hottest `acpitz` zone
+  exactly in both samples (86 against acpitz 86, 76, 80, 77, 82, 86, 80). Since acpitz is already in
+  Prometheus, exporting it would add nothing. `prochot` and `pl_level` read a constant 1 at idle and
+  a constant 1 under that load, so `1` cannot mean "asserted" and neither is a throttle signal yet.
+  Both samples were taken with `pl1` below its cap (23 W and 122 W of 140 W), so the question is still
+  open: sample them with `pl1` actually pinned by a saturating GEMM on an otherwise idle GPU.
 - **`nvidia_smi_power_limit_watts` and `enforced_power_limit_watts` must stay off the dashboard.**
   `power.limit` is permanently `[N/A]` on GB10 and the exporter drops unavailable fields, so those
   series do not exist on the box. They are in `exporters_gpu_query_fields` because asking costs

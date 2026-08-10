@@ -28,6 +28,10 @@ says so in its own description. Everything else arrives by default.
   <img src=".github/dashboard.png" alt="The spark-overview dashboard" />
 </p>
 
+Those numbers come from `make harness-up`, not from a Spark, so nobody mistakes them for a
+measurement. The channels behind them are calibrated to a real box: the peaks are what one machine
+actually drew.
+
 ## Before you run it
 
 This is root-level automation aimed at one specific machine. It assumes a DGX Spark running a DGX OS

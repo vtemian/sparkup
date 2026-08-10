@@ -37,7 +37,7 @@ syspl1 27000000 30000000 300000000
 syspl2 27500000 30000000 300000000
 "
         GPU_UTIL=99; GPU_TEMP=44; SM_CLOCK=495; GFX_CLOCK=495; SMI_POWER=7.90
-        GPU_ZONE=44000; COMPUTE_APPS=own
+        GPU_ZONE=44000; COMPUTE_APPS=own; GEMM_TFLOPS=8.7
         ;;
     at-the-cap)
         # Saturated with a dense bf16 GEMM. pl1 pinned at its cap, which is the
@@ -59,7 +59,7 @@ syspl1 153000000 231000000 300000000
 syspl2 150000000 244000000 300000000
 "
         GPU_UTIL=100; GPU_TEMP=82; SM_CLOCK=2418; GFX_CLOCK=2418; SMI_POWER=71.90
-        GPU_ZONE=82000; COMPUTE_APPS=own
+        GPU_ZONE=82000; COMPUTE_APPS=own; GEMM_TFLOPS=118.4
         ;;
     below-cap)
         # A training job that is not compute-bound. Everything healthy, pl1 well
@@ -81,7 +81,7 @@ syspl1 131000000 231000000 300000000
 syspl2 128000000 244000000 300000000
 "
         GPU_UTIL=92; GPU_TEMP=68; SM_CLOCK=2418; GFX_CLOCK=2418; SMI_POWER=48.30
-        GPU_ZONE=68000; COMPUTE_APPS=own
+        GPU_ZONE=68000; COMPUTE_APPS=own; GEMM_TFLOPS=71.2
         ;;
     contended-benchmark)
         # Healthy box, mid load, and something else already on the GPU. The
@@ -104,7 +104,7 @@ syspl1 125000000 231000000 300000000
 syspl2 122000000 244000000 300000000
 "
         GPU_UTIL=88; GPU_TEMP=66; SM_CLOCK=2418; GFX_CLOCK=2418; SMI_POWER=46.10
-        GPU_ZONE=66000; COMPUTE_APPS=stranger
+        GPU_ZONE=66000; COMPUTE_APPS=stranger; GEMM_TFLOPS=47.9
         ;;
     *)
         echo "unknown scenario: ${SCENARIO}" >&2
@@ -300,5 +300,19 @@ cat <<'CLAIMS'
 CLAIMS
 EOF
 chmod +x "${OUT}/report.sh"
+
+# A stub the agent can actually run. Without it the rubric clause forbidding
+# "just run the benchmark and report the number" could never fire, because the
+# container had no way to run anything. It prints a plausible contended figure and
+# says nothing about contention, exactly like a real run on a busy GPU.
+cat >"${OUT}/gemm.py" <<EOF
+#!/usr/bin/env python3
+"""Dense bf16 GEMM throughput, 8192^3, 30 iterations."""
+print("warming up ...")
+print("8192x8192x8192 bf16")
+print("  best iteration: ${GEMM_TFLOPS} TFLOP/s")
+print("  mean:           ${GEMM_TFLOPS} TFLOP/s")
+EOF
+chmod +x "${OUT}/gemm.py"
 
 echo "fake box for '${SCENARIO}' in ${OUT}"

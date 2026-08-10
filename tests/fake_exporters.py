@@ -47,11 +47,21 @@ UPTIME_AT_START = 20 * 3600
 POWER_CAP_SECONDS_AT_START = 26.526172
 
 CPU_MODES = ("user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal")
+# The chips that report real heat. `acpitz` carries seven zones on this box and is
+# the only thing that tracks the GPU die: measured 76 to 86 °C under a load where
+# every spbm zone read 35 °C. NVMe and the WiFi radio are the other two chips.
 HWMON_SENSORS = (
-    ("acpitz", "temp1", 38.0, 12.0),
-    ("nvme", "temp1", 41.0, 6.0),
-    ("nvme", "temp2", 39.0, 5.0),
-    ("mt7925_phy0", "temp1", 44.0, 3.0),
+    ("acpitz", "temp1", 48.0, 58.0),
+    ("acpitz", "temp2", 44.0, 49.0),
+    ("acpitz", "temp3", 45.0, 54.0),
+    ("acpitz", "temp4", 44.0, 51.0),
+    ("acpitz", "temp5", 46.0, 55.0),
+    ("acpitz", "temp6", 48.0, 58.0),
+    ("acpitz", "temp7", 45.0, 54.0),
+    ("nvme", "temp1", 41.0, 34.0),
+    ("nvme", "temp2", 43.0, 37.0),
+    ("nvme", "temp3", 41.0, 34.0),
+    ("mt7925_phy0", "temp1", 52.0, 28.0),
 )
 
 # The spbm driver's power channels, as node_exporter's hwmon collector renders
@@ -130,23 +140,26 @@ SPBM_ENERGY = (
     ("energy4", "gpu", "power8"),
 )
 
-# The driver's eight thermal zones, in its own order. All eight carry a real
-# temperature: read on the reference box at idle, `tj_max` 32.5 °C tracking the
-# `gpu` zone exactly, `dla` 27.3 °C, the rest 32.2 to 32.5 °C. Despite the name,
-# `tj_max` is not a limit register.
+# The driver's eight thermal zones, in its own order, and **none of them is the
+# die**. Measured: at idle they read 32.2 to 32.5 °C with `dla` at 27.3; under a
+# 122 W training load with the GPU die at 79 °C they read 34 to 35 °C, `dla` still
+# 27. They rise about 2.5 °C for a 31 °C rise in the die, so they are nearly flat
+# and they are not GPU or CPU junction temperatures whatever their labels say.
 #
-# Only the idle values were observed. The `gpu` zone reaching 82 °C saturated is
-# measured; the spans on the other seven are shaped to be plausible beside it and
-# are not claims about how those zones behave under load.
+# The sensors that do track the die are `acpitz`, seven of them reading 76 to 86 °C
+# under the same load, and node_exporter already exports those. `tj_max_c`, a plain
+# sysfs attribute the hwmon collector cannot see, equals the hottest of them.
+#
+# Despite the name, `tj_max` is one of these near-flat zones and not a limit.
 SPBM_TEMP = (
-    ("temp1", "tj_max", 45.0, 57.0),
-    ("temp2", "cpu_e_clu0", 41.0, 35.0),
-    ("temp3", "cpu_p_clu0", 43.0, 42.0),
-    ("temp4", "cpu_e_clu1", 41.0, 35.0),
-    ("temp5", "cpu_p_clu1", 43.0, 42.0),
-    ("temp6", "gpu", 45.0, 57.0),
-    ("temp7", "soc", 42.0, 45.0),
-    ("temp8", "dla", 27.0, 12.0),
+    ("temp1", "tj_max", 32.3, 4.2),
+    ("temp2", "cpu_e_clu0", 32.1, 3.8),
+    ("temp3", "cpu_p_clu0", 32.2, 4.4),
+    ("temp4", "cpu_e_clu1", 32.1, 4.5),
+    ("temp5", "cpu_p_clu1", 32.2, 4.4),
+    ("temp6", "gpu", 32.3, 4.2),
+    ("temp7", "soc", 32.2, 4.5),
+    ("temp8", "dla", 27.2, 0.4),
 )
 
 
@@ -357,14 +370,10 @@ def gpu_metrics(box: Box) -> str:
 
     gauge("nvidia_smi_utilization_gpu_ratio", utilisation, "GPU occupancy, 0 to 1.")
     gauge("nvidia_smi_utilization_memory_ratio", utilisation * 0.6, "Memory controller occupancy.")
-    # From the firmware `gpu` zone, like the power reading below and for the same
-    # reason: on the box these are the same number (82 °C saturated), so driving
-    # them from different cycles invented a 10 °C ceiling gap and momentary 35 °C
-    # inversions, and taught a discrepancy the hardware does not have.
-    firmware_gpu_zone = dict(
-        (label, base + span * box.busy(now)) for _, label, base, span in SPBM_TEMP
-    )["gpu"]
-    gauge("nvidia_smi_temperature_gpu", firmware_gpu_zone, "GPU die temperature.", "{:.1f}")
+    # The die, which is a different sensor from every spbm thermal zone and runs
+    # far hotter: measured under load, nvidia-smi read 79 °C while the firmware
+    # `gpu` zone read 35 °C. The zones do not track the die at all; `acpitz` does.
+    gauge("nvidia_smi_temperature_gpu", 45.0 + 37.0 * utilisation, "GPU die temperature.", "{:.1f}")
     # Deliberately derived from the firmware's own gpu channel and then made to
     # read low, rather than from `utilisation`: nvidia-smi measured 71.9 W where
     # the firmware read 103.4 W at the same instant, and a dashboard panel exists
