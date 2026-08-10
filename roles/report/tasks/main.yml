@@ -57,14 +57,29 @@
 # The join is done here rather than in the template because sysfs splits it: the
 # reading is in power7_input and its name is in power7_label, and a report that
 # prints raw microwatt paths is one nobody can quote.
+#
+# _cap and _max are read alongside because _input on its own is not diagnostic:
+# only the four limit channels carry them, and a pl1 reading means nothing until
+# you know whether the cap beside it is 140 W or the 20 W of the EC safety mode.
+# Glob the labels rather than index them: power10 sorts before power2, and the
+# hwmon index moves across boots, so a positional read returns another channel.
 - name: Read the hwmon power channels
   ansible.builtin.shell:
     cmd: |
       for input in /sys/class/hwmon/hwmon*/power*_input; do
           [ -e "${input}" ] || continue
-          label="$(cat "${input%_input}_label" 2>/dev/null)" || label="${input}"
+          base="${input%_input}"
+          label="$(cat "${base}_label" 2>/dev/null)" || label="${input}"
+          cap="$(cat "${base}_cap" 2>/dev/null)" || cap=""
+          max="$(cat "${base}_max" 2>/dev/null)" || max=""
           awk -v name="${label}" -v reading="$(cat "${input}")" \
-              'BEGIN { printf "%-12s %8.2f W\n", name, reading / 1000000 }'
+              -v cap="${cap}" -v max="${max}" \
+              'BEGIN {
+                   printf "%-12s %8.2f W", name, reading / 1000000
+                   if (cap != "") printf "   cap %5.0f W", cap / 1000000
+                   if (max != "") printf "   ceiling %5.0f W", max / 1000000
+                   printf "\n"
+               }'
       done
   register: report_power_channels
   changed_when: false

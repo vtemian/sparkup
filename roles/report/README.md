@@ -25,3 +25,10 @@ reported as missing rather than failing the run.
 
 The power channels only appear where `spbm` is loaded. On a default box that section is empty, which
 is the expected state and not a fault; see [roles/spbm/README.md](../spbm/README.md).
+
+Each channel prints its cap and firmware ceiling next to its reading, because the reading alone
+cannot tell you which limit is in force. `pl1` is the GB10 module budget shared by CPU and GPU, and
+it binds long before the system budget does; a healthy box caps it at 140 W with `syspl1` at 231 W,
+while 20 W and 30 W is the EC safety mode that only a cold drain clears. `nvidia-smi` cannot
+substitute for these: it reads the GPU rail low and reports no throttle while the EC is enforcing
+one.

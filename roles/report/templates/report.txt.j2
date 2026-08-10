@@ -52,6 +52,9 @@ GPU
 {% if report_gpu.rc | default(1) == 0 %}
 {{ report_gpu.stdout | default('', true) | trim | indent(4, true) }}
     (name, driver, compute capability, memory.total, power.draw, power.limit)
+    Believe power.draw only where the spbm gpu channel below agrees with it.
+    NVML sits above the EC here, so it reads the GPU rail low and its clocks
+    event reasons stay "Not Active" through a throttle the EC is enforcing.
 {% else %}
     nvidia-smi did not answer: {{ (report_gpu.stderr | default('', true)) | trim or (report_gpu.msg | default('unknown error', true)) }}
 {% endif %}
@@ -65,8 +68,13 @@ WHOLE-SYSTEM POWER
     none
 {% endif %}
 {% if power_channels %}
-  power channels, live. sys_total is the whole box, DC side of the PSU; the
-  GPU rail alone is what nvidia-smi reports above.
+  power channels, live. sys_total is the whole box, DC side of the PSU. pl1 is
+  the GB10 module budget and is shared by CPU and GPU, so it binds long before
+  syspl1 does: a saturated box pins pl1 against its cap, and loading the CPU
+  takes watts from the GPU rather than adding them. "cap" is the limit in force,
+  "ceiling" the highest the firmware accepts. A pl1 cap of 20 W beside a syspl1
+  of 30 W is the EC safety mode rather than a healthy box, and only a cold drain
+  clears it.
 {{ power_channels | indent(4, true) }}
 {% endif %}
 
@@ -79,6 +87,8 @@ reality wins and the docs are wrong: please open a "Hardware finding" issue.
   SSH socket-activated {% for unit in report_ssh_units.results | default([], true) %}{{ unit.item }} {{ unit.status.UnitFileState | default('absent', true) }}{{ ' / ' if not loop.last }}{% endfor %}   (claimed: ssh.socket enabled, ssh.service disabled)
   hidden boot menu     /etc/default/grub.d/no-grubmenu.cfg {{ 'present' if report_grub_dropin.stat.exists else 'ABSENT' }}   (claimed: present, forcing GRUB_TIMEOUT=0)
   unified GPU memory   see memory.total above   (claimed: [N/A], the field is dropped)
+  nvidia-smi reads low compare power.draw with the gpu channel above   (claimed: 30-44% low, and power.limit is [N/A])
+  pl1 is the ceiling   compare the pl1 and syspl1 caps above   (claimed: pl1 140 W holds the whole box near 171 W; syspl1 231 W never binds)
 
 FIRMWARE
 Older EC firmware reports incorrect CPU power, so the Embedded Controller line
