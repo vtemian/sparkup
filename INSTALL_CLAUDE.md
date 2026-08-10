@@ -378,26 +378,28 @@ stubbed. A fake that reported success would be worse than no test.
   these zones, not a limit. **`acpitz` is what tracks the die** (seven zones, 76 to 86 °C under that
   load) and node_exporter already exports it, so any thermal panel should read acpitz and treat the
   spbm zones as something else. The 82 °C figure recorded elsewhere in this file is the die, not a
-  spbm zone. The only spbm channel that reads zero is
+  spbm zone. The driver labels these zones "Package Tj max", "P-core cluster 0", "GPU" and so on and
+  documents them idling near 31 °C, which matches; what does not match is that they barely move. If
+  they are junction temperatures then this firmware is not populating them, and the honest reading is
+  that they measure something else. Worth an upstream question, not a panel. The only spbm channel that reads zero is
   the `dla` *power* rail, at 0.01 W, which is a different channel from the `dla` thermal zone. Do not
   filter the temperature panel on `> 0`: there is nothing to hide.
-- **`tj_max_c` is decoded and redundant; `prochot` and `pl_level` are still unusable.** All three are
-  plain sysfs attributes the hwmon collector cannot see. `tj_max_c` is the hottest junction in °C: it
-  read 49 to 60 at idle and 86 to 87 under a 122 W load, and it equalled the hottest `acpitz` zone
-  exactly in both samples (86 against acpitz 86, 76, 80, 77, 82, 86, 80). Since acpitz is already in
-  Prometheus, exporting it would add nothing. `prochot` and `pl_level` read a constant 1 at idle and
-  a constant 1 under that load, so `1` cannot mean "asserted" and neither is a throttle signal yet.
-  Both samples were taken with `pl1` below its cap (23 W and 122 W of 140 W), so the question is still
-  open: sample them with `pl1` actually pinned by a saturating GEMM on an otherwise idle GPU.
-- **`nvidia_smi_power_limit_watts` and `enforced_power_limit_watts` must stay off the dashboard.**
-  `power.limit` is permanently `[N/A]` on GB10 and the exporter drops unavailable fields, so those
-  series do not exist on the box. They are in `exporters_gpu_query_fields` because asking costs
-  nothing; a panel built on them is green in the harness and dead on hardware.
-- **`prochot` and `pl_level` are plain sysfs attributes, not hwmon channels.** The driver exposes
-  them through its own attribute group, so node_exporter's `hwmon` collector cannot see them and no
-  PromQL will ever find them. They are the EC's own throttle and power-limit-level status, i.e. the
-  signal NVML lacks, and getting them into Prometheus means a textfile-collector script. Not
-  attempted here: it needs a real box to confirm the sysfs path and the value encoding.
+- **`pl_level` is documented, `prochot` contradicts its documentation, `tj_max_c` is unresolved.** All
+  three are plain sysfs attributes the hwmon collector cannot see. The driver's own README defines
+  them: `prochot` is "PROCHOT thermal throttle status (0 = normal)", `pl_level` is "current active
+  power limit level", `tj_max_c` is "thermal rise above ambient (decidegrees, ~40 idle)".
+  - `pl_level` read 1 at idle and 1 under a 122 W load, which is consistent with PL1 being the limit
+    that binds on this hardware and would presumably read 2 if PL2 ever became the active limit.
+  - `prochot` read **1** on a healthy idle box drawing 23 W of a 140 W cap, and 1 again under load.
+    If 0 is normal then this box claims to be thermally throttled while idle, so either the polarity
+    is inverted in practice or the register means something else here. Do not build an alert on it.
+  - `tj_max_c` read 49 to 60 at idle and 86 to 87 under load. As decidegrees of rise that is 4.9 to
+    8.7 °C, implausibly small next to a die going 48 → 79 °C; read as plain °C it tracks the die
+    closely, and in the one sample where `acpitz` was read at the same instant it equalled the
+    hottest zone exactly (86 against 86, 76, 80, 77, 82, 86, 80). One simultaneous sample is not a
+    decode. Either way it adds nothing over `acpitz`, which is already in Prometheus.
+  - What would settle `prochot`: sample it with `pl1` actually pinned by a saturating GEMM on an
+    otherwise idle GPU, and again on a box in the 20 W safety mode.
 - **The dashboard stays on schema v1 (`schemaVersion: 39`).** Grafana 13's dynamic dashboards, and
   with them tabs, auto-grid and conditional rendering, need schema v2, which is still `v2beta1` and
   which **file-based provisioning does not load** (grafana/grafana#106381; the only workaround is a

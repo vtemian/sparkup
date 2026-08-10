@@ -23,7 +23,10 @@ model does not apply. What does matter:
   safety properties is a finding: it never reboots, and a staged capsule can be deleted from the ESP
   before it is ever applied.
 - **Supply chain.** Downloads are checksum-verified and container images are pinned to an exact
-  version or digest; replacing either with a floating tag is a finding.
+  version or digest; replacing either with a floating tag is a finding. That includes the one
+  third-party Grafana panel plugin: it is fetched by version with a literal `sha256:`, and it runs as
+  JavaScript in the browser of every anonymous viewer of port 80. A version bump without a matching
+  checksum, or a fetch that would silently proceed on mismatch, is a finding.
 
 ## What does not count
 

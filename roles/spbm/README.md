@@ -85,11 +85,14 @@ All eight temperatures carry a real reading, and **none of them is a junction te
 that do follow the die are `acpitz`, seven zones reading 76 to 86 °C under that load, and node_exporter
 exports them already. The one channel that reads nothing is the `dla` **power** rail, at 0.01 W.
 
-The driver also exposes `prochot`, `pl_level` and `tj_max_c` as plain sysfs attributes rather than hwmon
-channels, so node_exporter cannot see them. `tj_max_c` is decoded: it is the hottest junction in °C, and
-it equalled the hottest `acpitz` zone exactly in both samples, so exporting it would add nothing. The
-other two read a constant 1 at idle and unchanged under a 122 W load, so `1` cannot mean "asserted" and
-neither is usable until somebody samples them with `pl1` actually pinned at its cap.
+The driver also exposes `prochot`, `pl_level` and `tj_max_c` as plain sysfs attributes rather than
+hwmon channels, so node_exporter cannot see them and no panel uses them. Its README defines `prochot`
+as PROCHOT status with 0 normal, `pl_level` as the active power limit level, and `tj_max_c` as thermal
+rise above ambient in decidegrees. On this box `pl_level` reads 1, consistent with PL1 being the limit
+that binds. `prochot` reads 1 both idle and loaded, which cannot mean "throttled" on a box drawing
+23 W of 140 W, so treat it as undecoded. `tj_max_c` reads 49 to 60 idle and 86 to 87 loaded, which
+matches a junction temperature in °C far better than a few degrees of rise, and either way tells you
+nothing `acpitz` does not.
 
 `node_hwmon_power_watt` is a gauge; `node_hwmon_energy_joule_total` is a **counter** in
 **joules**, not watt-hours. The metric drops the sysfs `_input` suffix that the filename carries,

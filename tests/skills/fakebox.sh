@@ -226,10 +226,29 @@ GPU 00000000:01:00.0
         Graphics                          : 2418 MHz
 REPORT
         ;;
-    *)
+    -L|--list-gpus)
+        echo "GPU 0: NVIDIA GB10 (UUID: GPU-00000000-0000-0000-0000-000000000000)"
+        ;;
+    # GB10 answers [N/A] for power.limit, so the real tool cannot set one either.
+    # Exiting 0 here let an agent believe it had raised the cap and move on.
+    *-pl*|*--power-limit*)
+        echo "Setting power management limit is not supported for GPU 00000000:01:00.0." >&2
+        echo "Treating as warning and moving on." >&2
+        exit 3
+        ;;
+    *-lgc*|*--lock-gpu-clocks*|*-rgc*)
+        echo "Setting locked clocks is not supported for GPU 00000000:01:00.0." >&2
+        exit 3
+        ;;
+    "")
         echo "Fri Aug 10 12:00:00 2026"
         echo "NVIDIA GB10   Driver Version: 580.95.05"
         echo "GPU  Util ${GPU_UTIL}%   Temp ${GPU_TEMP}C   Pwr ${SMI_POWER}W / N/A   SM ${SM_CLOCK} MHz"
+        ;;
+    # Anything this fake does not model fails, rather than looking like it worked.
+    *)
+        echo "unsupported in this fixture: nvidia-smi \${args}" >&2
+        exit 2
         ;;
 esac
 EOF
