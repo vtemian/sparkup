@@ -293,19 +293,15 @@ stubbed. A fake that reported success would be worse than no test.
 
 ## Traps
 
-- **The EFI RTC on this hardware reads intermittently, and that breaks `community.general.timezone`
-  worse than a clean failure would.** When a read fails, bare `timedatectl` exits 1; the module
-  treats non-zero as "not systemd", falls back to a path requiring `hwclock`, and arm64 Ubuntu's
-  `util-linux` ships that binary's documentation and not the binary. The converge then dies on a box
-  whose clock is perfectly correct. `timedatectl set-timezone` writes fine either way, so `base`
-  compares `readlink -f /etc/localtime` and drives the write itself.
+Only what bites while installing or operating a box: what an installer hits, what breaks the machine,
+what spans roles so no single file owns it, and absences that have no line to hang a comment on.
 
-  **`timedatectl` exiting 0 is not evidence that the module is safe here**, and `make report` will
-  show it exiting 0 most of the time. Measured over four retained boots, `rtc-efi` logged
-  `setting system clock to ...` every time, i.e. `hctosys` succeeded on all of them, and one
-  `rtc-efi rtc-efi.0: can't read time` appeared in 140 h of uptime. An intermittent failure is the
-  argument *for* the workaround, not against it: the module would pass every test and then break on
-  somebody's box on a boot nobody can reproduce. Do not "simplify" it back to the module.
+Everything about *changing* this repo lives with the thing it constrains, because that is what gets
+read at the moment of the mistake: a comment beside the task or variable, the role's own README, or
+[tests/README.md](tests/README.md) for the harness. Dashboard and alerting internals are in
+[roles/monitoring/README.md](roles/monitoring/README.md); the spbm registers are in
+[roles/spbm/README.md](roles/spbm/README.md). Do not copy any of it back here.
+
 - **`curl 127.0.0.1:9100` hangs** on this hardware even when node-exporter is healthy. Verify through
   Prometheus.
 - **Prometheus publishes on two addresses, and dropping the second silently loses every training
@@ -320,8 +316,6 @@ stubbed. A fake that reported success would be worse than no test.
   9090`), never from the host, where loopback always answers.
 - **SSH is socket-activated.** `ssh.socket` is enabled, `ssh.service` is disabled. Restarting
   `ssh.service` is a no-op that looks like success.
-- **`ansible.builtin.cron` with `state: absent` silently does nothing** for a hand-written line. It
-  matches only entries carrying its own `#Ansible:` header, and reports `ok` having removed nothing.
 - **Docker port publishing bypasses ufw.** DNAT and `DOCKER-USER` sit ahead of ufw's chains, so
   `--publish` exposes a port regardless of policy. Use host networking when ufw must govern a port.
 - **A default-deny firewall breaks container scrapes.** Prometheus reaches host exporters through the
@@ -331,13 +325,8 @@ stubbed. A fake that reported success would be worse than no test.
   `GRUB_TIMEOUT_STYLE=hidden` and `GRUB_RECORDFAIL_TIMEOUT=0`. Drop-ins are sourced after
   `/etc/default/grub`, so editing the base file does nothing. The `kernel` role ships
   `zz-sparkup-menu.cfg`, which sorts last. Always verify the **generated** `grub.cfg`, never the edit.
-- **`nvidia-cdi-refresh` is two units.** The `.service` defaults to writing `/var/run/cdi/nvidia.yaml`;
-  two CDI specs claiming the same device make the cache drop it, so `nvidia.com/gpu=all` stops
-  resolving *because* the refresh worked. `/var/run` is also tmpfs.
 - **GPU memory metrics are absent by design.** Unified memory means `nvidia-smi` reports `[N/A]` and
   the exporter drops the field. `node_memory_*` is the GPU memory signal. Do not "fix" this.
-- **`vars_files` outrank a play's `vars:`.** A test playbook that sets `spark_users` in `vars:` while
-  loading `group_vars/all.yml` gets the empty list and silently creates nobody.
 - **`make check` fails with "Group does not exist" on a fresh box.** Check mode does not create the
   shared group, so adding users to it fails. Artifact of the dry run; gone after the first apply.
 - **A package stuck in dpkg state `install ok unpacked`** reads as not-installed forever, so its task
@@ -347,165 +336,19 @@ stubbed. A fake that reported success would be worse than no test.
   inject GPU device nodes and driver libraries into Prometheus, Grafana and every throwaway
   `alpine`, widening a broken toolkit from "GPU jobs fail" to "monitoring fails". Monitoring is the
   thing that has to survive when the GPU plumbing breaks.
-- **The GPU is sm_121, so the smoke-test image must be CUDA 13 *and* publish a `linux/arm64`
-  manifest.** sm_121 exists only from CUDA 13.0, so most `cu12x` images cannot address it, and
-  plenty of images ship amd64 only. `gpu_smoke_test_image` was checked against the registry manifest
-  list rather than guessed; changing that tag means checking both properties again.
-- **The two filesystem-collector excludes are what stop node_exporter hanging.** Without
-  `exporters_node_filesystem_mount_points_exclude` and `exporters_node_filesystem_fs_types_exclude`
-  the collector walks the snap loop devices and every Docker overlay and hangs, flapping `up` to 0:
-  telemetry reporting its own absence as an outage. They are not tidiness.
-- **`$` is written `$$` in the rendered exporter unit.** systemd expands `$` in `ExecStart` and `$$`
-  is its documented literal dollar, so the template applies the substitution and the defaults stay
-  readable as plain regexes. Debug against the rendered unit file, never against the defaults.
-- **Textfile-collector `.prom` files must be `0644`.** node_exporter drops to an unprivileged user,
-  so a `0600` file in `exporters_textfile_dir` is skipped with no error anybody notices. Write them
-  world-readable, and write them atomically (`mktemp` in the same directory, then `mv`) so a scrape
-  never sees half a file.
-- **`monitoring_project_name` is load-bearing.** Compose namespaces named volumes by project, not by
-  directory: `spark-monitoring_grafana-data` holds every dashboard built by hand in the UI and
-  `spark-monitoring_prometheus-data` holds the history. Rename the project and both are silently
-  abandoned, full and unreferenced, and the new stack collides with the running one on port 80.
-- **Dashboards are installed with `copy`, never `template`.** Grafana's own legend syntax is
-  `{{label}}` and Jinja would eat it. That applies to any JSON this repo hands to Grafana.
 - **`firmware` gates on `get-updates` exiting 2, and stages with `--no-reboot-check`.** `update`
   exits 0 on a converged box, so gating on its own result would report a change forever; only
   `get-updates` distinguishes "nothing to do", with exit 2. Without `--no-reboot-check`, `fwupdmgr
   update` offers to reboot and a run holding a pty can act on the answer. Neither token is cosmetic.
-- **`kernel` uses an apt pin, not a dpkg hold.** A hold only constrains packages that are already
-  installed; the failure being prevented is an update pulling in an unsigned image that is not
-  installed yet. `Pin-Priority: -1` on `linux-image-unsigned-*` covers every unsigned kernel that
-  will ever exist, including ones NVIDIA has not built.
-- **`kernel` resolves the image with `dpkg-query`, deliberately not `apt-cache depends`.** apt-cache
-  answers for the *candidate* version, so a newer meta package in NVIDIA's archive would become "the
-  intended kernel" and `state: present` would install it, an unrequested kernel upgrade on a box
-  with a boot-failure history.
 - **GRUB is pinned by menu entry id, never by title.** A title carries the distributor string and
   the kernel version in prose, and when it stops matching GRUB does not complain, it boots something
   else. The id embeds the kernel version and the root UUID, and Ubuntu nests per-kernel entries, so
   the saved value is `<submenu id>><entry id>`.
-- **`spbm_headers_package` is what makes the module survive a kernel upgrade.** DKMS can only
-  rebuild against headers that arrive with the new kernel. Remove that meta package and there is no
-  error, just a missing module, and a metric that stopped, after the next kernel.
 - **A skipped role leaves its registers undefined, and `default('')` then lies.** `site.yml`'s
   reboot summary asks whether the MOK key is enrolled by reading `spbm_mok_test.stdout`. With `spbm`
   skipped that variable does not exist, `default('')` yields no match, and the box is told to expect
   a MokManager screen that will never appear. Anything reading a `spbm_*` register must test
   `spbm_enabled` first.
-- **Jinja unescapes string literals, so `'\1'` inside a `.j2` is `chr(1)`.** `regex_search(x, '\1')`
-  then dies with "Unknown argument", which names neither the filter nor the cause. Double every
-  backslash in a template: `'\\1'`. YAML task files do not have this problem, which is why the
-  pattern copied out of a role breaks when it lands in a template.
-- **`default(x, true)` treats a return code of `0` as missing.** The second argument means "replace
-  falsy values too", and `rc: 0` is falsy. `report` claimed a tool was not installed on a box where
-  it had just run successfully. Only use the boolean form on strings.
-- **An alert nobody has watched fire is a comment with a `for:` clause.** `make alerts` is the reason
-  `tests/fake_exporters.py` has a `--safety-mode`: it serves the collapsed 20/30 W caps and a 495 MHz
-  SM clock, and `tests/check_alerts.sh` asserts the two rules that watch for that state reach
-  `pending` or `firing` while every other hardware rule stays `inactive` on a healthy box. It checks
-  `pending` as well as `firing` on purpose, because waiting out a 10 minute `for:` twice would make
-  the test unusable, and `pending` already proves the expression matched.
-- **`SparkPowerCapCollapsed` cannot fire on a box without spbm, and that is deliberate.** `< 100` on
-  a metric that does not exist yields no series. `SparkGpuClockStuckLow` is the one that covers a
-  default box, because it needs only nvidia-smi.
-- **`SparkFirmwarePowerSilent` is written as "it existed recently and does not now".** `absent()`
-  would fire forever on the majority of boxes, where spbm was never enabled. The consequence is that
-  it resolves by itself six hours after the metric stops: it catches the transition, not the state.
-- **Neither dashboard check can tell you the Power row is dead.** `make dashboard` allows
-  `node_hwmon_` by prefix because the `hwmon` collector is enabled regardless (NVMe
-  and SoC temperatures come through it), and `make dashboard-live` passes because
-  `tests/fake_exporters.py` synthesises the spbm power, energy and label series. Both are correct:
-  they check the panels against a box where `spbm_enabled` is true. Do not "fix" the harness by
-  removing those synthetic channels; that would only stop the row being checked at all.
-- **The harness models all 14 spbm power channels, in the driver's order, and that order is not
-  guessable.** It is `sys_total soc_pkg cpu_gpu cpu_p cpu_e vcore dc_input gpu prereg dla pl1 pl2
-  syspl1 syspl2`, taken from `pwr_chans[]` in the driver source, so `power11` is `pl1` in the harness
-  exactly as on the box. `powerN_cap`, `powerN_max` and `powerN_min` exist for the four limit
-  channels **only**. `_cap` is the effective limit and is writable; `_max` is the firmware ceiling.
-- **The nesting between channels has to hold at idle as well as at load.** The power flow and canvas
-  panels compute board overhead and uncore as differences between channels, so a synthetic idle
-  value that puts the rails above `soc_pkg`, or `soc_pkg` above `sys_total`, draws a box larger than
-  the box containing it. This is why every span in `SPBM_POWER` is scaled against `busy` topping out
-  at 0.65 rather than at 1.0, and why `pl1` tracks `soc_pkg`: it has to graze its 140 W cap at the
-  peak or the capping panels are a flat "not capped" line that nothing tests.
-- **`nvidia_smi_power_draw_watts` in the harness is derived from the firmware `gpu` channel and then
-  made to read low, on purpose.** The dashboard has a panel whose entire point is the 30 to 44% gap
-  between the two. Driving them from different cycles let them cross, which taught the opposite of
-  what was measured.
-- **The eight spbm thermal zones are not junction temperatures, whatever their labels say.** Measured
-  at idle 32.2 to 32.5 °C with `dla` at 27.3; under a 122 W training load with the GPU die at 79 °C
-  they read 34 to 35 °C. A 2.5 °C rise against the die's 31 °C. Despite its name `tj_max` is one of
-  these zones, not a limit. **`acpitz` is what tracks the die** (seven zones, 76 to 86 °C under that
-  load) and node_exporter already exports it, so any thermal panel should read acpitz and treat the
-  spbm zones as something else. The 82 °C figure recorded elsewhere in this file is the die, not a
-  spbm zone. The driver labels these zones "Package Tj max", "P-core cluster 0", "GPU" and so on and
-  documents them idling near 31 °C, which matches; what does not match is that they barely move. If
-  they are junction temperatures then this firmware is not populating them, and the honest reading is
-  that they measure something else. Worth an upstream question, not a panel. The only spbm channel that reads zero is
-  the `dla` *power* rail, at 0.01 W, which is a different channel from the `dla` thermal zone. Do not
-  filter the temperature panel on `> 0`: there is nothing to hide.
-- **`pl_level` names the limit currently binding, and it moves.** Sampled through the ramp of a
-  saturating GEMM it read **2** while `pl1` climbed 103 → 138 W, then dropped to **1** the moment
-  `pl1` pinned at 139 W against its 140 W cap. That is PL2, the short-window limit with the higher
-  142 W cap, governing the burst until the long-window average catches up and PL1 becomes the
-  constraint. Every earlier sample read 1 only because every earlier sample was a steady state. The
-  driver's README calls it "current active power limit level" and the box agrees.
-- **`prochot` is definitively not a capping signal.** It read **1** throughout that run, including the
-  twenty seconds with `pl1` pinned hard against its cap, exactly as it reads 1 on an idle box at 23 W.
-  Its README says 0 is normal. Whatever this register means on GB10, it does not report throttling,
-  and no alert should be built on it. That question is now closed by measurement rather than by
-  deciding not to look.
-- **`tj_max_c` is a temperature, confirmed again.** It climbed 72 → 84 monotonically with the die
-  through that run. Two earlier simultaneous samples put it within 1 °C of the hottest `acpitz` zone.
-  It is not the "rise above ambient in decidegrees" its README claims, and it adds nothing over
-  `acpitz`.
-- **The dashboard stays on schema v1 (`schemaVersion: 39`).** Grafana 13's dynamic dashboards, and
-  with them tabs, auto-grid and conditional rendering, need schema v2, which is still `v2beta1` and
-  which **file-based provisioning does not load** (grafana/grafana#106381; the only workaround is a
-  Kubernetes `GrafanaManifest`). Do not port the JSON to v2 to get tabs. It would also break
-  `tests/check_dashboard.py`, which walks `panels[]` and `targets[]`.
-- **Canvas placement is pixels, and the constraint decides what those pixels mean.** With the default
-  `left`/`top` the drawing sits at its authored size in a corner of a wide panel. With
-  `leftright`/`topbottom` every element stretches to the panel edges, which turns concentric boxes
-  into overlapping full-height columns. `scale` is the one that works, and under it Grafana reads
-  `left`/`right`/`top`/`bottom` as **percentages** and discards `width` and `height` entirely, so a
-  placement that still carries a width renders somewhere else. The canvas is authored against a
-  748x330 frame and converted to percentages.
-- **Concentric canvas elements cannot all centre their value.** `dc_input`, `sys_total` and `soc_pkg`
-  are drawn inside one another, so a centred value in each stacks all three in the middle of the
-  panel and then hides them behind the rails. The containers put their value in the top-right corner.
-- **`GF_PATHS_PLUGINS` must not point at a read-only mount.** Doing that makes Grafana's background
-  installer fail to update every bundled app it ships with, once per app, at every container start:
-  `failed to extract plugin archive: mkdir ...: read-only file system`. The panel plugin is instead
-  bind-mounted as a single directory *inside* Grafana's own plugin path, leaving that machinery alone.
-- **The panel plugin is downloaded by Ansible with a pinned checksum, not by `GF_INSTALL_PLUGINS`.**
-  The env var makes Grafana fetch from grafana.com at every container start, so a box whose WiFi is
-  down comes up with a panel reading "plugin not found" and nothing anybody sees. `get_url` with a
-  literal `sha256:` fails the converge instead. grafana.com publishes no sums file beside the
-  download, so the version and the hash are pinned together in `roles/monitoring/defaults/main.yml`
-  and must be bumped together.
-- **The alerts are visible in three places, none of which notifies anybody.** `/d/box-alerts` is the
-  provisioned board: what is firing, and a timeline of when it fired, which is the one thing Grafana's
-  own page cannot show. Grafana's `/alerting/list` lists every loaded rule with its expression, under a
-  `Prometheus` heading, and works for an anonymous viewer; the `Grafana-managed` section above it is
-  empty and always will be. Prometheus at `/alerts` is the third, over an SSH tunnel because it binds
-  to loopback.
-- **Every panel on `box-alerts` needs an `or` fallback.** `ALERTS` does not exist at all while
-  nothing is pending or firing, so a bare query is empty on precisely the boxes worth having, and
-  `make dashboard-live` would fail on a healthy harness. `label_replace(vector(0), "alertname",
-  "nothing firing", "", "")` synthesises one named series, so the panels read "nothing firing" instead
-  of "No data" and stay subject to the same check as everything else.
-- **The nav sidebar's "Starred" section never loads, and that is anonymous access, not a bug.**
-  Grafana asks `/api/user/stars` on every page load and gets 401, because `GF_AUTH_ANONYMOUS_ENABLED`
-  means there is no user record to hold stars. The skeleton placeholders sit there forever. There is no
-  setting that hides the section, so the only fix is requiring a login, which is the opposite of the
-  decision in SECURITY.md. Kiosk mode hides the whole sidebar if it bothers you:
-  `?kiosk` on the dashboard URL.
-- **A panel that looks empty in `make harness-up` is usually not empty.** A fresh browser profile
-  needs the better part of twenty seconds to load Grafana's plugin bundles before any panel draws,
-  and a provisioned dashboard rewritten under an already-open tab leaves that tab's scene stale.
-  Reload the page before believing a blank panel, and check the panel query with
-  `python3 tests/check_dashboard.py --prometheus-url http://127.0.0.1:19090` before changing it.
 
 ---
 
