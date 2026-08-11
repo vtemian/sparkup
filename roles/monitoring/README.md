@@ -34,6 +34,11 @@ them.
 Dashboards edited in the Grafana UI are kept in the `grafana-data` volume; the provisioned file in
 this repo wins on the next converge.
 
+**`monitoring_project_name` is load-bearing.** Compose namespaces named volumes by project, not by
+directory: `spark-monitoring_grafana-data` holds every dashboard built by hand in the UI and
+`spark-monitoring_prometheus-data` holds the history. Rename the project and both are silently
+abandoned, full and unreferenced, and the new stack collides with the running one on port 80.
+
 ## Alerting rules
 
 `files/rules/spark.yml` covers the hardware failures nothing else reports: the module power cap
@@ -47,6 +52,22 @@ exists saying so, at `/alerts` or via `ALERTS{alertname="..."}`. `make alerts` p
 on a healthy synthetic box and fire when it serves the safety mode.
 
 The `sparks` role installs its own rules file into the same directory; the two do not collide.
+
+Two rules are written the way they are on purpose:
+
+- **`SparkPowerCapCollapsed` cannot fire on a box without spbm, and that is deliberate.** `< 100` on
+  a metric that does not exist yields no series. `SparkGpuClockStuckLow` is the one that covers a
+  default box, because it needs only nvidia-smi.
+- **`SparkFirmwarePowerSilent` says "it existed recently and does not now".** `absent()` would fire
+  forever on the majority of boxes, where spbm was never enabled. The consequence is that it resolves
+  by itself six hours after the metric stops: it catches the transition, not the state.
+
+**Where firing alerts are visible, none of which notifies anybody.** `/d/box-alerts` is the
+provisioned board: what is firing, and a timeline of when it fired, which is the one thing Grafana's
+own page cannot show. Grafana's `/alerting/list` lists every loaded rule with its expression, under a
+`Prometheus` heading, and works for an anonymous viewer; the `Grafana-managed` section above it is
+empty and always will be. Prometheus at `/alerts` is the third, over an SSH tunnel because it binds
+to loopback.
 
 ## The panel plugin
 
@@ -66,6 +87,48 @@ curl -sL "https://grafana.com/api/plugins/volkovlabs-echarts-panel/versions/$v/d
 
 The unpack is guarded on a stamp file carrying the version, so a bump re-extracts. Guarding on the
 plugin directory alone would fetch the new archive, skip the unpack and leave the old version running.
+
+## Editing the dashboards
+
+The JSON cannot carry comments, so the constraints on it live here.
+
+**Stay on schema v1 (`schemaVersion: 39`).** Grafana 13's dynamic dashboards, and with them tabs,
+auto-grid and conditional rendering, need schema v2, which is still `v2beta1` and which **file-based
+provisioning does not load** (grafana/grafana#106381; the only workaround is a Kubernetes
+`GrafanaManifest`). Do not port the JSON to v2 to get tabs. It would also break
+`tests/check_dashboard.py`, which walks `panels[]` and `targets[]`.
+
+**Canvas placement is pixels, and the constraint decides what those pixels mean.** With the default
+`left`/`top` the drawing sits at its authored size in a corner of a wide panel. With
+`leftright`/`topbottom` every element stretches to the panel edges, which turns concentric boxes into
+overlapping full-height columns. `scale` is the one that works, and under it Grafana reads
+`left`/`right`/`top`/`bottom` as **percentages** and discards `width` and `height` entirely, so a
+placement that still carries a width renders somewhere else. The canvas is authored against a 748x330
+frame and converted to percentages.
+
+**Concentric canvas elements cannot all centre their value.** `dc_input`, `sys_total` and `soc_pkg`
+are drawn inside one another, so a centred value in each stacks all three in the middle of the panel
+and then hides them behind the rails. The containers put their value in the top-right corner.
+
+**Every panel on `box-alerts` needs an `or` fallback.** `ALERTS` does not exist at all while nothing
+is pending or firing, so a bare query is empty on precisely the boxes worth having, and
+`make dashboard-live` would fail on a healthy harness. `label_replace(vector(0), "alertname",
+"nothing firing", "", "")` synthesises one named series, so the panels read "nothing firing" instead
+of "No data" and stay subject to the same check as everything else.
+
+**Neither dashboard check can tell you the Power row is dead.** `make dashboard` allows `node_hwmon_`
+by prefix because the `hwmon` collector is enabled regardless (NVMe and SoC temperatures come through
+it), and `make dashboard-live` passes because `tests/fake_exporters.py` synthesises the spbm power,
+energy and label series. Both are correct: they check the panels against a box where `spbm_enabled`
+is true. Do not "fix" the harness by removing those synthetic channels; that would only stop the row
+being checked at all.
+
+**The nav sidebar's "Starred" section never loads, and that is anonymous access, not a bug.** Grafana
+asks `/api/user/stars` on every page load and gets 401, because `GF_AUTH_ANONYMOUS_ENABLED` means
+there is no user record to hold stars. The skeleton placeholders sit there forever. There is no
+setting that hides the section, so the only fix is requiring a login, which is the opposite of the
+decision in [SECURITY.md](../../SECURITY.md). Kiosk mode hides the whole sidebar if it bothers you:
+`?kiosk` on the dashboard URL.
 
 ## Installing a dashboard from another project
 
