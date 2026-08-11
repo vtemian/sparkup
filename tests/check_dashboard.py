@@ -175,6 +175,14 @@ GPU_ALWAYS = [
 
 # Synthesised by the Prometheus server for every target, so they are available
 # regardless of what any exporter emits.
+# Synthesised by the Prometheus server rather than scraped from anything: ALERTS
+# is materialised from the loaded alerting rules, so a panel may query it even
+# though no exporter emits it.
+PROMETHEUS_SYNTHETIC_METRICS = [
+    "ALERTS",
+    "ALERTS_FOR_STATE",
+]
+
 PROMETHEUS_SCRAPE_METRICS = [
     "scrape_body_size_bytes",
     "scrape_duration_seconds",
@@ -227,7 +235,8 @@ def load_yaml(path: Path) -> dict:
 
 def expected_metrics(collectors: list[str], gpu_fields: list[str]) -> tuple[set[str], set[str]]:
     """Turn the enabled collector and query-field lists into what may be queried."""
-    names = set(NODE_ALWAYS) | set(GPU_ALWAYS) | set(PROMETHEUS_SCRAPE_METRICS)
+    names = (set(NODE_ALWAYS) | set(GPU_ALWAYS) | set(PROMETHEUS_SCRAPE_METRICS)
+             | set(PROMETHEUS_SYNTHETIC_METRICS))
     prefixes: set[str] = set()
 
     unmapped = [c for c in collectors if c not in NODE_COLLECTORS]
