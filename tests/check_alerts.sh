@@ -42,6 +42,48 @@ names = [r["name"] for g in groups for r in g["rules"]]
 sys.exit(0 if "SparkPowerCapCollapsed" in names else 1)'
 }
 
+# Every series the two hardware rules read, across both synthetic exporters.
+# Until all of them exist, an evaluation can only conclude `inactive`, which is
+# indistinguishable from the alert being broken.
+metrics_scraped() {
+    curl -fsS --get "${PROMETHEUS_URL}/api/v1/query" \
+        --data-urlencode 'query=count(node_hwmon_power_cap_watt)
+          and count(node_hwmon_sensor_label)
+          and count(nvidia_smi_clocks_current_sm_clock_hz)
+          and count(nvidia_smi_utilization_gpu_ratio)' |
+        python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin)["data"]["result"] else 1)'
+}
+
+# Prometheus stamps each group with the time it last ran.
+group_stamp() {
+    curl -fsS "${PROMETHEUS_URL}/api/v1/rules" |
+        python3 -c '
+import json, sys
+groups = json.load(sys.stdin)["data"]["groups"]
+print(next((g["lastEvaluation"] for g in groups if g["name"] == "spark"), ""))'
+}
+
+stamp_moved_from() { [ "$(group_stamp)" != "$1" ]; }
+
+# Poll the condition rather than guess how long it takes. Every arbitrary sleep
+# here was a race: on a loaded runner the container start, the first scrape and
+# the group evaluation interleave any way they like, and whichever rule's series
+# landed after the last evaluation read `inactive`. Both of these alerts have
+# failed CI that way in turn, each while the other passed, and both pass locally
+# every time.
+wait_for() {
+    local what="$1" deadline
+    shift
+    deadline=$(( $(date +%s) + 120 ))
+    until "$@"; do
+        if [ "$(date +%s)" -ge "${deadline}" ]; then
+            echo "    timed out waiting for ${what}" >&2
+            exit 1
+        fi
+        sleep 1
+    done
+}
+
 failures=0
 check() {
     local label="$1" want="$2" got="$3"
@@ -67,21 +109,20 @@ quietly() {
 }
 
 run_phase() {
-    local phase="$1"
+    local phase="$1" stamp
     echo
     echo "==> ${phase} box"
     SPARKUP_HARNESS_OPEN=0 quietly "${REPO_ROOT}/tests/harness-up.sh"
-    # The rules only evaluate once the group has run, which is one
-    # evaluation_interval after load.
-    deadline=$(( $(date +%s) + 60 ))
-    until rules_loaded; do
-        if [ "$(date +%s)" -ge "${deadline}" ]; then
-            echo "    the alerting rules never loaded into Prometheus" >&2
-            exit 1
-        fi
-        sleep 2
-    done
-    sleep 8
+    wait_for "the alerting rules to load into Prometheus" rules_loaded
+    wait_for "the synthetic exporters to be scraped" metrics_scraped
+    # Two evaluations, not one: the evaluation in flight when the scrape landed
+    # may have read the series as still absent, so only the second is guaranteed
+    # to have seen this phase's data. This is what makes `inactive` on the
+    # healthy box a result rather than a race the assertion happened to win.
+    stamp="$(group_stamp)"
+    wait_for "a rule evaluation after that scrape" stamp_moved_from "${stamp}"
+    stamp="$(group_stamp)"
+    wait_for "a second rule evaluation" stamp_moved_from "${stamp}"
 }
 
 echo "==> Alerting rules, against a synthetic box"
