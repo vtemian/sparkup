@@ -23,20 +23,29 @@ Contended numbers are **valid for peak power** and **worthless for throughput**.
 
 ## Trap 2 — benchmarking against a number this hardware never had
 
-Dense bf16 peak is 48 SMs × 1024 FLOP/clk × clock — about **119 TFLOP/s at 2418 MHz**.
+Dense bf16 peak is 48 SMs × 1024 FLOP/clk × **the clock the job actually held**, which is not the
+clock the GPU asks for. Compute the target from the measured clock or the target is fiction.
 
-The **~213 TFLOPS** figure circulating for this hardware is not dense bf16. Benchmarking against it
-guarantees the box looks broken when it isn't. Do not quote it, and correct anyone who does.
+Two figures make a healthy box look broken:
 
-2418 MHz is `Default Applications Clocks`, i.e. spec. `nvidia-smi` reports `Max Clocks` as 3003 MHz,
-which is the top of the clock table and not a sustained frequency. A box running at 2418 is at spec,
-not throttled.
+- **~213 TFLOPS**, which circulates for this hardware and is not dense bf16. Do not quote it, and
+  correct anyone who does.
+- **The peak implied by 2418 MHz.** 2418 is `Default Applications Clocks` — what the GPU requests at
+  idle. Under a saturating GEMM the power cap pulls the sustained clock down to roughly 2150 MHz, so
+  a compute-bound job never holds 2418 and the peak derived from it is unreachable.
+
+`nvidia-smi` also reports `Max Clocks` as 3003 MHz, the top of the clock table and not a sustained
+frequency. Neither 3003 nor 2418 is a throughput target.
+
+Judge the result against theoretical-at-the-measured-clock. See INSTALL_CLAUDE.md, "What the box can
+actually draw", for the last measured run and what fraction of achievable it reached.
 
 ## Trap 3 — trusting nvidia-smi for power
 
-It reads the GPU rail **30–44 % low**, reports `power.limit` as `[N/A]`, and holds every Clocks Event
-Reason at `Not Active` through a throttle the EC is enforcing — its `SW Power Capping` counter did
-not advance through 75 s with the module pinned at its cap.
+It reads the GPU rail **low** — measured between 18 % and 44 % under across different runs, so treat
+the direction as reliable and the magnitude as meaningless. It reports `power.limit` as `[N/A]`, and
+holds every Clocks Event Reason at `Not Active` through a throttle the EC is enforcing — its
+`SW Power Capping` counter did not advance through 75 s with the module pinned at its cap.
 
 Take power from the `spbm` firmware channels. See the `spark-diagnosis` skill.
 
@@ -63,8 +72,10 @@ and is the limit that actually binds.
   `sys_total` around 171 W, nowhere near the 240 W PSU rating.
 - **`pl1` short of its cap during a dense GEMM** — something is wrong with the benchmark, not the
   box. Check trap 1, then check the matrix size.
-- **Throughput far under ~119 TFLOP/s on an uncontended box** — check the SM clock. Near 500 MHz means
-  the EC safety mode; go to `spark-diagnosis`.
+- **Throughput well under theoretical at the clock it held** — check the SM clock first. Near 500 MHz
+  means the EC safety mode; go to `spark-diagnosis`. Around 2150 under load is normal, and roughly
+  90 % of theoretical at that clock is what a good run looks like, so do not read the gap to an
+  idle-clock target as a fault.
 
 ## Reporting it
 

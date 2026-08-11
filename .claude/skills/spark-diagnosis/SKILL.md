@@ -9,10 +9,11 @@ Work through this in order. Do not skip to a fix.
 
 ## Rule zero: never diagnose from nvidia-smi
 
-On GB10, NVML sits above the Embedded Controller. It reads the GPU rail **30–44 % low**, reports
-`power.limit` as `[N/A]` forever, and leaves every Clocks Event Reason at `Not Active` through a
-throttle the EC is actively enforcing. A box can be pinned at its power cap while `nvidia-smi`
-reports no throttling at all.
+On GB10, NVML sits above the Embedded Controller. It reads the GPU rail **low** — between 18 % and
+44 % under across measured runs, so the direction is reliable and the magnitude is not worth quoting.
+It reports `power.limit` as `[N/A]` forever, and leaves every Clocks Event Reason at `Not Active`
+through a throttle the EC is actively enforcing. A box can be pinned at its power cap while
+`nvidia-smi` reports no throttling at all.
 
 Every number that decides anything below comes from the `spbm` firmware channels.
 
@@ -69,9 +70,11 @@ You cannot do this over SSH. Hand it to the human and say so plainly.
 
 Same wedge, caught from the other side. Follow the cold drain above.
 
-For reference, a healthy SM clock is **2418 MHz**, which is `Default Applications Clocks` and is
-spec. The `3003 MHz` that `nvidia-smi` reports as `Max Clocks` is the top of the clock table, not a
-sustained frequency. The gap between them is **not** throttling and not headroom. Do not chase it.
+For reference, a healthy idle SM clock is **2418 MHz**, which is `Default Applications Clocks` —
+what the GPU asks for, not what it holds. Under a saturating job the power cap pulls the sustained
+clock to roughly **2150 MHz**, and that is also healthy: it is the cap doing its job, not a fault.
+The `3003 MHz` that `nvidia-smi` reports as `Max Clocks` is the top of the clock table and never
+sustained. Neither gap is throttling to chase.
 
 ### Caps healthy, and pl1 is well below its cap under load → not power-limited
 

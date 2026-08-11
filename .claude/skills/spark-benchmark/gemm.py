@@ -4,7 +4,11 @@ Usage: python gemm.py [N] [SECONDS]
 
 N below ~8192 drifts toward memory-bound and under-reports both throughput and
 power. Read power from the spbm hwmon channels while this runs; nvidia-smi reads
-the GPU rail 30-44% low on this hardware and cannot see EC capping at all.
+the GPU rail low on this hardware and cannot see EC capping at all.
+
+Judge the TFLOP/s against theoretical at the clock this reports, not at the idle
+clock: the power cap pulls a saturating job well below Default Applications
+Clocks, so the idle figure implies a peak the box never reaches.
 """
 
 import sys
