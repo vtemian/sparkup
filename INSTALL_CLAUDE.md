@@ -2,7 +2,8 @@
 
 This repo's procedure, facts and traps, for an agent running them. Humans want
 [README.md](README.md). The rules (invariants, what to ask before doing, engineering standards) are
-in [CLAUDE.md](CLAUDE.md), which loads automatically; read it first and do not restate it here.
+in [CLAUDE.md](CLAUDE.md): inside a clone it loads by itself, but if you fetched this file from a raw
+URL then nothing has loaded, so read it at step 0 below. Either way, do not restate it here.
 
 Trust the machine over this file. Several claims in it were measured wrong once: the firewall turned
 out to be inactive rather than enabled with unknown rules, a pinned exporter version did not exist
@@ -15,6 +16,17 @@ checked.
 ## First run, in order
 
 Every step is a command. Step 4 exists because an agent cannot answer an interactive prompt.
+
+**0. The repo.** Skip if you are already in a clone. Everything below runs from its root.
+
+```bash
+git clone https://github.com/vtemian/sparkup && cd sparkup
+```
+
+Now read `CLAUDE.md`. It holds the invariants and the list of things to ask about before doing them,
+nothing below repeats them, and if you arrived here from a raw URL it has not been loaded for you.
+This box is typically headless and on WiFi with no wired fallback, so a firewall or boot mistake is
+recovered by physically walking to it.
 
 **1. Collections.**
 

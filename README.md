@@ -17,25 +17,37 @@ in to a kernel module.
 
 ## Start here
 
-Paste this to your coding agent. It works from any directory and reads the rest itself.
+### For humans
+
+Paste this to your coding agent. It works from any directory, and it reads the guide before it
+touches anything.
 
 ```text
-Set up my DGX Spark with sparkup: https://github.com/vtemian/sparkup
+Set up my DGX Spark with sparkup. Read the guide first:
 
-1. Clone it and work from inside the clone. CLAUDE.md and INSTALL_CLAUDE.md load
-   automatically there; read both before running anything.
-2. Follow the first-run procedure at the top of INSTALL_CLAUDE.md, in order. It
-   reaches `make report` before anything changes the box. Stop there and show me
-   that output: it says whether a converge would work on this machine at all.
-3. Ask me before the first converge, then walk me through it.
-4. Tell me what the spark-diagnosis and spark-benchmark skills do. They already work
-   here; run `make skills` only if I want them from other directories too.
+curl -s https://raw.githubusercontent.com/vtemian/sparkup/main/INSTALL_CLAUDE.md
 
-I own this machine and may be the only one who can physically reach it. Do not reboot
-it, do not touch firmware, and do not set spbm_enabled without asking me first.
+Fetch it with curl, not a tool that summarises pages. It is a procedure, and the
+rules that stop you breaking my machine do not survive a summary.
+
+Then follow its first-run steps in order, starting from step 0. Stop at `make
+report` and show me that output before anything changes the box.
+
+I own this machine and may be the only one who can physically reach it. Do not
+reboot it, do not touch firmware, and do not set spbm_enabled without asking me.
 ```
 
-Nothing in that prompt is a shortcut past the docs; step 1 is what makes the rest work.
+You can also just read [INSTALL_CLAUDE.md](INSTALL_CLAUDE.md) yourself. It is the same guide, written
+to be followed by either of you.
+
+### For agents
+
+```sh
+curl -s https://raw.githubusercontent.com/vtemian/sparkup/main/INSTALL_CLAUDE.md
+```
+
+`curl`, not a summarising fetch. Half that file is the specific mistakes that cost somebody a trip to
+a headless machine, and a summary keeps the steps while dropping the reasons they are in that order.
 
 ## What it looks like
 
