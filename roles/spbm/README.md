@@ -90,9 +90,9 @@ hwmon channels, so node_exporter cannot see them and no panel uses them. Its REA
 as PROCHOT status with 0 normal, `pl_level` as the active power limit level, and `tj_max_c` as thermal
 rise above ambient in decidegrees. On this box `pl_level` reads 1, consistent with PL1 being the limit
 that binds. `prochot` reads 1 both idle and loaded, which cannot mean "throttled" on a box drawing
-23 W of 140 W, so treat it as undecoded. `tj_max_c` reads 49 to 60 idle and 86 to 87 loaded, which
-matches a junction temperature in °C far better than a few degrees of rise, and either way tells you
-nothing `acpitz` does not.
+23 W of 140 W, so treat it as undecoded. `tj_max_c` is a temperature in °C rather than the rise its
+documentation claims: sampled beside `acpitz` at two load points it read 86 against an acpitz max of
+86, and 78 against 77. It tells you nothing `acpitz` does not already report.
 
 `node_hwmon_power_watt` is a gauge; `node_hwmon_energy_joule_total` is a **counter** in
 **joules**, not watt-hours. The metric drops the sysfs `_input` suffix that the filename carries,

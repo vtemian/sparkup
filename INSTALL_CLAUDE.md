@@ -403,14 +403,16 @@ stubbed. A fake that reported success would be worse than no test.
   power limit level", `tj_max_c` is "thermal rise above ambient (decidegrees, ~40 idle)".
   - `pl_level` read 1 at idle and 1 under a 122 W load, which is consistent with PL1 being the limit
     that binds on this hardware and would presumably read 2 if PL2 ever became the active limit.
-  - `prochot` read **1** on a healthy idle box drawing 23 W of a 140 W cap, and 1 again under load.
+  - `prochot` read **1** at every load point sampled so far: 23 W, 78 W, 80 W and 122 W of a 140 W cap.
     If 0 is normal then this box claims to be thermally throttled while idle, so either the polarity
     is inverted in practice or the register means something else here. Do not build an alert on it.
-  - `tj_max_c` read 49 to 60 at idle and 86 to 87 under load. As decidegrees of rise that is 4.9 to
-    8.7 °C, implausibly small next to a die going 48 → 79 °C; read as plain °C it tracks the die
-    closely, and in the one sample where `acpitz` was read at the same instant it equalled the
-    hottest zone exactly (86 against 86, 76, 80, 77, 82, 86, 80). One simultaneous sample is not a
-    decode. Either way it adds nothing over `acpitz`, which is already in Prometheus.
+  - `tj_max_c` is a temperature in °C, not decidegrees of rise, and it is essentially the hottest
+    `acpitz` zone. Two samples taken with `acpitz` read at the same instant, at different load
+    points: 86 against an acpitz max of 86, and 78 against 77. Across three load points it read 49 to
+    60 with the die at 48 to 51, 74 to 78 with the die at 65 to 67, and 86 to 87 with the die at 79 to
+    84 — always a few degrees above the die, never behaving like a rise above ambient, which at a die
+    of 67 °C would have to mean 7.8 °C. The driver's README says otherwise; the box does not. Either
+    way it adds nothing over `acpitz`, which is already in Prometheus, so there is nothing to export.
   - What would settle `prochot`: sample it with `pl1` actually pinned by a saturating GEMM on an
     otherwise idle GPU, and again on a box in the 20 W safety mode.
 - **The dashboard stays on schema v1 (`schemaVersion: 39`).** Grafana 13's dynamic dashboards, and
