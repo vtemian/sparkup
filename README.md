@@ -99,7 +99,11 @@ spbm_enabled: true
 ```
 
 Then `make apply`, reboot with a keyboard attached, and enrol the key.
-[roles/spbm/README.md](roles/spbm/README.md) has the screen-by-screen version.
+[roles/spbm/README.md](roles/spbm/README.md) has the screen-by-screen version. It also documents
+the 14 power channels, the PromQL that joins them to their sensor labels, and three readings that
+do not mean what their names or upstream's README suggest: `prochot` reads 1 always and does not
+report throttling, `tj_max_c` is a temperature and not a rise, and none of the eight temperatures
+is a junction temperature.
 
 ## Setup
 
