@@ -17,8 +17,6 @@ in to a kernel module.
 
 ## Start here
 
-### For humans
-
 Paste this to your coding agent. It works from any directory, and it reads the guide before it
 touches anything.
 
@@ -39,15 +37,6 @@ reboot it, do not touch firmware, and do not set spbm_enabled without asking me.
 
 You can also just read [INSTALL_CLAUDE.md](INSTALL_CLAUDE.md) yourself. It is the same guide, written
 to be followed by either of you.
-
-### For agents
-
-```sh
-curl -s https://raw.githubusercontent.com/vtemian/sparkup/main/INSTALL_CLAUDE.md
-```
-
-`curl`, not a summarising fetch. Half that file is the specific mistakes that cost somebody a trip to
-a headless machine, and a summary keeps the steps while dropping the reasons they are in that order.
 
 ## What it looks like
 
