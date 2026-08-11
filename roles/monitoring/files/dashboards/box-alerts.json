@@ -1,7 +1,7 @@
 {
-  "uid": "spark-alerts",
-  "title": "Spark alerts",
-  "description": "Every Prometheus alerting rule this box loads, what is firing, and when things fired before. Provisioned from roles/monitoring/files/dashboards/spark-alerts.json.",
+  "uid": "box-alerts",
+  "title": "Box alerts",
+  "description": "Every Prometheus alerting rule this box loads, what is firing, and when things fired before. Provisioned from roles/monitoring/files/dashboards/box-alerts.json.",
   "tags": [
     "spark",
     "alerts"
@@ -240,6 +240,22 @@
         "mode": "markdown",
         "content": "**Evaluated, not routed.** No Alertmanager on this box, so nothing emails or pages. Firing means a series exists saying so, and someone has to look.\n\nEach rule's expression and its `for` duration: [Alerting \u2192 Alert rules](/alerting/list), under **Prometheus**. Raw view: Prometheus `/alerts`, via `ssh -L 9090:127.0.0.1:9090 <box>`. Rules live in `roles/monitoring/files/rules/spark.yml`; `make alerts` proves they fire."
       }
+    }
+  ],
+  "links": [
+    {
+      "title": "Box overview",
+      "type": "dashboards",
+      "tags": [
+        "spark"
+      ],
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "tooltip": "",
+      "url": ""
     }
   ]
 }

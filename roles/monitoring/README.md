@@ -8,7 +8,7 @@ datasource and dashboard.
 | `monitoring_dir` | `/opt/monitoring` | `group_vars`; holds compose and every config file |
 | `monitoring_project_name` | `spark-monitoring` | namespaces the `grafana-data` and `prometheus-data` volumes |
 | `monitoring_dashboards_container_dir` | `/etc/grafana/dashboards` | the provider's search root inside Grafana; the mounts sit under it |
-| `monitoring_grafana_home_dashboard` | `/d/spark-overview/spark-overview` | also what `make dashboard` checks the uid against |
+| `monitoring_grafana_home_dashboard` | `/d/box-overview/box-overview` | also what `make dashboard` checks the uid against |
 | `monitoring_rules_file` | `spark.yml` | the alerting rules in `files/rules/`, staged and validated before install |
 | `monitoring_grafana_anonymous_role` | `Viewer` | what an unauthenticated visitor may do. See [SECURITY.md](../../SECURITY.md) |
 | `monitoring_grafana_theme` | `dark` | |
@@ -26,8 +26,8 @@ datasource and dashboard.
 | `prometheus_scrape_interval` | `15s` | also the datasource's `timeInterval` |
 | `spark_shared_dir` | `/srv/spark` | `group_vars`; its `dashboards/` is mounted into Grafana |
 
-Two dashboards are provisioned from `files/dashboards/`: `spark-overview`, which every visitor lands
-on, and `spark-alerts`, which shows what is firing and when it fired before. Every JSON in that
+Two dashboards are provisioned from `files/dashboards/`: `box-overview`, which every visitor lands
+on, and `box-alerts`, which shows what is firing and when it fired before. Every JSON in that
 directory is installed, so adding a third needs no change here, and `make dashboard` validates all of
 them.
 

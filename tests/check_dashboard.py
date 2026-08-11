@@ -51,7 +51,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DASHBOARD_DIR = REPO_ROOT / "roles/monitoring/files/dashboards"
 # The board the monitoring role sends every visitor to. Its uid is asserted against
 # monitoring_grafana_home_dashboard; the others only have to be valid.
-HOME_DASHBOARD = DASHBOARD_DIR / "spark-overview.json"
+HOME_DASHBOARD = DASHBOARD_DIR / "box-overview.json"
 GROUP_VARS = REPO_ROOT / "group_vars/all.yml"
 EXPORTER_DEFAULTS = REPO_ROOT / "roles/exporters/defaults/main.yml"
 MONITORING_DEFAULTS = REPO_ROOT / "roles/monitoring/defaults/main.yml"

@@ -19,7 +19,7 @@ monitoring_rules_file: spark.yml
 
 monitoring_grafana_anonymous_role: Viewer
 monitoring_grafana_theme: dark
-monitoring_grafana_home_dashboard: /d/spark-overview/spark-overview
+monitoring_grafana_home_dashboard: /d/box-overview/box-overview
 
 # The one panel type the dashboard needs that Grafana does not ship: the power
 # flow diagram is a sankey, and there is no built-in sankey visualisation.

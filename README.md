@@ -25,7 +25,7 @@ into: without it the three leftmost tiles and the Power row read "No data", and 
 says so in its own description. Everything else arrives by default.
 
 <p align="center">
-  <img src=".github/dashboard.png" alt="The spark-overview dashboard" />
+  <img src=".github/dashboard.png" alt="The box-overview dashboard" />
 </p>
 
 Those numbers come from `make harness-up`, not from a Spark, so nobody mistakes them for a

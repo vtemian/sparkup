@@ -174,7 +174,7 @@ wait_for "a window wider than the dashboard's 15s subquery step" enough_for_subq
 echo "==> Checking every panel query returns data"
 python3 "${REPO_ROOT}/tests/check_dashboard.py" --prometheus-url "${PROMETHEUS_URL}"
 
-DASHBOARD_URL="http://localhost:${GRAFANA_PORT}/d/spark-overview/spark-overview"
+DASHBOARD_URL="http://localhost:${GRAFANA_PORT}/d/box-overview/box-overview"
 echo
 echo "Grafana:    ${DASHBOARD_URL}  (anonymous, no login)"
 echo "Prometheus: ${PROMETHEUS_URL}"

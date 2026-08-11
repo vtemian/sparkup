@@ -1,7 +1,7 @@
 {
-  "uid": "spark-overview",
-  "title": "Spark overview",
-  "description": "What this box is drawing, and what is limiting it. Provisioned from roles/monitoring/files/dashboards/spark-overview.json. Edit in the UI to experiment, then export the JSON and commit it, or the next converge overwrites the change.",
+  "uid": "box-overview",
+  "title": "Box overview",
+  "description": "What this box is drawing, and what is limiting it. Provisioned from roles/monitoring/files/dashboards/box-overview.json. Edit in the UI to experiment, then export the JSON and commit it, or the next converge overwrites the change.",
   "tags": [
     "spark",
     "system",
@@ -219,6 +219,13 @@
           "expr": "count(ALERTS{alertstate=\"firing\"}) or vector(0)",
           "legendFormat": "firing",
           "instant": true
+        }
+      ],
+      "links": [
+        {
+          "title": "Which ones, and when they fired",
+          "url": "/d/box-alerts/box-alerts",
+          "targetBlank": false
         }
       ]
     },
