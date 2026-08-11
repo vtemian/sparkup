@@ -15,6 +15,23 @@ the NVIDIA runtime, supervised GPU and system telemetry, and Grafana on `http://
 login to look at it. Whole-system power and energy are available too, from the firmware, if you opt
 in to a kernel module.
 
+## What it looks like
+
+One dashboard, provisioned from a file in this repo. A status strip you can read from across the
+room, then the power the firmware reports and the cap it is being held to, the GPU rail measured both
+ways so you can see `nvidia-smi` reading low, clocks, temperatures, CPU, unified memory, network,
+disk, and a row saying whether the exporters themselves are still alive. Whole-system power is the part you opt
+into: without it the three leftmost tiles and the Power row read "No data", and every panel that does
+says so in its own description. Everything else arrives by default.
+
+<p align="center">
+  <img src=".github/dashboard.png" alt="The box-overview dashboard" />
+</p>
+
+Those numbers come from `make harness-up`, not from a Spark, so nobody mistakes them for a
+measurement. The channels behind them are calibrated to a real box: the peaks are what one machine
+actually drew.
+
 ## Installation
 
 Paste this to your coding agent. It works from any directory, and it reads the guide before it
@@ -37,23 +54,6 @@ reboot it, do not touch firmware, and do not set spbm_enabled without asking me.
 
 You can also just read [INSTALL_CLAUDE.md](INSTALL_CLAUDE.md) yourself. It is the same guide, written
 to be followed by either of you.
-
-## What it looks like
-
-One dashboard, provisioned from a file in this repo. A status strip you can read from across the
-room, then the power the firmware reports and the cap it is being held to, the GPU rail measured both
-ways so you can see `nvidia-smi` reading low, clocks, temperatures, CPU, unified memory, network,
-disk, and a row saying whether the exporters themselves are still alive. Whole-system power is the part you opt
-into: without it the three leftmost tiles and the Power row read "No data", and every panel that does
-says so in its own description. Everything else arrives by default.
-
-<p align="center">
-  <img src=".github/dashboard.png" alt="The box-overview dashboard" />
-</p>
-
-Those numbers come from `make harness-up`, not from a Spark, so nobody mistakes them for a
-measurement. The channels behind them are calibrated to a real box: the peaks are what one machine
-actually drew.
 
 ## Before you run it
 
