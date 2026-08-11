@@ -446,6 +446,12 @@ stubbed. A fake that reported success would be worse than no test.
   literal `sha256:` fails the converge instead. grafana.com publishes no sums file beside the
   download, so the version and the hash are pinned together in `roles/monitoring/defaults/main.yml`
   and must be bumped together.
+- **The nav sidebar's "Starred" section never loads, and that is anonymous access, not a bug.**
+  Grafana asks `/api/user/stars` on every page load and gets 401, because `GF_AUTH_ANONYMOUS_ENABLED`
+  means there is no user record to hold stars. The skeleton placeholders sit there forever. There is no
+  setting that hides the section, so the only fix is requiring a login, which is the opposite of the
+  decision in SECURITY.md. Kiosk mode hides the whole sidebar if it bothers you:
+  `?kiosk` on the dashboard URL.
 - **A panel that looks empty in `make harness-up` is usually not empty.** A fresh browser profile
   needs the better part of twenty seconds to load Grafana's plugin bundles before any panel draws,
   and a provisioned dashboard rewritten under an already-open tab leaves that tab's scene stale.
