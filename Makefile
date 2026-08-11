@@ -10,13 +10,34 @@ BECOME ?= -K
 PLAYBOOK ?= site.yml
 EXTRA ?=
 
-.PHONY: help deps lint syntax ping report check apply idempotence
+.PHONY: help deps lint syntax ping report check apply idempotence skills
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
 deps: ## Install pinned collections
 	ansible-galaxy collection install -r requirements.yml
+
+# Only needed to use the skills from OUTSIDE this directory. Claude Code finds
+# .claude/skills on its own for anyone working in the clone, so a fresh clone
+# needs nothing.
+#
+# Linked, not copied: `git pull` then updates them, and a clone that moves breaks
+# visibly instead of leaving a stale copy quietly answering with old numbers.
+# Never clobbers a directory it did not create.
+skills: ## Link the Claude Code skills into ~/.claude/skills
+	@mkdir -p "$(HOME)/.claude/skills"
+	@for path in .claude/skills/*/; do \
+		name=$$(basename "$$path"); \
+		target="$(HOME)/.claude/skills/$$name"; \
+		if [ -e "$$target" ] && [ ! -L "$$target" ]; then \
+			echo "  SKIP    $$name is already a real directory in ~/.claude/skills"; \
+		else \
+			ln -sfn "$(CURDIR)/.claude/skills/$$name" "$$target"; \
+			echo "  linked  $$name"; \
+		fi; \
+	done
+	@echo "Skills are now available in any directory. Re-run after moving this clone."
 
 lint: ## ansible-lint, production profile
 	ansible-lint

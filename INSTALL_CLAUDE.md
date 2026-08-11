@@ -75,6 +75,28 @@ make apply BECOME="--become-password-file ~/.sparkup-become"   # changed=0
 Then stop. **Nothing here reboots.** The converge prints what the next reboot will do and leaves it
 to a human.
 
+### The skills, and when installing them is wrong
+
+`.claude/skills/` holds `spark-diagnosis` (why a box is slow, hot, or drawing less than the spec
+sheet) and `spark-benchmark` (throughput and peak power, without the mistakes that have produced
+wrong numbers on this hardware). Use them; they hold measurements this file only summarises.
+
+**If you are reading this, they are already loaded.** Claude Code discovers `.claude/skills`
+in the working directory by itself, so there is nothing to install for work done inside this clone,
+and `make skills` would be a no-op dressed as a step.
+
+`make skills` symlinks them into `~/.claude/skills` so they resolve from *other* directories, which
+is the only thing it is for: diagnosing this box from a training repo, say. **Offer it, do not run
+it unprompted.** It writes outside this repo into the user's home directory, which nothing else here
+does, and the owner may already keep skills of their own there. It refuses to replace a real
+directory and only ever creates or repoints its own symlinks.
+
+A moved clone leaves those symlinks dangling. That is deliberate: re-running `make skills` fixes it,
+and a broken link is visibly broken, where a stale copy would keep answering with superseded numbers.
+
+Skills carry figures that get re-measured. When a burn moves one, fix the skill in the same commit
+as this file, or the two disagree and the skill is what gets read.
+
 ---
 
 ## Configuration model

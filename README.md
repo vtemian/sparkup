@@ -15,6 +15,28 @@ the NVIDIA runtime, supervised GPU and system telemetry, and Grafana on `http://
 login to look at it. Whole-system power and energy are available too, from the firmware, if you opt
 in to a kernel module.
 
+## Start here
+
+Paste this to your coding agent. It works from any directory and reads the rest itself.
+
+```text
+Set up my DGX Spark with sparkup: https://github.com/vtemian/sparkup
+
+1. Clone it and work from inside the clone. CLAUDE.md and INSTALL_CLAUDE.md load
+   automatically there; read both before running anything.
+2. Follow the first-run procedure at the top of INSTALL_CLAUDE.md, in order. It
+   reaches `make report` before anything changes the box. Stop there and show me
+   that output: it says whether a converge would work on this machine at all.
+3. Ask me before the first converge, then walk me through it.
+4. Tell me what the spark-diagnosis and spark-benchmark skills do. They already work
+   here; run `make skills` only if I want them from other directories too.
+
+I own this machine and may be the only one who can physically reach it. Do not reboot
+it, do not touch firmware, and do not set spbm_enabled without asking me first.
+```
+
+Nothing in that prompt is a shortcut past the docs; step 1 is what makes the rest work.
+
 ## What it looks like
 
 One dashboard, provisioned from a file in this repo. A status strip you can read from across the
@@ -123,6 +145,12 @@ roles/                base, docker, gpu, users, spbm, exporters, monitoring, fir
 tests/                everything that runs without a Spark
 .claude/skills/       diagnosing and benchmarking the box, if you drive it with Claude Code
 ```
+
+`spark-diagnosis` answers "why is my box slow, hot or drawing less than the spec sheet";
+`spark-benchmark` measures throughput and peak power without the three mistakes that have
+produced wrong numbers on this hardware. Both load automatically for anyone working in this
+clone. `make skills` links them into `~/.claude/skills` so they work from other directories
+too, and is the only reason you would run it.
 
 Each role has its own README. Running the playbook produces the machine described above, and per-box
 identity lives in `host_vars`. The one thing you can switch on or off is `spbm_enabled`, because it
