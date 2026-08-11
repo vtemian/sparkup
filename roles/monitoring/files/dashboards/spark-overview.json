@@ -21,7 +21,23 @@
     "list": []
   },
   "annotations": {
-    "list": []
+    "list": [
+      {
+        "name": "Alerts firing",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "hide": false,
+        "iconColor": "red",
+        "expr": "ALERTS{alertstate=\"firing\"}",
+        "titleFormat": "{{alertname}}",
+        "textFormat": "{{severity}}: {{alertname}} was firing",
+        "tagKeys": "alertname,severity",
+        "step": "60s"
+      }
+    ]
   },
   "version": 1,
   "panels": [

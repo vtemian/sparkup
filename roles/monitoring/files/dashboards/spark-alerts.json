@@ -19,14 +19,30 @@
     "list": []
   },
   "annotations": {
-    "list": []
+    "list": [
+      {
+        "name": "Alerts firing",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "hide": false,
+        "iconColor": "red",
+        "expr": "ALERTS{alertstate=\"firing\"}",
+        "titleFormat": "{{alertname}}",
+        "textFormat": "{{severity}}: {{alertname}} was firing",
+        "tagKeys": "alertname,severity",
+        "step": "60s"
+      }
+    ]
   },
   "version": 1,
   "panels": [
     {
       "id": 1,
       "type": "stat",
-      "title": "Firing now",
+      "title": "Alerts firing",
       "description": "Prometheus alerting rules in the firing state. Zero is the expected reading. Nothing routes these: there is no Alertmanager on this box, so this page and Prometheus are where they surface.",
       "datasource": {
         "type": "prometheus",
@@ -34,7 +50,7 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 6,
+        "w": 24,
         "x": 0,
         "y": 0
       },
@@ -61,7 +77,7 @@
       "options": {
         "colorMode": "background",
         "graphMode": "none",
-        "textMode": "value",
+        "textMode": "value_and_name",
         "justifyMode": "center",
         "reduceOptions": {
           "calcs": [
@@ -86,80 +102,58 @@
     },
     {
       "id": 2,
-      "type": "table",
-      "title": "What is firing",
-      "description": "One row per firing alert, with the labels the rule attached. `severity` is the rule's own judgement: critical means the box is not doing what it should, warning means it will stop being able to. A single row reading `nothing firing` is the healthy state, not a missing panel.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
+      "type": "alertlist",
+      "title": "Every rule this box loads",
+      "description": "Read from Grafana's alerting API, so each rule shows its own name and state rather than a row of labels. Normal is the healthy reading. `showInactiveAlerts` is what keeps the rules listed when none of them has a firing instance; without it this panel is empty on a healthy box, which is the state you most want to be able to confirm.",
       "gridPos": {
-        "h": 5,
-        "w": 18,
-        "x": 6,
-        "y": 0
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "filterable": false
-          }
-        },
-        "overrides": []
+        "h": 11,
+        "w": 14,
+        "x": 0,
+        "y": 5
       },
       "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false,
-          "reducer": [
-            "sum"
-          ],
-          "countRows": false,
-          "fields": ""
+        "viewMode": "list",
+        "groupMode": "default",
+        "groupBy": [],
+        "alertName": "",
+        "alertInstanceLabelFilter": "",
+        "datasource": "Prometheus",
+        "folder": {
+          "uid": "",
+          "title": ""
+        },
+        "dashboardAlerts": false,
+        "showInstances": false,
+        "showInactiveAlerts": true,
+        "maxItems": 20,
+        "sortOrder": 3,
+        "stateFilter": {
+          "firing": true,
+          "pending": true,
+          "recovering": true,
+          "noData": true,
+          "normal": true,
+          "error": true
         }
       },
-      "targets": [
-        {
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "ALERTS{alertstate=\"firing\"} or label_replace(vector(0), \"alertname\", \"nothing firing\", \"\", \"\")",
-          "instant": true,
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "Value": true,
-              "__name__": true,
-              "alertstate": true
-            },
-            "renameByName": {}
-          }
-        }
-      ]
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
     },
     {
       "id": 3,
       "type": "state-timeline",
       "title": "When they fired",
-      "description": "What the Alerting page cannot tell you: whether the box went into the USB-PD safety mode at three in the morning and came back. `ALERTS` is an ordinary time series, so it has history for as long as Prometheus retention holds it, which is a year here.",
+      "description": "The one thing the alerting API cannot answer: whether the box wedged at three in the morning and came back. `ALERTS` is an ordinary time series, so this reaches back as far as retention, a year.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 9,
-        "w": 24,
-        "x": 0,
+        "h": 11,
+        "w": 10,
+        "x": 14,
         "y": 5
       },
       "fieldConfig": {
@@ -233,10 +227,10 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "h": 6,
+        "h": 4,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 16
       },
       "fieldConfig": {
         "defaults": {},
@@ -244,7 +238,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "These rules are **evaluated, not routed.** There is no Alertmanager on this box, so nothing emails, pages or notifies. Firing means a series exists saying so, and someone has to look at it: here, or on the status strip of [Spark overview](/d/spark-overview/spark-overview).\n\nOther views of the same rules:\n\n- **Grafana's own list**, with each rule's expression: [Alerting \u2192 Alert rules](/alerting/list). The `Grafana-managed` section is empty and always will be; ours are under `Prometheus`.\n- **Prometheus at `/alerts`**, which is bound to loopback on the box. Reach it with `ssh -L 9090:127.0.0.1:9090 <box>` and open `http://127.0.0.1:9090/alerts`.\n\nThe rules themselves live in `roles/monitoring/files/rules/spark.yml`, and `make alerts` proves they fire on the condition they describe."
+        "content": "**Evaluated, not routed.** No Alertmanager on this box, so nothing emails or pages. Firing means a series exists saying so, and someone has to look.\n\nEach rule's expression and its `for` duration: [Alerting \u2192 Alert rules](/alerting/list), under **Prometheus**. Raw view: Prometheus `/alerts`, via `ssh -L 9090:127.0.0.1:9090 <box>`. Rules live in `roles/monitoring/files/rules/spark.yml`; `make alerts` proves they fire."
       }
     }
   ]

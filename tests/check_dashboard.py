@@ -287,6 +287,23 @@ def walk_panels(node: object) -> list[dict]:
     return found
 
 
+def annotation_targets(dashboard: dict) -> list[tuple[str, str, str]]:
+    """The annotation queries, which are checked differently from panels.
+
+    An annotation that matches nothing is the correct state: `ALERTS` exists only
+    while something is firing, and a box with no events is the box we want. So
+    these are parsed by promtool and held to the metric allowlist like everything
+    else, but exempt from the --prometheus-url emptiness check, which would
+    otherwise demand that a healthy harness be alerting.
+    """
+    found = []
+    for index, annotation in enumerate(dashboard.get("annotations", {}).get("list", [])):
+        if isinstance(annotation.get("expr"), str):
+            name = annotation.get("name", f"#{index}")
+            found.append((f"annotation {name!r}", "expr", annotation["expr"]))
+    return found
+
+
 def walk_targets(node: object, panel: str = "dashboard") -> list[tuple[str, str, str]]:
     """Collect (panel, refId, expr) from anywhere in the dashboard JSON.
 
@@ -457,8 +474,16 @@ def main() -> int:
             return 1
 
     exprs = []
+    annotations = []
     for path, dashboard in dashboards.items():
-        found = walk_targets(dashboard)
+        annotations.extend(
+            (f"{path.stem} {label}", ref, expr)
+            for label, ref, expr in annotation_targets(dashboard)
+        )
+        # Walk everything except the annotations list, which is collected above and
+        # judged by a different standard.
+        panels_only = {k: v for k, v in dashboard.items() if k != "annotations"}
+        found = walk_targets(panels_only)
         if not found:
             print(f"FAIL {path.relative_to(REPO_ROOT)} has no panel queries at all")
             return 1
@@ -468,6 +493,9 @@ def main() -> int:
     try:
         if args.prometheus_url:
             print(f"Evaluating {len(exprs)} panel queries against {args.prometheus_url}")
+            if annotations:
+                print(f"  ({len(annotations)} annotation queries exempt: matching nothing is "
+                      f"the healthy state)")
             problems = check_against_prometheus(args.prometheus_url, exprs)
             if problems:
                 print("\nFAIL panels with no data:")
@@ -477,7 +505,7 @@ def main() -> int:
             print(f"\nPASS all {len(exprs)} panel queries returned data")
             return 0
 
-        return offline_checks(dashboards, exprs)
+        return offline_checks(dashboards, exprs + annotations)
     except CheckFailed as error:
         print(f"FAIL {error}")
         return 1
