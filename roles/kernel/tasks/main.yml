@@ -94,6 +94,10 @@
       The menu appears for {{ kernel_grub_menu_settings[0][1] }} seconds.
   when: not ansible_check_mode
 
+# By menu entry id, never by title. A title carries the distributor string and the
+# kernel version in prose, and when it stops matching GRUB does not complain, it
+# boots something else. The id embeds the kernel version and the root UUID, and
+# Ubuntu nests per-kernel entries, so the saved value is `<submenu id>><entry id>`.
 - name: Point GRUB at the signed kernel
   block:
     # A nested entry is only selectable as "<submenu id>>><entry id>"; with no
