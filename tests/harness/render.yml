@@ -20,6 +20,15 @@
     - "{{ playbook_dir }}/vars.yml"
 
   tasks:
+    # `copy` adds and never prunes, and harness-down leaves this tree on disk, so
+    # a dashboard renamed in the role would linger here from an earlier render and
+    # Grafana would serve both. The role solves this by removing what it no longer
+    # ships; here the whole directory is disposable, so re-render it from nothing.
+    - name: Discard dashboards from an earlier render
+      ansible.builtin.file:
+        path: "{{ monitoring_dir }}/grafana/dashboards"
+        state: absent
+
     # The same tree the monitoring role creates, including the two empty
     # provisioning directories Grafana logs an error for when they are absent,
     # and the shared dashboard drop the compose file bind-mounts. Docker

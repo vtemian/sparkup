@@ -182,6 +182,30 @@
     group: root
     mode: "0644"
 
+# `copy` adds and updates, never prunes, so renaming a dashboard leaves the old
+# JSON on disk and Grafana provisions both under their old uid. This directory
+# is created and filled by this role alone, so anything in it this role does not
+# ship is stale by definition. No handler: the provider polls every 10 s with
+# disableDeletion false, so it drops the board itself once the file is gone.
+- name: List the dashboards this role ships
+  ansible.builtin.set_fact:
+    monitoring_shipped_dashboards: "{{ query('fileglob', 'dashboards/*.json') | map('basename') | list }}"
+
+- name: Find the dashboards already installed
+  ansible.builtin.find:
+    paths: "{{ monitoring_dir }}/grafana/dashboards"
+    patterns: "*.json"
+  register: monitoring_installed_dashboards
+
+- name: Remove dashboards this role no longer ships
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ monitoring_installed_dashboards.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: item.path | basename not in monitoring_shipped_dashboards
+
 - name: Bring the monitoring stack up
   community.docker.docker_compose_v2:
     project_src: "{{ monitoring_dir }}"
