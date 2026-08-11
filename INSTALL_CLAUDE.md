@@ -413,8 +413,14 @@ stubbed. A fake that reported success would be worse than no test.
     84 — always a few degrees above the die, never behaving like a rise above ambient, which at a die
     of 67 °C would have to mean 7.8 °C. The driver's README says otherwise; the box does not. Either
     way it adds nothing over `acpitz`, which is already in Prometheus, so there is nothing to export.
-  - What would settle `prochot`: sample it with `pl1` actually pinned by a saturating GEMM on an
-    otherwise idle GPU, and again on a box in the 20 W safety mode.
+  - **Decoding `prochot` is not worth a burn, and this is the decision, not a to-do.** What it might
+    report is "the EC is capping this box", which is already measured directly as `pl1` over its own
+    cap: that is the `At the cap` panel and the `SparkPowerCapCollapsed` rule, both working on real
+    hardware with no extra moving parts. Exporting `prochot` would need a textfile-collector script
+    for a redundant confirmation of a signal we have, and it reads as a constant across every sample
+    so far. The one state that would justify revisiting it is a box whose `pl1` sits **below** its cap
+    while the clocks stay pinned low, which the cap ratio cannot see and nobody has observed. If that
+    turns up, sample all three registers through a saturating GEMM on an idle GPU.
 - **The dashboard stays on schema v1 (`schemaVersion: 39`).** Grafana 13's dynamic dashboards, and
   with them tabs, auto-grid and conditional rendering, need schema v2, which is still `v2beta1` and
   which **file-based provisioning does not load** (grafana/grafana#106381; the only workaround is a
