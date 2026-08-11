@@ -1,0 +1,251 @@
+{
+  "uid": "spark-alerts",
+  "title": "Spark alerts",
+  "description": "Every Prometheus alerting rule this box loads, what is firing, and when things fired before. Provisioned from roles/monitoring/files/dashboards/spark-alerts.json.",
+  "tags": [
+    "spark",
+    "alerts"
+  ],
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "timezone": "browser",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Firing now",
+      "description": "Prometheus alerting rules in the firing state. Zero is the expected reading. Nothing routes these: there is no Alertmanager on this box, so this page and Prometheus are where they surface.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(ALERTS{alertstate=\"firing\"}) or vector(0)",
+          "legendFormat": "firing",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "What is firing",
+      "description": "One row per firing alert, with the labels the rule attached. `severity` is the rule's own judgement: critical means the box is not doing what it should, warning means it will stop being able to. A single row reading `nothing firing` is the healthy state, not a missing panel.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 18,
+        "x": 6,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "ALERTS{alertstate=\"firing\"} or label_replace(vector(0), \"alertname\", \"nothing firing\", \"\", \"\")",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "alertstate": true
+            },
+            "renameByName": {}
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "state-timeline",
+      "title": "When they fired",
+      "description": "What the Alerting page cannot tell you: whether the box went into the USB-PD safety mode at three in the morning and came back. `ALERTS` is an ordinary time series, so it has history for as long as Prometheus retention holds it, which is a year here.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "quiet",
+                  "color": "dark-green",
+                  "index": 0
+                },
+                "1": {
+                  "text": "firing",
+                  "color": "red",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "mergeValues": true,
+        "showValue": "never",
+        "alignValue": "left",
+        "rowHeight": 0.8,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (alertname) (ALERTS{alertstate=\"firing\"}) or label_replace(vector(0), \"alertname\", \"nothing firing\", \"\", \"\")",
+          "legendFormat": "{{alertname}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "text",
+      "title": "Nothing notifies you",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "These rules are **evaluated, not routed.** There is no Alertmanager on this box, so nothing emails, pages or notifies. Firing means a series exists saying so, and someone has to look at it: here, or on the status strip of [Spark overview](/d/spark-overview/spark-overview).\n\nOther views of the same rules:\n\n- **Grafana's own list**, with each rule's expression: [Alerting \u2192 Alert rules](/alerting/list). The `Grafana-managed` section is empty and always will be; ours are under `Prometheus`.\n- **Prometheus at `/alerts`**, which is bound to loopback on the box. Reach it with `ssh -L 9090:127.0.0.1:9090 <box>` and open `http://127.0.0.1:9090/alerts`.\n\nThe rules themselves live in `roles/monitoring/files/rules/spark.yml`, and `make alerts` proves they fire on the condition they describe."
+      }
+    }
+  ]
+}

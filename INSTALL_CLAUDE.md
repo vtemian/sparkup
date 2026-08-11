@@ -446,6 +446,17 @@ stubbed. A fake that reported success would be worse than no test.
   literal `sha256:` fails the converge instead. grafana.com publishes no sums file beside the
   download, so the version and the hash are pinned together in `roles/monitoring/defaults/main.yml`
   and must be bumped together.
+- **The alerts are visible in three places, none of which notifies anybody.** `/d/spark-alerts` is the
+  provisioned board: what is firing, and a timeline of when it fired, which is the one thing Grafana's
+  own page cannot show. Grafana's `/alerting/list` lists every loaded rule with its expression, under a
+  `Prometheus` heading, and works for an anonymous viewer; the `Grafana-managed` section above it is
+  empty and always will be. Prometheus at `/alerts` is the third, over an SSH tunnel because it binds
+  to loopback.
+- **Every panel on `spark-alerts` needs an `or` fallback.** `ALERTS` does not exist at all while
+  nothing is pending or firing, so a bare query is empty on precisely the boxes worth having, and
+  `make dashboard-live` would fail on a healthy harness. `label_replace(vector(0), "alertname",
+  "nothing firing", "", "")` synthesises one named series, so the panels read "nothing firing" instead
+  of "No data" and stay subject to the same check as everything else.
 - **The nav sidebar's "Starred" section never loads, and that is anonymous access, not a bug.**
   Grafana asks `/api/user/stars` on every page load and gets 401, because `GF_AUTH_ANONYMOUS_ENABLED`
   means there is no user record to hold stars. The skeleton placeholders sit there forever. There is no

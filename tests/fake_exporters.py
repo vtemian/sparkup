@@ -202,6 +202,13 @@ class Box:
 
     def gpu_utilisation(self, now: float) -> float:
         """GPU occupancy, on a slower cycle than the CPU and offset from it."""
+        # Pinned high in the safety mode, which is what the failure looks like: the
+        # box is being asked for work and cannot deliver it, so occupancy reads 99%
+        # while the clock sits at 495 MHz. Leaving it on the cycle also made
+        # SparkGpuClockStuckLow, whose expression is `clock low AND util high`,
+        # depend on where the cycle happened to be when the test sampled it.
+        if SAFETY_MODE:
+            return 0.99
         phase = (now - self.started) / 300.0 * 2 * math.pi
         return max(0.02, min(0.98, 0.55 + 0.42 * math.sin(phase - 0.9)))
 

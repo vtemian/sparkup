@@ -26,6 +26,11 @@ datasource and dashboard.
 | `prometheus_scrape_interval` | `15s` | also the datasource's `timeInterval` |
 | `spark_shared_dir` | `/srv/spark` | `group_vars`; its `dashboards/` is mounted into Grafana |
 
+Two dashboards are provisioned from `files/dashboards/`: `spark-overview`, which every visitor lands
+on, and `spark-alerts`, which shows what is firing and when it fired before. Every JSON in that
+directory is installed, so adding a third needs no change here, and `make dashboard` validates all of
+them.
+
 Dashboards edited in the Grafana UI are kept in the `grafana-data` volume; the provisioned file in
 this repo wins on the next converge.
 

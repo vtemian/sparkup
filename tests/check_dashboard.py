@@ -48,7 +48,10 @@ from pathlib import Path
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DASHBOARD = REPO_ROOT / "roles/monitoring/files/dashboards/spark-overview.json"
+DASHBOARD_DIR = REPO_ROOT / "roles/monitoring/files/dashboards"
+# The board the monitoring role sends every visitor to. Its uid is asserted against
+# monitoring_grafana_home_dashboard; the others only have to be valid.
+HOME_DASHBOARD = DASHBOARD_DIR / "spark-overview.json"
 GROUP_VARS = REPO_ROOT / "group_vars/all.yml"
 EXPORTER_DEFAULTS = REPO_ROOT / "roles/exporters/defaults/main.yml"
 MONITORING_DEFAULTS = REPO_ROOT / "roles/monitoring/defaults/main.yml"
@@ -440,16 +443,27 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    try:
-        dashboard = json.loads(DASHBOARD.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as error:
-        print(f"FAIL {DASHBOARD.relative_to(REPO_ROOT)} is not valid JSON: {error}")
+    paths = sorted(DASHBOARD_DIR.glob("*.json"))
+    if not paths:
+        print(f"FAIL no dashboards in {DASHBOARD_DIR.relative_to(REPO_ROOT)}")
         return 1
 
-    exprs = walk_targets(dashboard)
-    if not exprs:
-        print("FAIL the dashboard has no panel queries at all")
-        return 1
+    dashboards = {}
+    for path in paths:
+        try:
+            dashboards[path] = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            print(f"FAIL {path.relative_to(REPO_ROOT)} is not valid JSON: {error}")
+            return 1
+
+    exprs = []
+    for path, dashboard in dashboards.items():
+        found = walk_targets(dashboard)
+        if not found:
+            print(f"FAIL {path.relative_to(REPO_ROOT)} has no panel queries at all")
+            return 1
+        # Prefix the panel label so a failure names which board it is on.
+        exprs.extend((f"{path.stem} {panel}", ref, expr) for panel, ref, expr in found)
 
     try:
         if args.prometheus_url:
@@ -463,18 +477,19 @@ def main() -> int:
             print(f"\nPASS all {len(exprs)} panel queries returned data")
             return 0
 
-        return offline_checks(dashboard, exprs)
+        return offline_checks(dashboards, exprs)
     except CheckFailed as error:
         print(f"FAIL {error}")
         return 1
 
 
-def offline_checks(dashboard: dict, exprs: list[tuple[str, str, str]]) -> int:
+def offline_checks(dashboards: dict, exprs: list[tuple[str, str, str]]) -> int:
     group_vars = load_yaml(GROUP_VARS)
     exporter_defaults = load_yaml(EXPORTER_DEFAULTS)
     monitoring_defaults = load_yaml(MONITORING_DEFAULTS)
 
-    print(f"Checking {DASHBOARD.relative_to(REPO_ROOT)}")
+    for path in dashboards:
+        print(f"Checking {path.relative_to(REPO_ROOT)}")
 
     # The uid is not decoration: monitoring_grafana_home_dashboard sends every
     # anonymous visitor to /d/<uid>/..., so renaming it silently empties the
@@ -487,18 +502,29 @@ def offline_checks(dashboard: dict, exprs: list[tuple[str, str, str]]) -> int:
             f"is not a /d/<uid>/<slug> path: {home!r}"
         )
     expected_uid = match.group(1)
-    if dashboard.get("uid") != expected_uid:
+    home = dashboards[HOME_DASHBOARD]
+    if home.get("uid") != expected_uid:
         raise CheckFailed(
-            f"dashboard uid is {dashboard.get('uid')!r} but Grafana is told to open "
-            f"{home!r}, which needs uid {expected_uid!r}"
+            f"{HOME_DASHBOARD.name} uid is {home.get('uid')!r} but Grafana is told to open "
+            f"{monitoring_defaults.get('monitoring_grafana_home_dashboard')!r}, which needs uid "
+            f"{expected_uid!r}"
         )
     print(f"  uid {expected_uid!r} matches monitoring_grafana_home_dashboard")
 
-    all_panels = walk_panels(dashboard)
-    ids = [p.get("id") for p in all_panels]
-    duplicates = {i for i in ids if ids.count(i) > 1}
-    if duplicates:
-        raise CheckFailed(f"panel ids are not unique: {sorted(duplicates)}")
+    # Uids have to be distinct across files: two dashboards claiming one uid means
+    # whichever the provider reads last silently wins.
+    uids = {path: d.get("uid") for path, d in dashboards.items()}
+    if len(set(uids.values())) != len(uids):
+        raise CheckFailed(f"two dashboards share a uid: {uids}")
+
+    all_panels = []
+    for path, dashboard in dashboards.items():
+        panels = walk_panels(dashboard)
+        ids = [p.get("id") for p in panels]
+        duplicates = {i for i in ids if ids.count(i) > 1}
+        if duplicates:
+            raise CheckFailed(f"{path.name} panel ids are not unique: {sorted(duplicates)}")
+        all_panels.extend(panels)
 
     # Panels reference the datasource by uid. The monitoring role provisions
     # exactly one, and its uid is fixed in the template.
@@ -549,7 +575,7 @@ def offline_checks(dashboard: dict, exprs: list[tuple[str, str, str]]) -> int:
         )
 
     print(f"  all {len(referenced)} referenced metrics are emitted by the enabled exporters")
-    print(f"\nPASS {len(exprs)} panel queries across {len(dashboard.get('panels', []))} panels")
+    print(f"\nPASS {len(exprs)} panel queries across {len(dashboards)} dashboards")
     return 0
 
 
