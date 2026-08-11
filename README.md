@@ -15,7 +15,7 @@ the NVIDIA runtime, supervised GPU and system telemetry, and Grafana on `http://
 login to look at it. Whole-system power and energy are available too, from the firmware, if you opt
 in to a kernel module.
 
-## Start here
+## Installation
 
 Paste this to your coding agent. It works from any directory, and it reads the guide before it
 touches anything.
