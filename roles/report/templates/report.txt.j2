@@ -87,7 +87,7 @@ reality wins and the docs are wrong: please open a "Hardware finding" issue.
   SSH socket-activated {% for unit in report_ssh_units.results | default([], true) %}{{ unit.item }} {{ unit.status.UnitFileState | default('absent', true) }}{{ ' / ' if not loop.last }}{% endfor %}   (claimed: ssh.socket enabled, ssh.service disabled)
   hidden boot menu     /etc/default/grub.d/no-grubmenu.cfg {{ 'present' if report_grub_dropin.stat.exists else 'ABSENT' }}   (claimed: present, forcing GRUB_TIMEOUT=0)
   unified GPU memory   see memory.total above   (claimed: [N/A], the field is dropped)
-  nvidia-smi reads low compare power.draw with the gpu channel above   (claimed: 30-44% low, and power.limit is [N/A])
+  nvidia-smi reads low compare power.draw with the gpu channel above   (claimed: 18-44% low across runs, and power.limit is [N/A])
   pl1 is the ceiling   compare the pl1 and syspl1 caps above   (claimed: pl1 140 W holds the whole box near 171 W; syspl1 231 W never binds)
 
 FIRMWARE

@@ -189,7 +189,8 @@ while `gpu` rises 79.5 → 91.7 W, together filling `soc_pkg` to 137.9 W. Loadin
 watts from the GPU instead of adding them, and a GPU rail plateauing near 100 W is correct.
 
 **`nvidia-smi` cannot measure any of this.** It read 71.9 W against the spbm `gpu` channel's 103.4 W
-at the same instant, 30–44 % low, and `power.limit` is permanently `[N/A]`. Worse, its
+at the same instant; across runs the undercount has ranged 18 to 44 %, so treat the direction as
+reliable and the magnitude as worthless. `power.limit` is permanently `[N/A]`. Worse, its
 `SW Power Capping` counter did not advance through 75 s with `pl1` pinned at its cap: **NVML sits
 above the EC, so "Not Active" on every clocks event reason proves nothing.** Diagnose power from the
 spbm channels or not at all. The same blindness is what makes the safety mode below so easy to miss.
