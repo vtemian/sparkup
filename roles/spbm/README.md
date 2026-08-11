@@ -85,14 +85,19 @@ All eight temperatures carry a real reading, and **none of them is a junction te
 that do follow the die are `acpitz`, seven zones reading 76 to 86 °C under that load, and node_exporter
 exports them already. The one channel that reads nothing is the `dla` **power** rail, at 0.01 W.
 
-The driver also exposes `prochot`, `pl_level` and `tj_max_c` as plain sysfs attributes rather than
-hwmon channels, so node_exporter cannot see them and no panel uses them. Its README defines `prochot`
-as PROCHOT status with 0 normal, `pl_level` as the active power limit level, and `tj_max_c` as thermal
-rise above ambient in decidegrees. On this box `pl_level` reads 1, consistent with PL1 being the limit
-that binds. `prochot` reads 1 both idle and loaded, which cannot mean "throttled" on a box drawing
-23 W of 140 W, so treat it as undecoded. `tj_max_c` is a temperature in °C rather than the rise its
-documentation claims: sampled beside `acpitz` at two load points it read 86 against an acpitz max of
-86, and 78 against 77. It tells you nothing `acpitz` does not already report.
+The driver also exposes `prochot`, `pl_level` and `tj_max_c` as plain sysfs attributes rather than hwmon
+channels, so node_exporter cannot see them and no panel uses them.
+
+`pl_level` names the limit currently binding and it does move: sampled through the ramp of a saturating
+GEMM it read 2 while `pl1` climbed toward its cap, then 1 once `pl1` pinned there. That is PL2's higher
+142 W cap governing the burst until the long-window average makes PL1 the constraint.
+
+`prochot` reads 1 always, including with `pl1` pinned hard against its cap, while its README says 0 is
+normal. It does not report throttling on this hardware; do not build on it.
+
+`tj_max_c` is a temperature in °C rather than the rise its README claims: sampled beside `acpitz` at two
+load points it read 86 against an acpitz max of 86, and 78 against 77, and it tracks the die through a
+burn. It tells you nothing `acpitz` does not already report.
 
 `node_hwmon_power_watt` is a gauge; `node_hwmon_energy_joule_total` is a **counter** in
 **joules**, not watt-hours. The metric drops the sysfs `_input` suffix that the filename carries,

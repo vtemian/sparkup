@@ -137,6 +137,19 @@ against a 231 W cap it never approaches. The 240 W in the product spec is the PS
 70 W of it is unreachable because `pl1` binds first. Nobody is entitled to 240 W and a box that will
 not draw it is not broken.
 
+**Measured again on 2026-08-11, 8192 dense bf16 for 60 s on an otherwise idle GPU** (one resident
+process holding 4 GB but computing nothing). It reproduces the ceiling and adds three things:
+
+- `sys_total` peaked at **168 W**, `pl1` ramped 103 → 139 W and pinned against its 140 W cap,
+  `soc_pkg` 139-142 W. The third independent confirmation that the 240 W PSU rating is unreachable.
+- **The sustained SM clock at the cap is ~2150 MHz, not 2418.** Idle it sits at 2411; under a
+  saturating GEMM the cap pulls it to 2151-2236. So 2418 is Default Applications Clocks in the sense
+  of "what it asks for", not what a compute-bound job holds. Throughput was 95.3 TFLOP/s, which is
+  90% of the 105 TFLOP/s theoretical at the clock it actually ran.
+- **nvidia-smi read 18-21% low here, not 30-44%.** 89.8 W against the firmware `gpu` channel's 109 W.
+  The direction is reliable and the magnitude is not: quote it as "reads low" and take the number from
+  the firmware.
+
 **`pl1` is shared, so the GPU rail cannot approach 140 W.** Under load `cpu_p` rises 10.7 → 20.6 W
 while `gpu` rises 79.5 → 91.7 W, together filling `soc_pkg` to 137.9 W. Loading the Grace cores takes
 watts from the GPU instead of adding them, and a GPU rail plateauing near 100 W is correct.
@@ -397,30 +410,21 @@ stubbed. A fake that reported success would be worse than no test.
   that they measure something else. Worth an upstream question, not a panel. The only spbm channel that reads zero is
   the `dla` *power* rail, at 0.01 W, which is a different channel from the `dla` thermal zone. Do not
   filter the temperature panel on `> 0`: there is nothing to hide.
-- **`pl_level` is documented, `prochot` contradicts its documentation, `tj_max_c` is unresolved.** All
-  three are plain sysfs attributes the hwmon collector cannot see. The driver's own README defines
-  them: `prochot` is "PROCHOT thermal throttle status (0 = normal)", `pl_level` is "current active
-  power limit level", `tj_max_c` is "thermal rise above ambient (decidegrees, ~40 idle)".
-  - `pl_level` read 1 at idle and 1 under a 122 W load, which is consistent with PL1 being the limit
-    that binds on this hardware and would presumably read 2 if PL2 ever became the active limit.
-  - `prochot` read **1** at every load point sampled so far: 23 W, 78 W, 80 W and 122 W of a 140 W cap.
-    If 0 is normal then this box claims to be thermally throttled while idle, so either the polarity
-    is inverted in practice or the register means something else here. Do not build an alert on it.
-  - `tj_max_c` is a temperature in °C, not decidegrees of rise, and it is essentially the hottest
-    `acpitz` zone. Two samples taken with `acpitz` read at the same instant, at different load
-    points: 86 against an acpitz max of 86, and 78 against 77. Across three load points it read 49 to
-    60 with the die at 48 to 51, 74 to 78 with the die at 65 to 67, and 86 to 87 with the die at 79 to
-    84 — always a few degrees above the die, never behaving like a rise above ambient, which at a die
-    of 67 °C would have to mean 7.8 °C. The driver's README says otherwise; the box does not. Either
-    way it adds nothing over `acpitz`, which is already in Prometheus, so there is nothing to export.
-  - **Decoding `prochot` is not worth a burn, and this is the decision, not a to-do.** What it might
-    report is "the EC is capping this box", which is already measured directly as `pl1` over its own
-    cap: that is the `At the cap` panel and the `SparkPowerCapCollapsed` rule, both working on real
-    hardware with no extra moving parts. Exporting `prochot` would need a textfile-collector script
-    for a redundant confirmation of a signal we have, and it reads as a constant across every sample
-    so far. The one state that would justify revisiting it is a box whose `pl1` sits **below** its cap
-    while the clocks stay pinned low, which the cap ratio cannot see and nobody has observed. If that
-    turns up, sample all three registers through a saturating GEMM on an idle GPU.
+- **`pl_level` names the limit currently binding, and it moves.** Sampled through the ramp of a
+  saturating GEMM it read **2** while `pl1` climbed 103 → 138 W, then dropped to **1** the moment
+  `pl1` pinned at 139 W against its 140 W cap. That is PL2, the short-window limit with the higher
+  142 W cap, governing the burst until the long-window average catches up and PL1 becomes the
+  constraint. Every earlier sample read 1 only because every earlier sample was a steady state. The
+  driver's README calls it "current active power limit level" and the box agrees.
+- **`prochot` is definitively not a capping signal.** It read **1** throughout that run, including the
+  twenty seconds with `pl1` pinned hard against its cap, exactly as it reads 1 on an idle box at 23 W.
+  Its README says 0 is normal. Whatever this register means on GB10, it does not report throttling,
+  and no alert should be built on it. That question is now closed by measurement rather than by
+  deciding not to look.
+- **`tj_max_c` is a temperature, confirmed again.** It climbed 72 → 84 monotonically with the die
+  through that run. Two earlier simultaneous samples put it within 1 °C of the hottest `acpitz` zone.
+  It is not the "rise above ambient in decidegrees" its README claims, and it adds nothing over
+  `acpitz`.
 - **The dashboard stays on schema v1 (`schemaVersion: 39`).** Grafana 13's dynamic dashboards, and
   with them tabs, auto-grid and conditional rendering, need schema v2, which is still `v2beta1` and
   which **file-based provisioning does not load** (grafana/grafana#106381; the only workaround is a
