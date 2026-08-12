@@ -220,9 +220,12 @@ draw less than a GEMM by nature, so profile before treating the gap as headroom 
 Play order is load-bearing:
 
 ```
-base → docker → gpu → users → spbm → exporters → monitoring → firmware → kernel
+base → tailscale → docker → gpu → users → spbm → exporters → monitoring → firmware → kernel
 ```
 
+- `tailscale` follows `base` because `base` installs and enables ufw, and this adds one allow rule to
+  it. It has no `when:` in `site.yml` and does nothing until `tailscale_hostname` is set in
+  `host_vars`: identity, like `base_timezone`, not a second gate.
 - `docker` precedes `users` because `ansible.builtin.user` fails hard if a group in `groups:` does
   not exist.
 - `exporters` precedes `monitoring` because `monitoring` uses `remove_orphans: true`, which deletes

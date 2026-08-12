@@ -95,6 +95,12 @@
   roles:
     - role: base
       tags: [base]
+    # After base, which installs and enables ufw: this adds one allow rule to it.
+    # No `when:` here. The role reads tailscale_hostname itself and does nothing
+    # without one, which is identity rather than the second gate this play does
+    # not have.
+    - role: tailscale
+      tags: [tailscale]
     # docker before users: ansible.builtin.user fails hard when a group named in
     # `groups:` does not exist, and users are put in the docker group.
     - role: docker

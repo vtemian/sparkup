@@ -27,6 +27,13 @@ spark_shared_group: spark
 # Empty leaves the clock alone.
 # base_timezone: Europe/Bucharest
 
+# The name this box takes on your tailnet, so you can reach it from outside the
+# house without forwarding a port. Empty does nothing at all. Converging with it
+# set installs Tailscale and then tells you the one `tailscale up` to run, which
+# needs a browser. roles/tailscale/README.md, and note what becomes reachable:
+# Grafana has no login.
+# tailscale_hostname: spark
+
 # Whole-system power and energy, from a third-party DKMS module. Uncommenting
 # this commits you to a trip to the box: Secure Boot will not load the module
 # until you enrol its key at a console screen. roles/spbm/README.md.

@@ -1,0 +1,17 @@
+---
+# The name this box takes on the tailnet, and the only thing that decides whether
+# this role does anything. Empty is the default and leaves the box untouched, the
+# same way an empty spark_users creates nobody and an empty base_timezone leaves
+# the clock alone. Identity, in host_vars; not a feature switch.
+tailscale_hostname: ""
+
+# Tailscale publish one suite per Ubuntu release, keyed by its codename. Derived
+# rather than pinned so this does not silently install the wrong suite on a box
+# running something other than noble.
+tailscale_keyring_url: "https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_distribution_release }}.noarmor.gpg"
+tailscale_keyring_path: /usr/share/keyrings/tailscale-archive-keyring.gpg
+tailscale_repo_url: https://pkgs.tailscale.com/stable/ubuntu
+
+# The interface tailscaled creates. Traffic from the tailnet arrives on it, and
+# with a default-deny policy that is dropped until it is allowed.
+tailscale_interface: tailscale0

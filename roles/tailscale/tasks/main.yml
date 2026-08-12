@@ -1,0 +1,77 @@
+---
+# Reaches a headless box from outside the house without opening anything to the
+# internet: tailscaled dials out, so there is no port forward and no inbound hole
+# on a machine whose only link is WiFi.
+#
+# Nothing here runs without a hostname to join under. This is the base_timezone
+# shape, not a second feature flag: the role runs on every converge and has
+# nothing to do until host_vars says what this box is called on the tailnet.
+- name: Put this box on a tailnet
+  when: tailscale_hostname | default('', true) | trim | length > 0
+  block:
+
+    - name: Install the Tailscale signing key
+      ansible.builtin.get_url:
+        url: "{{ tailscale_keyring_url }}"
+        dest: "{{ tailscale_keyring_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    # Written out rather than fetched from the published .list: that file names
+    # the keyring by absolute path, so fetching it makes the path above a lie
+    # that only breaks at apt update.
+    - name: Add the Tailscale apt repository
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [signed-by={{ tailscale_keyring_path }}]
+          {{ tailscale_repo_url }} {{ ansible_distribution_release }} main
+        state: present
+        update_cache: true
+        filename: tailscale
+
+    - name: Install tailscale
+      ansible.builtin.apt:
+        name: tailscale
+        state: present
+
+    - name: Enable tailscaled
+      ansible.builtin.systemd_service:
+        name: tailscaled
+        enabled: true
+        state: started
+
+    # ADD only, and scoped to the VPN interface. The LAN policy is untouched:
+    # this opens nothing to the 192.168 network and nothing to the internet.
+    # Without it, default-deny drops tailnet traffic and the box is on the
+    # tailnet but answers nothing, which reads as Tailscale being broken.
+    - name: Allow inbound traffic arriving on the tailnet interface
+      community.general.ufw:
+        rule: allow
+        direction: in
+        interface: "{{ tailscale_interface }}"
+
+    # `tailscale up` prints a URL that has to be opened in a browser and approved
+    # against a Tailscale account. No converge can do that, and the alternative,
+    # an auth key, is a credential this repo would then have to carry. Report it
+    # and stop, the way firmware and the MOK key are reported and stopped at.
+    - name: Read whether this box has joined a tailnet
+      ansible.builtin.command: tailscale status --json
+      register: tailscale_status
+      changed_when: false
+      failed_when: false
+
+    - name: Record the backend state
+      ansible.builtin.set_fact:
+        tailscale_backend_state: >-
+          {{ (tailscale_status.stdout | default('{}', true) | from_json)
+             .get('BackendState', 'unknown') }}
+
+    - name: Report the one-time login this box still needs
+      ansible.builtin.debug:
+        msg:
+          - "Tailscale is installed and running, and this box has NOT joined a tailnet."
+          - "It is reachable on the LAN only until a human runs, at a terminal:"
+          - "    sudo tailscale up --hostname={{ tailscale_hostname }}"
+          - "That prints a URL to approve in a browser. Nothing here can do it for you."
+      when: tailscale_backend_state != 'Running'
