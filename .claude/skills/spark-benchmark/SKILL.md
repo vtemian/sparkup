@@ -59,6 +59,10 @@ scp .claude/skills/spark-benchmark/gemm.py <box>:/tmp/
 ssh <box> '<path-to-venv>/bin/python /tmp/gemm.py 8192 60'
 ```
 
+`<box>` is `spark.local` on its own LAN. From anywhere else it is the tailnet name, which `make
+report` prints on its `Reachable from` line where the `tailscale` role is configured. A benchmark run
+over the tailnet is fine: the GEMM runs entirely on the box and only the result crosses the link.
+
 Arguments are matrix size and duration in seconds. 8192 keeps it compute-bound; smaller sizes drift
 toward memory-bound and under-report both throughput and power.
 

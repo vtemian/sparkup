@@ -61,11 +61,13 @@
       changed_when: false
       failed_when: false
 
-    - name: Record the backend state
+    - name: Record what tailscaled reports about itself
       ansible.builtin.set_fact:
-        tailscale_backend_state: >-
-          {{ (tailscale_status.stdout | default('{}', true) | from_json)
-             .get('BackendState', 'unknown') }}
+        tailscale_state: "{{ tailscale_self.get('BackendState', 'unknown') }}"
+        # Trailing dot stripped: it is a valid FQDN either way, and nobody types it.
+        tailscale_dns_name: "{{ tailscale_self.get('Self', {}).get('DNSName', '') | regex_replace('\\.$', '') }}"
+      vars:
+        tailscale_self: "{{ tailscale_status.stdout | default('{}', true) | from_json }}"
 
     - name: Report the one-time login this box still needs
       ansible.builtin.debug:
@@ -74,4 +76,18 @@
           - "It is reachable on the LAN only until a human runs, at a terminal:"
           - "    sudo tailscale up --hostname={{ tailscale_hostname }}"
           - "That prints a URL to approve in a browser. Nothing here can do it for you."
-      when: tailscale_backend_state != 'Running'
+      when: tailscale_state != 'Running'
+
+    # The address is the whole point of the role, and it is not guessable: the
+    # tailnet name is assigned, not chosen. Printing it saves reading it back off
+    # the box every time somebody wants to know how to reach it.
+    - name: Report where this box now answers
+      ansible.builtin.debug:
+        msg:
+          # ansible_user, not ansible_user_id: these tasks run under become, so
+          # the latter is root and would print an ssh command nobody can use.
+          - "On the tailnet as {{ tailscale_dns_name or tailscale_hostname }}."
+          - "From any device signed into the same tailnet:"
+          - "    ssh {{ ansible_user | default('you', true) }}@{{ tailscale_dns_name or tailscale_hostname }}"
+          - "    http://{{ tailscale_dns_name or tailscale_hostname }}    (Grafana, no login)"
+      when: tailscale_state == 'Running'

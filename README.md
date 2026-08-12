@@ -105,6 +105,36 @@ do not mean what their names or upstream's README suggest: `prochot` reads 1 alw
 report throttling, `tj_max_c` is a temperature and not a rise, and none of the eight temperatures
 is a junction temperature.
 
+## Reaching it from outside the house, if you want it
+
+A Spark is usually headless and on WiFi, which makes it a machine you want to reach and a machine you
+should not expose. [`tailscale`](roles/tailscale/README.md) dials **out** to join a private network,
+so there is no port to forward, nothing on a public address, and no change to the firewall beyond one
+rule scoped to the VPN interface.
+
+Name the box and converge:
+
+```yaml
+# host_vars/spark.yml
+tailscale_hostname: spark
+```
+
+The converge installs it and stops, because joining needs a browser. It prints the one command to
+run:
+
+```bash
+sudo tailscale up --hostname=spark
+```
+
+Approve the URL that prints, put Tailscale on your laptop under the same account, and
+`ssh you@spark.your-tailnet.ts.net` works from anywhere. `make report` shows the name and address the
+box answers to.
+
+Empty leaves everything alone: no packages, no rules, nothing installed. Before you add a **second
+person** rather than a second device, read [roles/tailscale/README.md](roles/tailscale/README.md) —
+Grafana has no login and the registry speaks plain HTTP, both deliberate on a home LAN and both worth
+a second look on a shared network.
+
 ## Setup
 
 You need `ansible-core` on your own machine, and SSH access to the Spark as an account with sudo.

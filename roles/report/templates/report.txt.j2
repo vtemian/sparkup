@@ -7,6 +7,9 @@
 {% set hwmon = report_hwmon.stdout | default('', true) | trim %}
 {% set power_channels = report_power_channels.stdout | default('', true) | trim %}
 {% set firmware = report_firmware.stdout | default('', true) | trim %}
+{# rc is undefined when the binary is missing entirely, which is a different answer
+   from installed-but-not-joined, so the template tests rc before parsing. #}
+{% set tailnet = (report_tailscale.stdout | default('', true) | trim or '{}') | from_json %}
 {# /etc/dgx-release carries DGX_SERIAL_NUMBER, so pull the versions out rather
    than printing the file: this report is written to be pasted in public. #}
 {% set dgx = report_dgx_release.content | default('', true) | b64decode %}
@@ -47,6 +50,18 @@ MACHINE
   Root filesystem      {{ (root_fs.size_available / 1024 ** 3) | round | int }} GB free of {{ (root_fs.size_total / 1024 ** 3) | round | int }} GB
 {% endif %}
   Uptime               {{ ((ansible_uptime_seconds | default(0)) / 3600) | round(1) }} h
+{# Three states, told apart by what tailscaled answered rather than by rc: the
+   command module sets rc=2 for a missing binary, so `rc is not defined` is false
+   on a box that has never heard of tailscale. #}
+{% if tailnet.get('BackendState', '') == 'Running' %}
+  Reachable from       any device on this tailnet, as {{ tailnet.get('Self', {}).get('DNSName', '?') | regex_replace('\\.$', '') }}
+{% elif tailnet.get('BackendState') %}
+  Reachable from       this LAN only. Tailscale is installed but has not joined a tailnet
+                       ({{ tailnet.BackendState }}); run `sudo tailscale up`.
+{% else %}
+  Reachable from       this LAN only. Tailscale is not installed or not answering;
+                       see roles/tailscale/README.md
+{% endif %}
 
 GPU
 {% if report_gpu.rc | default(1) == 0 %}

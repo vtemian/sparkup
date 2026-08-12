@@ -93,6 +93,15 @@
   failed_when: false
   check_mode: false
 
+# Needs no sudo, and answers the question somebody asks about a headless box they
+# cannot see: is it reachable from anywhere but this LAN, and under what name.
+- name: Read whether this box is on a tailnet
+  ansible.builtin.command: tailscale status --json
+  register: report_tailscale
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
 # The EFI RTC here reads intermittently, so this usually exits 0 and sometimes
 # does not. Both answers are worth collecting: the rare failure is what breaks
 # community.general.timezone, and a box that never fails would kill the trap.

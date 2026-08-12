@@ -17,6 +17,24 @@ through a throttle the EC is actively enforcing. A box can be pinned at its powe
 
 Every number that decides anything below comes from the `spbm` firmware channels.
 
+## Step 0 — reach the box
+
+If `spark.local` does not resolve, you are not on its LAN. mDNS does not leave the network, so a box
+that answered from the sofa is unreachable from anywhere else — that is not a fault to diagnose.
+
+Where the `tailscale` role is configured, the box answers on a tailnet as well, under a name that is
+assigned rather than chosen. `make report` prints it on the `Reachable from` line, and so does a
+converge scoped to `--tags tailscale`. From any device signed into the same tailnet:
+
+```sh
+ssh <user>@<name>.<tailnet>.ts.net
+```
+
+If that line says the box is on this LAN only, remote access is not set up and no amount of
+diagnosing changes it: see `roles/tailscale/README.md`. Do not respond by opening a port or editing
+the firewall — the whole design is that nothing is exposed, and this repo's rules forbid weakening a
+firewall on a box nobody can physically reach.
+
 ## Step 1 — get the channels
 
 ```sh
