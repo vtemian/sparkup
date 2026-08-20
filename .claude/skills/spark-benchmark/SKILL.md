@@ -37,8 +37,8 @@ Two figures make a healthy box look broken:
 `nvidia-smi` also reports `Max Clocks` as 3003 MHz, the top of the clock table and not a sustained
 frequency. Neither 3003 nor 2418 is a throughput target.
 
-Judge the result against theoretical-at-the-measured-clock. See INSTALL_CLAUDE.md, "What the box can
-actually draw", for the last measured run and what fraction of achievable it reached.
+Judge the result against theoretical-at-the-measured-clock, never against the spec-sheet
+peak; the fraction of achievable is the number worth quoting.
 
 ## Trap 3 — trusting nvidia-smi for power
 
